@@ -1,28 +1,26 @@
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable
 
 from litellm.types.utils import ChatCompletionMessageToolCall, Function, Message
 
 # Third-party imports
 from pydantic import BaseModel
 
-AgentFunction = Callable[[], Union[str, "Agent", dict]]
+AgentFunction = Callable[[], "str | Agent | dict"]
 
 
 class Agent(BaseModel):
     name: str = "Agent"
     model: str = "gpt-4o"
-    instructions: Union[str, Callable[[], str]] = "You are a helpful agent."
-    functions: List[AgentFunction] = []
-    tool_choice: str = None
+    instructions: str | Callable[[dict], str] = "You are a helpful agent."
+    functions: list[AgentFunction] = []
+    tool_choice: str | None = None
     parallel_tool_calls: bool = False
-    examples: Union[List[Tuple[dict, str]], Callable[[], str]] = []
-    handle_mm_func: Callable[[], str] = None
 
 
 class Response(BaseModel):
-    messages: List = []
-    agent: Optional[Agent] = None
-    context_variables: dict = {}
+    messages: list[Message | dict] = []
+    agent: Agent | None = None
+    ctx_vars: dict = {}
 
 
 class Result(BaseModel):
@@ -36,6 +34,6 @@ class Result(BaseModel):
     """
 
     value: str = ""
-    agent: Optional[Agent] = None
-    context_variables: dict = {}
-    image: Optional[str] = None  # base64 encoded image
+    agent: Agent | None = None
+    ctx_vars: dict = {}
+    image: str | None = None  # base64 encoded image
