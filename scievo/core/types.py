@@ -19,7 +19,6 @@ class Agent(BaseModel):
 
 class Response(BaseModel):
     messages: list[Message | dict] = []
-    agent: Agent | None = None
     ctx_vars: dict = {}
 
 
@@ -34,6 +33,5 @@ class Result(BaseModel):
     """
 
     value: str = ""
-    agent: Agent | None = None
     ctx_vars: dict = {}
     image: str | None = None  # base64 encoded image

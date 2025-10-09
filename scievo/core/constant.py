@@ -1,7 +1,8 @@
 import os
 
-import global_state
 from dotenv import load_dotenv
+
+from . import global_state
 
 load_dotenv()  # 加载.env文件
 

@@ -10,7 +10,6 @@ import litellm.types.utils
 from httpx import ConnectError, RemoteProtocolError
 from litellm import completion
 from litellm.exceptions import APIError, BadRequestError, ContextWindowExceededError
-from memory.utils import decode_tokens_by_tiktoken, encode_string_by_tiktoken
 from tenacity import (
     RetryCallState,
     retry,
@@ -19,6 +18,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from ..memory.utils import decode_tokens_by_tiktoken, encode_string_by_tiktoken
 from .constant import API_BASE_URL
 from .logger import LoggerManager, MetaChainLogger
 from .types import Agent, AgentFunction, ChatCompletionMessageToolCall, Message, Response, Result
@@ -165,12 +165,6 @@ class MetaChain:
         match result:
             case Result() as result:
                 return result
-
-            case Agent() as agent:
-                return Result(
-                    value=json.dumps({"assistant": agent.name}),
-                    agent=agent,
-                )
             case _:
                 try:
                     return Result(value=str(result))
@@ -185,11 +179,11 @@ class MetaChain:
         self,
         tool_calls: list[ChatCompletionMessageToolCall],
         functions: list[AgentFunction],
-        context_variables: dict,
+        ctx_vars: dict,
         debug: bool,
     ) -> Response:
         function_map = {f.__name__: f for f in functions}
-        partial_response = Response(messages=[], agent=None, ctx_vars={})
+        partial_response = Response(messages=[], ctx_vars={})
 
         for tool_call in tool_calls:
             name = tool_call.function.name
@@ -206,16 +200,17 @@ class MetaChain:
                 new_msg["tool_call_id"] = tool_call.id
                 partial_response.messages.append(new_msg)
                 continue
-            args = json.loads(tool_call.function.arguments)
+            kwargs = json.loads(tool_call.function.arguments)
 
             # debug_print(
             #     debug, f"Processing tool call: {name} with arguments {args}")
             func = function_map[name]
             # pass context_variables to agent functions
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:
-                args[__CTX_VARS_NAME__] = context_variables
+                kwargs[__CTX_VARS_NAME__] = ctx_vars
+
             try:
-                raw_result = function_map[name](**args)
+                raw_result = function_map[name](**kwargs)
             except Exception as e:
                 # if "case_resolved" in name:
                 #     raw_result = function_map[name](tool_call.function.arguments)
@@ -247,8 +242,6 @@ class MetaChain:
             # debug_print(debug, "Tool calling: ", json.dumps(partial_response.messages[-1], indent=4), log_path=log_path, title="Tool Calling", color="green")
 
             partial_response.ctx_vars.update(result.ctx_vars)
-            if result.agent:
-                partial_response.agent = result.agent
 
         return partial_response
 
@@ -262,8 +255,12 @@ class MetaChain:
         max_turns: int = sys.maxsize,
         execute_tools: bool = True,
     ) -> Response:
-        active_agent = agent
         ctx_vars = copy.deepcopy(ctx_vars)
+        ctx_vars["plan_step"] = 0
+        ctx_vars["plans"] = []
+        ctx_vars["plans_stack"] = []
+        ctx_vars["agent_stack"] = []
+
         history = copy.deepcopy(messages)
         init_len = len(messages)
 
@@ -271,11 +268,12 @@ class MetaChain:
             "Receiveing the task:", history[-1]["content"], title="Receive Task", color="green"
         )
 
-        while len(history) - init_len < max_turns and active_agent:
+        while len(history) - init_len < max_turns and len(ctx_vars["agent_stack"]) > 0:
 
+            current_agent: Agent = ctx_vars["agent_stack"][-1]
             # get completion with current history, agent
             completion = self.get_chat_completion(
-                agent=active_agent,
+                agent=current_agent,
                 history=history,
                 ctx_vars=ctx_vars,
                 model_override=model_override,
@@ -283,7 +281,7 @@ class MetaChain:
             )
             message: Message = completion.choices[0].message  # type: ignore
             # Add a new attribute "sender" to the message
-            message.sender = active_agent.name  # type: ignore
+            message.sender = current_agent.name  # type: ignore
             # debug_print(
             #     debug,
             #     "Received completion:",
@@ -293,20 +291,17 @@ class MetaChain:
             #     color="blue",
             # )
             self.logger.pretty_print_messages(message)
-            history.append(json.loads(message.model_dump_json()))  # to avoid OpenAI types (?)
+            history.append(message)
 
             if not message.tool_calls or not execute_tools:
                 self.logger.info("Ending turn.", title="End Turn", color="red")
                 break
-            # if (message.tool_calls and message.tool_calls[0].function.name == "case_resolved") or not execute_tools:
-            #     debug_print(debug, "Ending turn.", log_path=log_path, title="End Turn", color="red")
-            #     break
 
             # handle function calls, updating context_variables, and switching agents
             if message.tool_calls:
                 partial_response = self.handle_tool_calls(
                     message.tool_calls,
-                    active_agent.functions,
+                    current_agent.functions,
                     ctx_vars,
                     debug,
                 )
@@ -314,12 +309,9 @@ class MetaChain:
                 partial_response = Response(messages=[message])
             history.extend(partial_response.messages)
             ctx_vars.update(partial_response.ctx_vars)
-            if partial_response.agent:
-                active_agent = partial_response.agent
 
         return Response(
             messages=history[init_len:],
-            agent=active_agent,
             ctx_vars=ctx_vars,
         )
 
