@@ -1,4 +1,5 @@
 # Standard library imports
+import contextlib
 import copy
 import json
 import sys
@@ -18,10 +19,20 @@ from tenacity import (
     wait_exponential,
 )
 
+from scievo.tools.plan_tool import create_plans, pop_agent, set_plan_answer_and_next_step
+
 from ..memory.utils import decode_tokens_by_tiktoken, encode_string_by_tiktoken
 from .constant import API_BASE_URL, API_KEY
 from .logger import LoggerManager, MetaChainLogger
-from .types import Agent, AgentFunction, ChatCompletionMessageToolCall, Message, Response, Result
+from .types import (
+    Agent,
+    AgentFunction,
+    ChatCompletionMessageToolCall,
+    Function,
+    Message,
+    Response,
+    Result,
+)
 from .util import function_to_json, pretty_print_messages
 
 # litellm.set_verbose=True
@@ -71,6 +82,7 @@ def should_retry_error(retry_state: RetryCallState):
 
 
 __CTX_VARS_NAME__ = "ctx_vars"
+__HISTORY_NAME__ = "history"
 logger = LoggerManager.get_logger()
 
 
@@ -120,7 +132,7 @@ class MetaChain:
     def get_chat_completion(
         self,
         agent: Agent,
-        history: list[Message | dict],
+        history: list[Message],
         ctx_vars: dict,  # type: ignore
         model_override: str | None,
         debug: bool,
@@ -180,6 +192,7 @@ class MetaChain:
         self,
         tool_calls: list[ChatCompletionMessageToolCall],
         functions: list[AgentFunction],
+        history: list[Message],
         ctx_vars: dict,
         debug: bool,
     ) -> Response:
@@ -209,6 +222,8 @@ class MetaChain:
             # pass context_variables to agent functions
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:
                 kwargs[__CTX_VARS_NAME__] = ctx_vars
+            if __HISTORY_NAME__ in func.__code__.co_varnames:
+                kwargs[__HISTORY_NAME__] = history
 
             try:
                 raw_result = function_map[name](**kwargs)
@@ -249,7 +264,7 @@ class MetaChain:
     def run(
         self,
         agent: Agent,
-        messages: list[Message | dict],
+        messages: list[Message],
         ctx_vars: dict = {},
         model_override: str | None = None,
         debug: bool = True,
@@ -261,6 +276,8 @@ class MetaChain:
         ctx_vars["plans"] = []
         ctx_vars["plans_stack"] = []
         ctx_vars["agent_stack"] = [agent]
+        ctx_vars["model"] = agent.model
+        ctx_vars["forced_planning"] = True
 
         history = copy.deepcopy(messages)
         init_len = len(messages)
@@ -269,21 +286,43 @@ class MetaChain:
             "Receiveing the task:", history[-1]["content"], title="Receive Task", color="green"
         )
 
-        while (
-            len(history) - init_len < max_turns
-            and len(ctx_vars["agent_stack"]) > 0
-            and ctx_vars["plan_step"] <= len(ctx_vars["plans"])
-        ):
-
+        while len(history) - init_len < max_turns and len(ctx_vars["agent_stack"]) > 0:
             current_agent: Agent = ctx_vars["agent_stack"][-1]
+
+            if ctx_vars["plan_step"] > len(ctx_vars["plans"]):
+                if len(ctx_vars["agent_stack"]) == 1:
+                    # normally plan step has reached the end
+                    break
+                else:
+                    # TODO: pop agent
+                    self.handle_tool_calls(
+                        [
+                            ChatCompletionMessageToolCall(
+                                function=Function(name="pop_agent", arguments="{}")
+                            )
+                        ],
+                        [pop_agent],
+                        history,
+                        ctx_vars,
+                        debug,
+                    )
+                    continue
+
             # get completion with current history, agent
-            completion = self.get_chat_completion(
-                agent=current_agent,
-                history=history,
-                ctx_vars=ctx_vars,
-                model_override=model_override,
-                debug=debug,
-            )
+            if ctx_vars["forced_planning"]:
+                hook_ctx = current_agent.hook_functions([create_plans])
+            elif ctx_vars["plan_step"] == len(ctx_vars["plans"]):
+                hook_ctx = current_agent.hook_functions([set_plan_answer_and_next_step])
+            else:
+                hook_ctx = contextlib.nullcontext()
+            with hook_ctx:
+                completion = self.get_chat_completion(
+                    agent=current_agent,
+                    history=history,
+                    ctx_vars=ctx_vars,
+                    model_override=model_override,
+                    debug=debug,
+                )
             message: Message = completion.choices[0].message  # type: ignore
             # Add a new attribute "sender" to the message
             message.sender = current_agent.name  # type: ignore
@@ -303,10 +342,19 @@ class MetaChain:
                 break
 
             # handle function calls, updating context_variables, and switching agents
-            if message.tool_calls:
+            tool_calls = []
+            for tool_call in message.tool_calls:
+                # truncate tool calls after push_agent
+                if tool_call.function.name == "push_agent":
+                    tool_calls.append(tool_call)
+                    break
+                else:
+                    tool_calls.append(tool_call)
+            if tool_calls:
                 partial_response = self.handle_tool_calls(
-                    message.tool_calls,
+                    tool_calls,
                     current_agent.functions,
+                    history,
                     ctx_vars,
                     debug,
                 )

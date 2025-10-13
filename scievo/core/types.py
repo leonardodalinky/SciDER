@@ -1,3 +1,4 @@
+import contextlib
 from typing import Callable
 
 from litellm.types.utils import ChatCompletionMessageToolCall, Function, Message
@@ -16,9 +17,16 @@ class Agent(BaseModel):
     tool_choice: str | None = None
     parallel_tool_calls: bool = False
 
+    @contextlib.contextmanager
+    def hook_functions(self, functions: list[AgentFunction]):
+        old_functions = self.functions.copy()
+        self.functions = functions
+        yield
+        self.functions = old_functions
+
 
 class Response(BaseModel):
-    messages: list[Message | dict] = []
+    messages: list[Message] = []
     ctx_vars: dict = {}
 
 
