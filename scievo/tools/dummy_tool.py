@@ -5,11 +5,14 @@ from ..core.registry import register_tool
     "dummy_func",
     json_schema={
         "type": "function",
-        "description": "Dummy function. Only shows the context variables.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": [],
+        "function": {
+            "name": "dummy_func",
+            "description": "Dummy function. Only shows the context variables.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
         },
     },
 )

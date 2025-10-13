@@ -19,7 +19,7 @@ from tenacity import (
 )
 
 from ..memory.utils import decode_tokens_by_tiktoken, encode_string_by_tiktoken
-from .constant import API_BASE_URL
+from .constant import API_BASE_URL, API_KEY
 from .logger import LoggerManager, MetaChainLogger
 from .types import Agent, AgentFunction, ChatCompletionMessageToolCall, Message, Response, Result
 from .util import function_to_json, pretty_print_messages
@@ -147,6 +147,7 @@ class MetaChain:
             "tools": tools or None,
             "tool_choice": agent.tool_choice,
             "base_url": API_BASE_URL,
+            "api_key": API_KEY,
         }
 
         if create_params["model"].startswith("mistral"):
@@ -259,7 +260,7 @@ class MetaChain:
         ctx_vars["plan_step"] = 0
         ctx_vars["plans"] = []
         ctx_vars["plans_stack"] = []
-        ctx_vars["agent_stack"] = []
+        ctx_vars["agent_stack"] = [agent]
 
         history = copy.deepcopy(messages)
         init_len = len(messages)
@@ -268,7 +269,11 @@ class MetaChain:
             "Receiveing the task:", history[-1]["content"], title="Receive Task", color="green"
         )
 
-        while len(history) - init_len < max_turns and len(ctx_vars["agent_stack"]) > 0:
+        while (
+            len(history) - init_len < max_turns
+            and len(ctx_vars["agent_stack"]) > 0
+            and ctx_vars["plan_step"] <= len(ctx_vars["plans"])
+        ):
 
             current_agent: Agent = ctx_vars["agent_stack"][-1]
             # get completion with current history, agent
