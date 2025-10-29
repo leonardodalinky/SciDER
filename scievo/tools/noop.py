@@ -2,11 +2,12 @@ from . import register_tool
 
 
 @register_tool(
+    "noop",
     {
         "type": "function",
         "function": {
-            "name": "dummy_func",
-            "description": "Dummy function. Only shows the context variables.",
+            "name": "noop",
+            "description": "No-op tool: performs no action. You can call this tool to do nothing and move on as an intermediate thinking step.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -15,5 +16,5 @@ from . import register_tool
         },
     },
 )
-def dummy_func(ctx_vars) -> str:
-    return f"The context variables is {ctx_vars}"
+def noop(ctx_vars) -> str:
+    return "No action taken"

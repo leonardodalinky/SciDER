@@ -1,6 +1,68 @@
-[tool.basedpyright]
-exclude = [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.git",
+[project]
+name = "scievo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "epam-indigo==1.35.0",
+    "litellm>=1.79.0",
+    "pydantic>=2.12.3",
+    "pydantic-yaml>=1.6.0",
+    "tooluniverse>=1.0.11.2",
 ]
+
+[dependency-groups]
+dev = [
+    "jupyterlab>=4.4.10",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "torch>=2.9.0",
+    "torchvision",
+]
+cu128 = [
+    "torch>=2.9.0",
+    "torchvision",
+]
+mac = [
+    "torch>=2.9.0",
+    "torchvision",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu128" },
+        { extra = "mac" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+    { index = "pytorch-mac", extra = "mac" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+    { index = "pytorch-mac", extra = "mac" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-mac"
+url = "https://pypi.org/simple"
+explicit = true

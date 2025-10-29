@@ -1,9 +1,9 @@
-from ..core.registry import register_tool
+from . import register_tool
 
 
 @register_tool(
-    "dummy_func",
-    json_schema={
+    "misc",
+    {
         "type": "function",
         "function": {
             "name": "dummy_func",

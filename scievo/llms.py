@@ -1,8 +1,10 @@
 from typing import Callable
 
+from litellm.types.utils import Usage
+
 from .constant import __GRAPH_STATE_NAME__
 from .tools import ToolRegistry
-from .types import LLMessage, Message
+from .types import Message
 
 
 def function_to_json_schema(func: Callable | str) -> dict:
@@ -79,5 +81,8 @@ class ModelRegistry:
 
         response = ll_completion(**params)
         msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
+        usage: Usage = response.usage  # type: ignore
         msg.sender = name
+        msg.completion_tokens = usage.completion_tokens
+        msg.prompt_tokens = usage.prompt_tokens
         return msg
