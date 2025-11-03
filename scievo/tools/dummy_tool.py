@@ -1,13 +1,14 @@
+from ..core.types import GraphState
 from . import register_tool
 
 
 @register_tool(
-    "misc",
+    "dummy",
     {
         "type": "function",
         "function": {
             "name": "dummy_func",
-            "description": "Dummy function. Only shows the context variables.",
+            "description": "Dummy function. Only shows the graph state.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -16,5 +17,5 @@ from . import register_tool
         },
     },
 )
-def dummy_func(ctx_vars) -> str:
-    return f"The context variables is {ctx_vars}"
+def dummy_func(graph_state: GraphState) -> str:
+    return f"The graph state is {graph_state}"

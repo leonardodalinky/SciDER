@@ -16,5 +16,5 @@ from . import register_tool
         },
     },
 )
-def noop(ctx_vars) -> str:
+def noop() -> str:
     return "No action taken"

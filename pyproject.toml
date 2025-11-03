@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "epam-indigo==1.35.0",
+    "langgraph>=1.0.2",
     "litellm>=1.79.0",
     "pydantic>=2.12.3",
     "pydantic-yaml>=1.6.0",
+    "python-toon>=0.1.2",
     "tooluniverse>=1.0.11.2",
 ]
 

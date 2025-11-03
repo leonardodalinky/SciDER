@@ -1,22 +1,26 @@
 from langgraph.graph import END, START, StateGraph
-from scievo_lg.prompts import PROMPTS
 
-from ..llms import ModelRegistry
-from ..types import AllState
+from scievo.prompts import PROMPTS
+
+from ..core.types import GraphState, Message
+
+LLM_NAME = "dummy"
+AGENT_NAME = "dummy"
 
 
-def say_hello(state: AllState) -> AllState:
-    msg = ModelRegistry.completion(
-        "dummy",
-        state.data_msgs,
-        PROMPTS.dummy.dummy_prompt,
+def say_hello(graph_state: GraphState) -> GraphState:
+    msg = Message(
+        role="assistant",
+        content="Hello",
+        llm_sender=None,
+        agent_sender=AGENT_NAME,
     )
-    state.data_msgs.append(msg)
-    return state
+    graph_state.agents[AGENT_NAME].data_msgs.append(msg)
+    return graph_state
 
 
 def build():
-    g = StateGraph(AllState)
+    g = StateGraph(GraphState)
     g.add_node("dummy1", say_hello)
     g.add_node("dummy2", say_hello)
 

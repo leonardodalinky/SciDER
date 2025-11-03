@@ -20,7 +20,27 @@ from pydantic import BaseModel
 
 
 class Message(LLMessage):
-    sender: str | None = None
+    # --- LLMessage fields ---
+    # content: Optional[str]
+    # role: Literal["assistant", "user", "system", "tool", "function"]
+    # tool_calls: Optional[List[ChatCompletionMessageToolCall]]
+    # function_call: Optional[FunctionCall]
+    # audio: Optional[ChatCompletionAudioResponse] = None
+    # images: Optional[List[ImageURLListItem]] = None
+    # reasoning_content: Optional[str] = None
+    # thinking_blocks: Optional[
+    #     List[Union[ChatCompletionThinkingBlock, ChatCompletionRedactedThinkingBlock]]
+    # ] = None
+    # provider_specific_fields: Optional[Dict[str, Any]] = Field(
+    #     default=None, exclude=True
+    # )
+    # annotations: Optional[List[ChatCompletionAnnotation]] = None
+
+    # --- custom fields ---
+    llm_sender: str | None = None
+    agent_sender: str | None = None
+    tool_call_id: str | None = None
+    tool_name: str | None = None
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
 
@@ -36,5 +56,14 @@ class Message(LLMessage):
         return (self.completion_tokens or 0) + (self.prompt_tokens or 0)
 
 
-class AllState(BaseModel):
+class GraphState(BaseModel):
+    """State of the graph"""
+
+    agents: dict[str, "AgentState"]
+
+
+class AgentState(BaseModel):
+    """State of an agent"""
+
+    toolset: str = "noop"
     data_msgs: list[Message] = []

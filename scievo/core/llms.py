@@ -2,17 +2,17 @@ from typing import Callable
 
 from litellm.types.utils import Usage
 
+from ..tools import ToolRegistry
 from .constant import __GRAPH_STATE_NAME__
-from .tools import ToolRegistry
 from .types import Message
 
 
-def function_to_json_schema(func: Callable | str) -> dict:
-    if isinstance(func, str):
-        tool = ToolRegistry.get_instance().tools[func]
+def function_to_json_schema(func_or_name: Callable | str) -> dict:
+    if isinstance(func_or_name, str):
+        tool = ToolRegistry.get_instance().tools[func_or_name]
         return tool.json_schema
-    elif callable(func):
-        tool = ToolRegistry.get_instance().tools[func.__name__]
+    elif callable(func_or_name):
+        tool = ToolRegistry.get_instance().tools[func_or_name.__name__]
         return tool.json_schema
     else:
         raise ValueError("func must be a string or a callable")
@@ -52,6 +52,7 @@ class ModelRegistry:
         name: str,
         history: list[Message],
         system_prompt: str,
+        agent_sender: str | None = None,
         tools: list | None = None,
         tool_choice: str | None = None,
         **kwargs,
@@ -82,7 +83,8 @@ class ModelRegistry:
         response = ll_completion(**params)
         msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
         usage: Usage = response.usage  # type: ignore
-        msg.sender = name
+        msg.llm_sender = name
+        msg.agent_sender = agent_sender
         msg.completion_tokens = usage.completion_tokens
         msg.prompt_tokens = usage.prompt_tokens
         return msg
