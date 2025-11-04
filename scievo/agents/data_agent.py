@@ -39,43 +39,47 @@ def gateway_conditional(graph_state: GraphState) -> str:
 
 
 def llm_chat_node(graph_state: GraphState) -> GraphState:
-    state_wo_msgs = graph_state.agents[AGENT_NAME].model_dump()
-    state_wo_msgs.pop("data_msgs", None)
+    agent_state = graph_state.agents[AGENT_NAME]
+    selected_state = {
+        "working_dir": agent_state.local_env.working_dir,
+        "toolsets": agent_state.toolsets,
+    }
 
     system_prompt = PROMPTS.data.system_prompt.format(
-        state=wrap_dict_to_toon(state_wo_msgs),
+        state=wrap_dict_to_toon(selected_state),
         toolsets_desc=wrap_dict_to_toon(
             ToolRegistry.get_toolsets_desc(["fs"]),
         ),
     )
 
     tools: dict[str, Tool] = {}
-    for toolset in graph_state.agents[AGENT_NAME].toolsets:
+    for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
     tools.update(ToolRegistry.get_toolset("noop"))
     tools.update(ToolRegistry.get_toolset("state"))
     msg = ModelRegistry.completion(
         LLM_NAME,
-        graph_state.agents[AGENT_NAME].data_msgs,
+        agent_state.data_msgs,
         system_prompt,
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
     )
-    graph_state.agents[AGENT_NAME].data_msgs.append(msg)
+    agent_state.data_msgs.append(msg)
     return graph_state
 
 
 def tool_calling_node(graph_state: GraphState) -> GraphState:
     """Execute tool calls from the last message and update the graph state"""
+    agent_state = graph_state.agents[AGENT_NAME]
     # Get the last message which contains tool calls
-    last_msg = graph_state.agents[AGENT_NAME].data_msgs[-1]
+    last_msg = agent_state.data_msgs[-1]
 
     if not last_msg.tool_calls:
         raise ValueError("No tool calls found in the last message")
 
     # Create a function map for available tools
     tools: dict[str, Tool] = {}
-    for toolset in graph_state.agents[AGENT_NAME].toolsets:
+    for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
     tools.update(ToolRegistry.get_toolset("noop"))
     tools.update(ToolRegistry.get_toolset("state"))
@@ -95,7 +99,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            graph_state.agents[AGENT_NAME].data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response))
             continue
 
         # Parse tool arguments
@@ -110,7 +114,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            graph_state.agents[AGENT_NAME].data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response))
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -120,7 +124,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            graph_state.agents[AGENT_NAME].data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response))
             continue
 
         # Execute the tool
@@ -136,7 +140,10 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 args.update({constant.__GRAPH_STATE_NAME__: graph_state})
             if constant.__CTX_NAME__ in sig.parameters:
                 args.update({constant.__CTX_NAME__: {"current_agent": AGENT_NAME}})
-            result = func(**args)
+
+            # Execute the tool in the agent's local environment
+            with graph_state.agents[AGENT_NAME].local_env:
+                result = func(**args)
 
             # Create tool response message
             tool_response = {
@@ -145,7 +152,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            graph_state.agents[AGENT_NAME].data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response))
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -155,7 +162,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            graph_state.agents[AGENT_NAME].data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response))
 
     return graph_state
 

@@ -1,8 +1,19 @@
 import os
+import stat
+from datetime import datetime
 from pathlib import Path
 
+try:  # pragma: no cover - platform dependent
+    import grp
+except ImportError:  # pragma: no cover - Windows fallback
+    grp = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - platform dependent
+    import pwd
+except ImportError:  # pragma: no cover - Windows fallback
+    pwd = None  # type: ignore[assignment]
+
 from ..core.types import GraphState
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("fs", "File system toolset.")
@@ -14,11 +25,11 @@ register_toolset_desc("fs", "File system toolset.")
         "type": "function",
         "function": {
             "name": "list_files",
-            "description": "List all files (non-recursive) in the given directory path.",
+            "description": "Produce an 'ls -l' style listing (non-recursive) for the given path.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Directory path to list files from"}
+                    "path": {"type": "string", "description": "Filesystem path to inspect"}
                 },
                 "required": ["path"],
             },
@@ -26,38 +37,118 @@ register_toolset_desc("fs", "File system toolset.")
     },
 )
 def list_files(graph_state: GraphState, path: str) -> str:
+    def _resolve_owner(uid: int) -> str:
+        if pwd is None:
+            return str(uid)
+        try:
+            return pwd.getpwuid(uid).pw_name  # type: ignore[attr-defined]
+        except KeyError:
+            return str(uid)
+
+    def _resolve_group(gid: int) -> str:
+        if grp is None:
+            return str(gid)
+        try:
+            return grp.getgrgid(gid).gr_name  # type: ignore[attr-defined]
+        except KeyError:
+            return str(gid)
+
+    def _format_mtime(ts: float) -> str:
+        dt = datetime.fromtimestamp(ts)
+        now = datetime.now()
+        day = f"{dt.day:2d}"
+        if abs((now - dt).days) >= 180:
+            return f"{dt:%b} {day}  {dt:%Y}"
+        return f"{dt:%b} {day} {dt:%H:%M}"
+
+    normalized = Path(os.path.expandvars(path)).expanduser()
+    is_symlink = normalized.is_symlink()
+
     try:
-
-        def human_size(nbytes: int) -> str:
-            units = ["B", "KB", "MB", "GB", "TB", "PB"]
-            i = 0
-            f = float(nbytes)
-            while f >= 1024.0 and i < len(units) - 1:
-                f /= 1024.0
-                i += 1
-            return f"{f:.1f} {units[i]}" if i > 0 else f"{int(f)} {units[i]}"
-
-        entries = os.listdir(path)
-        files = [name for name in entries if os.path.isfile(os.path.join(path, name))]
-        files.sort()
-
-        results = []
-        for name in files:
-            full_path = os.path.abspath(os.path.join(path, name))
-            try:
-                size_bytes = os.path.getsize(full_path)
-            except Exception:
-                size_bytes = 0
-            results.append(
-                {
-                    "path": full_path,
-                    "size": human_size(size_bytes),
-                }
-            )
-
-        return wrap_dict_to_toon(results)
-    except Exception as e:
+        if normalized.is_dir() and not is_symlink:
+            entries = sorted(normalized.iterdir(), key=lambda p: p.name)
+            show_total = True
+        else:
+            entries = [normalized]
+            show_total = False
+    except OSError as e:
         return f"Error listing files in '{path}': {e}"
+
+    records = []
+    errors = []
+    total_blocks = 0
+
+    for entry in entries:
+        try:
+            stat_result = entry.lstat()
+        except FileNotFoundError:
+            errors.append(f"Path '{entry}' does not exist.")
+            continue
+        except OSError as e:
+            errors.append(f"Error accessing '{entry}': {e}")
+            continue
+
+        mode = stat.filemode(stat_result.st_mode)
+        nlink = stat_result.st_nlink
+        owner = _resolve_owner(stat_result.st_uid)
+        group = _resolve_group(stat_result.st_gid)
+        size = stat_result.st_size
+        mtime = _format_mtime(stat_result.st_mtime)
+
+        name = entry.name
+        if entry.is_symlink():
+            try:
+                target = os.readlink(entry)
+                name = f"{name} -> {target}"
+            except OSError:
+                name = f"{name} -> <unresolved>"
+
+        blocks = getattr(stat_result, "st_blocks", None)
+        if blocks is None:
+            blocks = (size + 511) // 512
+        total_blocks += blocks
+
+        records.append(
+            {
+                "mode": mode,
+                "nlink": nlink,
+                "owner": owner,
+                "group": group,
+                "size": size,
+                "mtime": mtime,
+                "name": name,
+            }
+        )
+
+    if errors and not records:
+        return "\n".join(errors)
+
+    if not records and show_total:
+        return "total 0"
+
+    link_width = max((len(str(r["nlink"])) for r in records), default=1)
+    owner_width = max((len(r["owner"]) for r in records), default=1)
+    group_width = max((len(r["group"]) for r in records), default=1)
+    size_width = max((len(str(r["size"])) for r in records), default=1)
+
+    lines: list[str] = []
+    if records and show_total:
+        lines.append(f"total {total_blocks}")
+
+    for r in records:
+        lines.append(
+            f"{r['mode']} "
+            f"{r['nlink']:>{link_width}} "
+            f"{r['owner']:<{owner_width}} "
+            f"{r['group']:<{group_width}} "
+            f"{r['size']:>{size_width}} "
+            f"{r['mtime']} "
+            f"{r['name']}"
+        )
+
+    lines.extend(errors)
+
+    return "\n".join(lines)
 
 
 @register_tool(

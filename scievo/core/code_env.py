@@ -11,15 +11,15 @@ class LocalEnv(AbstractContextManager, BaseModel):
     working_dir: Path
     _original_cwd: Path | None = PrivateAttr(default=None)
 
-    def __init__(self, working_dir: str | Path, create_dir: bool = True):
+    def __init__(self, working_dir: str | Path, create_dir_if_missing: bool = True):
         """Initialise the environment with an optional auto-create directory flag."""
         # Resolve and validate the target directory.
-        super().__init__(working_dir=working_dir, create_dir=create_dir)
+        super().__init__(working_dir=working_dir, create_dir_if_missing=create_dir_if_missing)
         if self.working_dir.exists():
             if not self.working_dir.is_dir():
                 raise NotADirectoryError(f"Path {self.working_dir} is not a directory")
         else:
-            if create_dir:
+            if create_dir_if_missing:
                 self.working_dir.mkdir(parents=True, exist_ok=True)
             else:
                 raise FileNotFoundError(f"Directory {self.working_dir} does not exist")
