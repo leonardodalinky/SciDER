@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from threading import RLock
 from typing import Callable
 
 from litellm.types.utils import Usage
@@ -9,26 +12,36 @@ from .types import Message
 
 def function_to_json_schema(func_or_name: Callable | str) -> dict:
     if isinstance(func_or_name, str):
-        tool = ToolRegistry.get_instance().tools[func_or_name]
+        tool = ToolRegistry.instance().tools[func_or_name]
         return tool.json_schema
     elif callable(func_or_name):
-        tool = ToolRegistry.get_instance().tools[func_or_name.__name__]
+        tool = ToolRegistry.instance().tools[func_or_name.__name__]
         return tool.json_schema
     else:
         raise ValueError("func must be a string or a callable")
 
 
 class ModelRegistry:
-    _instance = None
+    _instance: ModelRegistry | None = None
+    _lock: RLock = RLock()
 
-    def __init__(self):
+    def __new__(cls) -> ModelRegistry:
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self) -> None:
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
         self.models = {}
 
-    @staticmethod
-    def get_instance() -> "ModelRegistry":
-        if ModelRegistry._instance is None:
-            ModelRegistry._instance = ModelRegistry()
-        return ModelRegistry._instance
+    @classmethod
+    def instance(cls) -> ModelRegistry:
+        return cls()
 
     @classmethod
     def register(
@@ -39,7 +52,7 @@ class ModelRegistry:
         api_key: str | None = None,
         **kwargs,
     ):
-        cls.get_instance().models[name] = {
+        cls.instance().models[name] = {
             "model": model,
             "base_url": base_url,
             "api_key": api_key,
@@ -69,7 +82,7 @@ class ModelRegistry:
 
         messages = [{"role": "system", "content": system_prompt}] + history
 
-        model_params: dict = cls.get_instance().models[name]
+        model_params: dict = cls.instance().models[name]
         params = model_params.copy()
         params.update(kwargs)
         params.update(

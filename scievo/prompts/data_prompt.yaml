@@ -4,8 +4,8 @@ system_prompt: |
   Current state:
   ${state}
 
-  You can change the candidate tools by calling the "change_toolset" tool. Your current toolset is in your state.
-  Here are the toolsets you can use:
+  You can activate other toolsets by calling the "activate_toolset" tool. Your current active toolsets are in your state.
+  Here are the toolsets you can activate:
   ${toolsets_desc}
 
   Before each tool call, you should first explain why you call the tool.

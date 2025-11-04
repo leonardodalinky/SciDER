@@ -1,22 +1,7 @@
 from litellm import Message as LLMessage
 from pydantic import BaseModel
 
-#
-# class Message(OpenAIObject):
-#     content: Optional[str]
-#     role: Literal["assistant", "user", "system", "tool", "function"]
-#     tool_calls: Optional[List[ChatCompletionMessageToolCall]]
-#     function_call: Optional[FunctionCall]
-#     audio: Optional[ChatCompletionAudioResponse] = None
-#     images: Optional[List[ImageURLListItem]] = None
-#     reasoning_content: Optional[str] = None
-#     thinking_blocks: Optional[
-#         List[Union[ChatCompletionThinkingBlock, ChatCompletionRedactedThinkingBlock]]
-#     ] = None
-#     provider_specific_fields: Optional[Dict[str, Any]] = Field(
-#         default=None, exclude=True
-#     )
-#     annotations: Optional[List[ChatCompletionAnnotation]] = None
+from .code_env import LocalEnv
 
 
 class Message(LLMessage):
@@ -65,5 +50,9 @@ class GraphState(BaseModel):
 class AgentState(BaseModel):
     """State of an agent"""
 
-    toolset: str = "noop"
+    # Local environment for the agent
+    local_env: LocalEnv
+    # List of toolsets available to the agent
+    toolsets: list[str] = ["noop"]
+    # List of messages sent to the agent
     data_msgs: list[Message] = []

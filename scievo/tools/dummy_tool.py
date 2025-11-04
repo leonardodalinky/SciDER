@@ -1,5 +1,7 @@
 from ..core.types import GraphState
-from . import register_tool
+from .registry import register_tool, register_toolset_desc
+
+register_toolset_desc("dummy", "Dummy toolset.")
 
 
 @register_tool(

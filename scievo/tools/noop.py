@@ -1,4 +1,6 @@
-from . import register_tool
+from .registry import register_tool, register_toolset_desc
+
+register_toolset_desc("noop", "No-op toolset.")
 
 
 @register_tool(

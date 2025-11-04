@@ -12,7 +12,7 @@ from ..core import constant
 from ..core.llms import ModelRegistry
 from ..core.types import GraphState, Message
 from ..core.utils import wrap_dict_to_toon
-from ..tools import ToolRegistry
+from ..tools import Tool, ToolRegistry
 
 LLM_NAME = "data"
 AGENT_NAME = "data"
@@ -20,6 +20,7 @@ AGENT_NAME = "data"
 
 def gateway_node(graph_state: GraphState) -> GraphState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
+    # Check `gateway_conditional` for the actual logic
     return graph_state
 
 
@@ -48,9 +49,9 @@ def llm_chat_node(graph_state: GraphState) -> GraphState:
         ),
     )
 
-    from ..tools import fs_tool, noop, state_tool
-
-    tools = ToolRegistry.get_toolset(graph_state.agents[AGENT_NAME].toolset)
+    tools: dict[str, Tool] = {}
+    for toolset in graph_state.agents[AGENT_NAME].toolsets:
+        tools.update(ToolRegistry.get_toolset(toolset))
     tools.update(ToolRegistry.get_toolset("noop"))
     tools.update(ToolRegistry.get_toolset("state"))
     msg = ModelRegistry.completion(
@@ -73,7 +74,9 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
         raise ValueError("No tool calls found in the last message")
 
     # Create a function map for available tools
-    tools = ToolRegistry.get_toolset(graph_state.agents[AGENT_NAME].toolset)
+    tools: dict[str, Tool] = {}
+    for toolset in graph_state.agents[AGENT_NAME].toolsets:
+        tools.update(ToolRegistry.get_toolset(toolset))
     tools.update(ToolRegistry.get_toolset("noop"))
     tools.update(ToolRegistry.get_toolset("state"))
 

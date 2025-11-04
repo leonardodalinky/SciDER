@@ -3,7 +3,9 @@ from pathlib import Path
 
 from ..core.types import GraphState
 from ..core.utils import wrap_dict_to_toon
-from . import register_tool
+from .registry import register_tool, register_toolset_desc
+
+register_toolset_desc("fs", "File system toolset.")
 
 
 @register_tool(
@@ -103,7 +105,7 @@ def read_head(graph_state: GraphState, path: str, n: int = 10) -> str:
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read the entire file content. Truncate to max_char (default 100000) if longer.",
+            "description": "Read the entire file content. Truncate to max_char (default 32000) if longer.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -111,7 +113,7 @@ def read_head(graph_state: GraphState, path: str, n: int = 10) -> str:
                     "max_char": {
                         "type": "integer",
                         "description": "Maximum number of characters to return",
-                        "default": 100000,
+                        "default": 32000,
                     },
                 },
                 "required": ["path"],
@@ -119,7 +121,7 @@ def read_head(graph_state: GraphState, path: str, n: int = 10) -> str:
         },
     },
 )
-def read_file(graph_state: GraphState, path: str, max_char: int = 100000) -> str:
+def read_file(graph_state: GraphState, path: str, max_char: int = 32000) -> str:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read()
