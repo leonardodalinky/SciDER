@@ -1,8 +1,7 @@
 from langgraph.graph import END, START, StateGraph
 
+from scievo.core.types import GraphState, Message
 from scievo.prompts import PROMPTS
-
-from ..core.types import GraphState, Message
 
 LLM_NAME = "dummy"
 AGENT_NAME = "dummy"

@@ -4,15 +4,15 @@ Agent for data understanding and processing
 
 import json
 
+from functional import seq
 from langgraph.graph import END, START, StateGraph
 
+from scievo.core import constant
+from scievo.core.llms import ModelRegistry
+from scievo.core.types import GraphState, Message
+from scievo.core.utils import wrap_dict_to_toon
 from scievo.prompts import PROMPTS
-
-from ..core import constant
-from ..core.llms import ModelRegistry
-from ..core.types import GraphState, Message
-from ..core.utils import wrap_dict_to_toon
-from ..tools import Tool, ToolRegistry
+from scievo.tools import Tool, ToolRegistry
 
 LLM_NAME = "data"
 AGENT_NAME = "data"
@@ -21,6 +21,8 @@ AGENT_NAME = "data"
 def gateway_node(graph_state: GraphState) -> GraphState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
     # Check `gateway_conditional` for the actual logic
+    agent_state = graph_state.agents[AGENT_NAME]
+    agent_state.round += 1
     return graph_state
 
 
@@ -59,7 +61,7 @@ def llm_chat_node(graph_state: GraphState) -> GraphState:
     tools.update(ToolRegistry.get_toolset("state"))
     msg = ModelRegistry.completion(
         LLM_NAME,
-        agent_state.data_msgs,
+        seq(agent_state.data_msgs).filter_not(lambda msg: msg.hidden).to_list(),
         system_prompt,
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],

@@ -13,7 +13,8 @@ try:  # pragma: no cover - platform dependent
 except ImportError:  # pragma: no cover - Windows fallback
     pwd = None  # type: ignore[assignment]
 
-from ..core.types import GraphState
+from scievo.core.types import GraphState
+
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("fs", "File system toolset.")

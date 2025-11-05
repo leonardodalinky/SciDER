@@ -3,6 +3,8 @@ from __future__ import annotations
 from threading import RLock
 from typing import Callable
 
+import litellm
+from functional import seq
 from litellm.types.utils import Usage
 
 from ..tools import ToolRegistry
@@ -70,8 +72,6 @@ class ModelRegistry:
         tool_choice: str | None = None,
         **kwargs,
     ):
-        from litellm import completion as ll_completion
-
         tools_json_schemas = [function_to_json_schema(tool) for tool in tools] if tools else None
         if tools_json_schemas:
             for schema in tools_json_schemas:
@@ -80,24 +80,104 @@ class ModelRegistry:
                 if __GRAPH_STATE_NAME__ in params["required"]:
                     params["required"].remove(__GRAPH_STATE_NAME__)
 
-        messages = [{"role": "system", "content": system_prompt}] + history
+        messages = [Message(role="system", content=system_prompt)] + history
+
+        model_params: dict = cls.instance().models[name]
+        llm_model: str = cls.instance().models[name]["model"]
+
+        if llm_model.startswith("gpt-5"):
+            from litellm import responses as ll_responses
+
+            # response API has different tool schema
+            res_tools = (
+                seq(tools_json_schemas)
+                .map(lambda schema: {"type": "function", **schema["function"]})
+                .to_list()
+            )
+
+            input = []
+            for msg in messages:
+                input.extend(msg.to_ll_response_message())
+
+            params = model_params.copy()
+            params.update(kwargs)
+            params.update(
+                {
+                    "input": input,
+                    "tools": res_tools,
+                    "tool_choice": tool_choice,
+                }
+            )
+
+            response = ll_responses(**params)
+            # print(response.model_dump_json(indent=2))
+            tool_calls = (
+                seq(response.output)
+                .filter(lambda c: c.type == "function_call")
+                .map(
+                    lambda c: litellm.ChatCompletionMessageToolCall(
+                        id=c.id,
+                        function=litellm.Function(
+                            name=c.name,
+                            arguments=c.arguments,
+                        ),
+                    )
+                )
+                .to_list()
+            )
+            msg_content = (
+                seq(response.output)
+                .filter(lambda c: c.type == "message")
+                .map(lambda c: c.content)
+                .to_list()
+            )
+            if len(msg_content) == 0:
+                msg_content = None
+            else:
+                msg_content = msg_content[0][0].text
+            # TODO: summary
+            usage = response.usage  # type: ignore
+            msg: Message = Message(
+                role="assistant",
+                content=msg_content,
+                tool_calls=tool_calls,
+                llm_sender=name,
+                agent_sender=agent_sender,
+                completion_tokens=usage.output_tokens,
+                prompt_tokens=usage.input_tokens,
+            )
+            return msg
+        else:
+            from litellm import completion as ll_completion
+
+            params = model_params.copy()
+            params.update(kwargs)
+            params.update(
+                {
+                    "messages": (seq(messages).map(lambda msg: msg.to_ll_message()).to_list()),
+                    "tools": tools_json_schemas,
+                    "tool_choice": tool_choice,
+                }
+            )
+
+            response = ll_completion(**params)
+            msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
+            usage: Usage = response.usage  # type: ignore
+            msg.llm_sender = name
+            msg.agent_sender = agent_sender
+            msg.completion_tokens = usage.completion_tokens
+            msg.prompt_tokens = usage.prompt_tokens
+            return msg
+
+    @classmethod
+    def embedding(cls, name: str, texts: list[str], **kwargs) -> list[list[float]]:
+        """Returns a list of embeddings for the given texts."""
+        from litellm import embedding as ll_embedding
 
         model_params: dict = cls.instance().models[name]
         params = model_params.copy()
         params.update(kwargs)
-        params.update(
-            {
-                "messages": messages,
-                "tools": tools_json_schemas,
-                "tool_choice": tool_choice,
-            }
-        )
+        params.update({"input": texts})
 
-        response = ll_completion(**params)
-        msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
-        usage: Usage = response.usage  # type: ignore
-        msg.llm_sender = name
-        msg.agent_sender = agent_sender
-        msg.completion_tokens = usage.completion_tokens
-        msg.prompt_tokens = usage.prompt_tokens
-        return msg
+        response = ll_embedding(**params)
+        return [d["embedding"] for d in response.data]

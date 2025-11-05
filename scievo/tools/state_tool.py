@@ -1,5 +1,6 @@
+from scievo.core.types import GraphState
+
 from ..core.constant import __GRAPH_STATE_NAME__
-from ..core.types import GraphState
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("state", "State management toolset.")

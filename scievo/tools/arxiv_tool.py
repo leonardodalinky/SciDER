@@ -3,7 +3,8 @@ import urllib.parse
 
 import feedparser
 
-from ..core.types import GraphState
+from scievo.core.types import GraphState
+
 from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 

@@ -1,4 +1,5 @@
-from ..core.types import GraphState
+from scievo.core.types import GraphState
+
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("dummy", "Dummy toolset.")
