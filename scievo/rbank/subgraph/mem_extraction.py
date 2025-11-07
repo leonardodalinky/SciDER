@@ -50,7 +50,7 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
 
     # Look for markdown or generic fenced blocks, preferring markdown
     md_match = re.search(
-        r"```\s*(?:markdown\s*)?(.*)```", mem_text, flags=re.DOTALL | re.IGNORECASE
+        r"(?:```\s*)?(?:markdown\s*)?(.*)(?:```)?", mem_text, flags=re.DOTALL | re.IGNORECASE
     )
     if not md_match:
         raise ValueError("Markdown not found in the memory extraction response")
@@ -93,13 +93,12 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
     now = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     entries: list[MemEntry] = []
     id = secrets.token_hex(4)
-    for i, memo, emb in zip(range(len(memos)), memos, embeddings):
+    for i, memo in zip(range(len(memos)), memos):
         entries.append(
             MemEntry(
                 id=f"{id}_{i}",
                 time_str=now,
                 memo=memo,
-                embedding=emb,
                 llm=LLM_NAME,
                 agent=AGENT_NAME,
             )

@@ -4666,6 +4666,7 @@ dependencies = [
     { name = "pydantic-yaml" },
     { name = "pyfunctional" },
     { name = "python-toon" },
+    { name = "tiktoken" },
     { name = "tooluniverse" },
 ]
 
@@ -4702,6 +4703,7 @@ requires-dist = [
     { name = "pydantic-yaml", specifier = ">=1.6.0" },
     { name = "pyfunctional", specifier = ">=1.5.0" },
     { name = "python-toon", specifier = ">=0.1.2" },
+    { name = "tiktoken", specifier = ">=0.12.0" },
     { name = "tooluniverse", specifier = ">=1.0.11.2" },
     { name = "torch", marker = "extra == 'cpu'", specifier = ">=2.9.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "scievo", extra = "cpu" } },
     { name = "torch", marker = "extra == 'cu128'", specifier = ">=2.9.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "scievo", extra = "cu128" } },

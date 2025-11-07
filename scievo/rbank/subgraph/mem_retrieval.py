@@ -15,18 +15,16 @@ from scievo.prompts import PROMPTS
 from scievo.rbank.memo import Memo, MemoEmbeddings
 from scievo.rbank.utils import cosine_similarity
 
-LLM_NAME_SUMMARIZE = "mem_retrieval_summarize"
-LLM_NAME_EMBED = "embed"
+LLM_NAME = "embed"
 AGENT_NAME = "mem_retrieval"
 
 
 class MemRetrievalState(BaseModel):
     input_msgs: list[Message]
     mem_dirs: list[str | Path]
-    max_num_memos: int = 3
+    max_num_memos: int = 2
 
     # intermediate
-    summary_text: str = ""
     summary_embedding: list[float] = []
 
     # output
@@ -34,52 +32,40 @@ class MemRetrievalState(BaseModel):
     output_error: str | None = None
 
 
-def summarize_node(state: MemRetrievalState) -> MemRetrievalState:
-    """Summarize the input messages using the retrieval summarize prompt."""
-    # Format input messages
-    input_msgs_texts = []
-    for i, msg in enumerate(state.input_msgs):
-        plain = msg.to_plain_text()
-        input_msgs_texts.append(f"--- Message {i} Begin ---\n{plain}\n--- Message {i} End ---")
-    input_msgs_text: str = "\n".join(input_msgs_texts)
+def format_input_msgs(
+    input_msgs: list[Message], max_tokens: int = 6400, max_token_per_msg: int = 3200
+) -> str:
+    import tiktoken
 
-    # Use the retrieval summarize prompt
-    system_prompt = PROMPTS.rbank.mem_retrieval_summarize_system_prompt
-    user_prompt = PROMPTS.rbank.mem_retrieval_summarize_user_prompt.format(
-        trajectory=input_msgs_text,
-    )
-    user_msg = Message(
-        role="user",
-        content=user_prompt,
-    )
+    enc = tiktoken.get_encoding("cl100k_base")  # NOTE: hardcode for now
+    # reverse the order of messages
+    input_msgs = input_msgs[::-1]
+    total_tokens = 0
+    ret_text = ""
+    for i, msg in enumerate(input_msgs):
+        if total_tokens >= max_tokens:
+            break
+        msg_tokens = enc.encode(msg.to_plain_text())
+        is_truncated = False
+        if len(msg_tokens) > max_token_per_msg:
+            msg_tokens = msg_tokens[:max_token_per_msg]
+            is_truncated = True
+        if (len(msg_tokens) + total_tokens) > max_tokens:
+            msg_tokens = msg_tokens[: max_tokens - total_tokens]
+            is_truncated = True
+        total_tokens += len(msg_tokens)
+        text = enc.decode(msg_tokens)
+        ret_text += f"# Latest Message {i + 1}:\n{text}\n\n"
+        if is_truncated:
+            ret_text += "(truncated...)\n\n"
 
-    # Get summary from LLM
-    try:
-        summary_msg = ModelRegistry.completion(
-            LLM_NAME_SUMMARIZE,
-            [user_msg],
-            system_prompt,
-            agent_sender=AGENT_NAME,
-        )
-        state.summary_text = summary_msg.content
-    except Exception as e:
-        state.output_error = f"summarize_error: {e}"
-        return state
-
-    return state
+    return ret_text
 
 
 def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
     """Compute embeddings for the summary text."""
-    if state.output_error:
-        return state
-
-    if not state.summary_text:
-        state.output_error = "no summary text to embed"
-        return state
-
     try:
-        embeddings = ModelRegistry.embedding(LLM_NAME_EMBED, [state.summary_text])
+        embeddings = ModelRegistry.embedding(LLM_NAME, [format_input_msgs(state.input_msgs)])
         if embeddings and len(embeddings) > 0:
             state.summary_embedding = embeddings[0]
         else:
@@ -113,6 +99,7 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
         # Find all JSON files (containing embeddings)
         json_files = list(mem_dir_path.glob("*.json"))
 
+        # TODO: cache embeddings for each memo
         for json_path in json_files:
             try:
                 # Load the embedding
@@ -121,7 +108,7 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
                 memo_emb = MemoEmbeddings.model_validate(memo_emb_data)
 
                 # Get the embedding for the same LLM
-                emb_vec = memo_emb.get_embedding(LLM_NAME_EMBED)
+                emb_vec = memo_emb.get_embedding(LLM_NAME)
                 if emb_vec is None:
                     continue
 
@@ -159,12 +146,10 @@ def build():
     """Build the memory retrieval subgraph."""
     g = StateGraph(MemRetrievalState)
 
-    g.add_node("summarize", summarize_node)
     g.add_node("embedding", embedding_node)
     g.add_node("retrieval", retrieval_node)
 
-    g.add_edge(START, "summarize")
-    g.add_edge("summarize", "embedding")
+    g.add_edge(START, "embedding")
     g.add_edge("embedding", "retrieval")
     g.add_edge("retrieval", END)
 

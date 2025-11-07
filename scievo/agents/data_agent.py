@@ -3,6 +3,9 @@ Agent for data understanding and processing
 """
 
 import json
+import logging
+import os
+from typing import TYPE_CHECKING
 
 from functional import seq
 from langgraph.graph import END, START, StateGraph
@@ -10,24 +13,38 @@ from langgraph.graph import END, START, StateGraph
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import GraphState, Message
-from scievo.core.utils import wrap_dict_to_toon
+from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
 from scievo.prompts import PROMPTS
+from scievo.rbank.subgraph import mem_extraction, mem_retrieval
 from scievo.tools import Tool, ToolRegistry
+
+if TYPE_CHECKING:
+    from scievo.rbank.memo import Memo
 
 LLM_NAME = "data"
 AGENT_NAME = "data"
+MEM_EXTRACTION_CONTEXT_WINDOW = int(os.getenv("MEM_EXTRACTION_CONTEXT_WINDOW", 16))
+MEM_EXTRACTION_ROUND_FREQ = int(os.getenv("MEM_EXTRACTION_ROUND_FREQ", 8))
 
 
 def gateway_node(graph_state: GraphState) -> GraphState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
     # Check `gateway_conditional` for the actual logic
     agent_state = graph_state.agents[AGENT_NAME]
-    agent_state.round += 1
     return graph_state
 
 
 def gateway_conditional(graph_state: GraphState) -> str:
-    last_msg = graph_state.agents[AGENT_NAME].data_msgs[-1]
+    agent_state = graph_state.agents[AGENT_NAME]
+
+    if (
+        not agent_state.skip_mem_extraction
+        and agent_state.round > 0
+        and agent_state.round % MEM_EXTRACTION_ROUND_FREQ == 0
+    ):
+        return "mem_extraction"
+
+    last_msg = agent_state.data_msgs[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
 
@@ -40,18 +57,54 @@ def gateway_conditional(graph_state: GraphState) -> str:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
 
+mem_retrieval_subgraph = mem_retrieval.build()
+mem_retrieval_subgraph_compiled = mem_retrieval_subgraph.compile()
+
+
+def _memos_to_markdown(memos: list["Memo"]) -> str:
+    ret = ""
+    if len(memos) == 0:
+        return "No memory retrieved."
+    for i, memo in enumerate(memos):
+        ret += f"# Memo {i + 1}\n\n{memo.to_markdown()}\n\n"
+    return ret
+
+
 def llm_chat_node(graph_state: GraphState) -> GraphState:
     agent_state = graph_state.agents[AGENT_NAME]
+    agent_state.round += 1
+    agent_state.skip_mem_extraction = False
+
     selected_state = {
         "working_dir": agent_state.local_env.working_dir,
         "toolsets": agent_state.toolsets,
     }
 
+    # retrieve memos
+    try:
+        res = mem_retrieval_subgraph_compiled.invoke(
+            mem_retrieval.MemRetrievalState(
+                input_msgs=agent_state.data_msgs,
+                mem_dirs=[agent_state.sess_dir / f"mem_{AGENT_NAME}"],  # TODO: more mem dirs
+            )
+        )
+    except Exception as e:
+        logging.exception("mem_retrieval_error")
+        res = {"output_error": f"mem_retrieval_error with exception {e}"}
+
+    if err := res.get("output_error", None):
+        memory_text = err
+    else:
+        memos: list[Memo] = res.get("output_memos", [])
+        memory_text = _memos_to_markdown(memos)
+
+    # update system prompt
     system_prompt = PROMPTS.data.system_prompt.format(
         state=wrap_dict_to_toon(selected_state),
         toolsets_desc=wrap_dict_to_toon(
             ToolRegistry.get_toolsets_desc(["fs"]),
         ),
+        memory=wrap_text_with_block(memory_text, "markdown"),
     )
 
     tools: dict[str, Tool] = {}
@@ -169,6 +222,43 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
     return graph_state
 
 
+mem_extraction_subgraph = mem_extraction.build()
+mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
+
+
+def mem_extraction_node(graph_state: GraphState) -> GraphState:
+    agent_state = graph_state.agents[AGENT_NAME]
+    agent_state.skip_mem_extraction = True
+    context_window = agent_state.data_msgs[-MEM_EXTRACTION_CONTEXT_WINDOW:]
+    try:
+        res = mem_extraction_subgraph_compiled.invoke(
+            mem_extraction.MemExtractionState(
+                save_dir=agent_state.sess_dir / f"mem_{AGENT_NAME}",
+                input_msgs=context_window,
+            )
+        )
+    except Exception as e:
+        agent_state.data_msgs.append(
+            Message(
+                role="assistant",
+                content=f"mem_extraction_error: {e}",
+                agent_sender=AGENT_NAME,
+            )
+        )
+        return graph_state
+
+    err = res.get("output_error", None)
+    if err:
+        agent_state.data_msgs.append(
+            Message(
+                role="assistant",
+                content=f"mem_extraction_error: {err}",
+                agent_sender=AGENT_NAME,
+            )
+        )
+    return graph_state
+
+
 def build():
     g = StateGraph(GraphState)
 
@@ -176,13 +266,23 @@ def build():
     g.add_node("gateway", gateway_node)
     g.add_node("llm_chat", llm_chat_node)
     g.add_node("tool_calling", tool_calling_node)
+    g.add_node("mem_extraction", mem_extraction_node)
 
     # edges from gateway to nodes
     g.add_edge(START, "gateway")
-    g.add_conditional_edges("gateway", gateway_conditional, ["llm_chat", "tool_calling", END])
+    g.add_conditional_edges(
+        "gateway",
+        gateway_conditional,
+        [
+            "llm_chat",
+            "tool_calling",
+            "mem_extraction",
+            END,
+        ],
+    )
 
     # edges from nodes to gateway
     g.add_edge("llm_chat", "gateway")
     g.add_edge("tool_calling", "gateway")
-
+    g.add_edge("mem_extraction", "gateway")
     return g

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from litellm import Message as LLMessage
 from pydantic import BaseModel
 
@@ -52,6 +54,18 @@ class Message(LLMessage):
             return None
         return (self.completion_tokens or 0) + (self.prompt_tokens or 0)
 
+    @property
+    def reasoning_text(self) -> str | None:
+        if not hasattr(self, "reasoning_content"):
+            return None
+        elif self.reasoning_content is None:
+            return None
+        return self.reasoning_content
+
+    @reasoning_text.setter
+    def reasoning_text(self, value: str | None):
+        self.reasoning_content = value
+
     def to_ll_message(self) -> LLMessage | dict:
         return LLMessage(**self.model_dump(exclude=fields_to_exclude))
 
@@ -96,7 +110,7 @@ class Message(LLMessage):
         return ret
 
     def to_plain_text(self) -> str:
-        if self.reasoning_content is None:
+        if self.reasoning_text is None:
             return f"""\
 ## Metadata
 Role: {self.role}
@@ -116,7 +130,7 @@ Tool Name: {self.tool_name or "N/A"}
 Tool Call ID: {self.tool_call_id or "N/A"}
 
 ## Thinking Process
-{self.reasoning_content}
+{self.reasoning_text}
 
 ## Content
 {self.content}
@@ -135,7 +149,11 @@ class AgentState(BaseModel):
     round: int = 0
     # Local environment for the agent
     local_env: LocalEnv
+    # session dir (mem storage)
+    sess_dir: str | Path
     # List of toolsets available to the agent
     toolsets: list[str] = ["noop"]
     # List of messages sent to the agent
     data_msgs: list[Message] = []
+    # skip mem extraction for this round
+    skip_mem_extraction: bool = False

@@ -61,6 +61,11 @@ class ModelRegistry:
             **kwargs,
         }
 
+    def get_model_params(self, name: str) -> dict:
+        if name not in self.models:
+            raise ValueError(f"Model `{name}` not found")
+        return self.models[name]
+
     @classmethod
     def completion(
         cls,
@@ -72,18 +77,17 @@ class ModelRegistry:
         tool_choice: str | None = None,
         **kwargs,
     ) -> Message:
-        tools_json_schemas = [function_to_json_schema(tool) for tool in tools] if tools else None
-        if tools_json_schemas:
-            for schema in tools_json_schemas:
-                params = schema["function"]["parameters"]
-                params["properties"].pop(__GRAPH_STATE_NAME__, None)
-                if __GRAPH_STATE_NAME__ in params["required"]:
-                    params["required"].remove(__GRAPH_STATE_NAME__)
+        tools_json_schemas = [function_to_json_schema(tool) for tool in tools] if tools else []
+        for schema in tools_json_schemas:
+            params = schema["function"]["parameters"]
+            params["properties"].pop(__GRAPH_STATE_NAME__, None)
+            if __GRAPH_STATE_NAME__ in params["required"]:
+                params["required"].remove(__GRAPH_STATE_NAME__)
 
         messages = [Message(role="system", content=system_prompt)] + history
 
-        model_params: dict = cls.instance().models[name]
-        llm_model: str = cls.instance().models[name]["model"]
+        model_params: dict = cls.instance().get_model_params(name)
+        llm_model: str = model_params["model"]
 
         if llm_model.startswith("gpt-5"):
             from litellm import responses as ll_responses
@@ -153,9 +157,9 @@ class ModelRegistry:
                     .map(lambda s: s.text)
                     .to_list()
                 )
-                reasoning_content = "\n".join(reasoning_summaries)
+                reasoning_text = "\n".join(reasoning_summaries)
             else:
-                reasoning_content = None
+                reasoning_text = None
 
             ## construct message
             msg: Message = Message(
@@ -166,7 +170,7 @@ class ModelRegistry:
                 agent_sender=agent_sender,
                 completion_tokens=usage.output_tokens,
                 prompt_tokens=usage.input_tokens,
-                reasoning_content=reasoning_content,
+                reasoning_content=reasoning_text,
             )
             return msg
         else:
