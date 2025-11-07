@@ -71,7 +71,7 @@ class ModelRegistry:
         tools: list | None = None,
         tool_choice: str | None = None,
         **kwargs,
-    ):
+    ) -> Message:
         tools_json_schemas = [function_to_json_schema(tool) for tool in tools] if tools else None
         if tools_json_schemas:
             for schema in tools_json_schemas:
@@ -111,6 +111,7 @@ class ModelRegistry:
 
             response = ll_responses(**params)
             # print(response.model_dump_json(indent=2))
+            ## tool calls
             tool_calls = (
                 seq(response.output)
                 .filter(lambda c: c.type == "function_call")
@@ -125,6 +126,7 @@ class ModelRegistry:
                 )
                 .to_list()
             )
+            ## message content
             msg_content = (
                 seq(response.output)
                 .filter(lambda c: c.type == "message")
@@ -135,8 +137,27 @@ class ModelRegistry:
                 msg_content = None
             else:
                 msg_content = msg_content[0][0].text
-            # TODO: summary
+            ## usage
             usage = response.usage  # type: ignore
+            ## reasoning content
+            reasoning_msg_block = (
+                seq(response.output)
+                .filter(lambda c: c.type == "reasoning")
+                .filter(lambda c: len(c.summary) > 0)
+                .head_option(no_wrap=True)
+            )
+            if reasoning_msg_block:
+                reasoning_summaries = (
+                    seq(reasoning_msg_block.summary)
+                    .filter(lambda s: s.type == "summary_text")
+                    .map(lambda s: s.text)
+                    .to_list()
+                )
+                reasoning_content = "\n".join(reasoning_summaries)
+            else:
+                reasoning_content = None
+
+            ## construct message
             msg: Message = Message(
                 role="assistant",
                 content=msg_content,
@@ -145,6 +166,7 @@ class ModelRegistry:
                 agent_sender=agent_sender,
                 completion_tokens=usage.output_tokens,
                 prompt_tokens=usage.input_tokens,
+                reasoning_content=reasoning_content,
             )
             return msg
         else:

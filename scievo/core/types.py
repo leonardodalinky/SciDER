@@ -96,12 +96,29 @@ class Message(LLMessage):
         return ret
 
     def to_plain_text(self) -> str:
-        return f"""\
+        if self.reasoning_content is None:
+            return f"""\
+## Metadata
 Role: {self.role}
 Agent Sender: {self.agent_sender}
 Tool Name: {self.tool_name or "N/A"}
 Tool Call ID: {self.tool_call_id or "N/A"}
-Content:
+
+## Content
+{self.content}
+"""
+        else:
+            return f"""\
+## Metadata
+Role: {self.role}
+Agent Sender: {self.agent_sender}
+Tool Name: {self.tool_name or "N/A"}
+Tool Call ID: {self.tool_call_id or "N/A"}
+
+## Thinking Process
+{self.reasoning_content}
+
+## Content
 {self.content}
 """
 

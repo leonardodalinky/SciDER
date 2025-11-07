@@ -23,6 +23,8 @@ class DataPrompts(BaseModel):
 class RBankPrompts(BaseModel):
     mem_extraction_system_prompt: str
     mem_extraction_user_prompt: str
+    mem_retrieval_summarize_system_prompt: str
+    mem_retrieval_summarize_user_prompt: str
 
 
 def init():

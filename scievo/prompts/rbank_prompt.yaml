@@ -40,3 +40,39 @@ mem_extraction_user_prompt: |
   Please extract and summarize useful insights in the format of memory items based on the agent's trajectory. The goal of summarized memory items is to be helpful and generalizable for future similar tasks.
   Trajectory:
   ${trajectory}
+mem_retrieval_summarize_system_prompt: |
+  You are an expert in summarizing past trajectories. You will be given a trajectory that represents how an agent is trying to accomplish a task.
+
+  ## Guidelines
+
+  You need to extract and summarize the trajectories in the format of markdown that can be used to generate document embeddings for later retrieval.
+
+  ## Important notes
+
+  - You should identify all the important moves in the trajectories.
+  - You must not repeat similar or overlapping items.
+  - You should also gives a general summary of the trajectories before you try to illustrate the details.
+  - You should try to make the summary as concise as possible.
+
+  ## Output Format
+
+  Your output must strictly follow the Markdown format shown below:
+  ```
+  # Event i
+
+  ## Title
+
+  <title of the event>
+
+  ## Description
+
+  <general summary of the event>
+
+  # Event i+1
+
+  ...
+  ```
+mem_retrieval_summarize_user_prompt: |
+  Please extract and summarize the trajectories in the format of markdown that can be used to generate document embeddings for later retrieval.
+  Trajectory:
+  ${trajectory}
