@@ -6,6 +6,7 @@ from typing import Callable
 import litellm
 from functional import seq
 from litellm.types.utils import Usage
+from loguru import logger
 
 from ..tools import ToolRegistry
 from .constant import __GRAPH_STATE_NAME__
@@ -60,6 +61,7 @@ class ModelRegistry:
             "api_key": api_key,
             **kwargs,
         }
+        logger.debug("Registered model: {}", name)
 
     def get_model_params(self, name: str) -> dict:
         if name not in self.models:
@@ -90,6 +92,8 @@ class ModelRegistry:
         llm_model: str = model_params["model"]
 
         if llm_model.startswith("gpt-5"):
+            logger.trace("Using GPT-5 Response API for model: {}", name)
+
             from litellm import responses as ll_responses
 
             # response API has different tool schema
@@ -115,6 +119,8 @@ class ModelRegistry:
 
             response = ll_responses(**params)
             # print(response.model_dump_json(indent=2))
+            logger.trace("GPT-5 Response API response: {}", response.model_dump_json(indent=2))
+
             ## tool calls
             tool_calls = (
                 seq(response.output)

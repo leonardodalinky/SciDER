@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 from langgraph.graph import END, START, StateGraph
+from loguru import logger
 from pydantic import BaseModel
 
 from scievo.core.llms import ModelRegistry
@@ -64,25 +65,35 @@ def format_input_msgs(
 
 def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
     """Compute embeddings for the summary text."""
+    logger.debug("Mem Retrieval embedding begin: {} input msgs", len(state.input_msgs))
     try:
         embeddings = ModelRegistry.embedding(LLM_NAME, [format_input_msgs(state.input_msgs)])
         if embeddings and len(embeddings) > 0:
             state.summary_embedding = embeddings[0]
         else:
             state.output_error = "embedding returned empty result"
+            logger.debug("Retrieval error: {}", state.output_error)
     except Exception as e:
         state.output_error = f"embedding_error: {e}"
+        logger.debug("Retrieval error: {}", state.output_error)
 
+    if not state.output_error:
+        logger.debug(
+            "Mem Retrieval embedding end: {} dims",
+            len(state.summary_embedding) if state.summary_embedding else 0,
+        )
     return state
 
 
 def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
     """Retrieve the top-k most relevant memos from the memory bank."""
     if state.output_error:
+        logger.debug("Retrieval skipped due to existing error: {}", state.output_error)
         return state
 
     if not state.summary_embedding:
         state.output_error = "no summary embedding available"
+        logger.debug("Retrieval error: {}", state.output_error)
         return state
 
     # Convert query embedding to numpy array
@@ -91,9 +102,11 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
     # Collect all memo embeddings from JSON files
     memo_candidates: list[tuple[float, Path, Path]] = []  # (similarity, json_path, md_path)
 
+    logger.debug("Retrieval scanning mem dirs: {}", state.mem_dirs)
     for mem_dir in state.mem_dirs:
         mem_dir_path = Path(mem_dir)
         if not mem_dir_path.exists() or not mem_dir_path.is_dir():
+            logger.debug("Skip non-dir mem path: {}", mem_dir_path)
             continue
 
         # Find all JSON files (containing embeddings)
@@ -139,9 +152,13 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
             continue
 
     state.output_memos = retrieved_memos
+    logger.debug(
+        "Retrieval end: {} candidates, {} returned", len(memo_candidates), len(retrieved_memos)
+    )
     return state
 
 
+@logger.catch
 def build():
     """Build the memory retrieval subgraph."""
     g = StateGraph(MemRetrievalState)

@@ -4,8 +4,10 @@ from datetime import datetime
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
+from loguru import logger
 from pydantic import BaseModel
 
+from scievo.core.constant import LOG_MEM_SUBGRAPH
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.prompts import PROMPTS
@@ -25,6 +27,7 @@ class MemExtractionState(BaseModel):
 
 
 def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
+    logger.debug("Memory Extraction begin")
     input_msgs_texts = []
     for i, msg in enumerate(state.input_msgs):
         plain = msg.to_plain_text()
@@ -45,7 +48,7 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
         [user_msg],
         system_prompt,
         agent_sender=AGENT_NAME,
-    )
+    ).with_log(LOG_MEM_SUBGRAPH)
     mem_text = mem_msg.content
 
     # Look for markdown or generic fenced blocks, preferring markdown
@@ -74,12 +77,14 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
             try:
                 memos.append(Memo.from_markdown(block))
             except Exception:
+                logger.debug("Failed to parse memo block: {}", block)
                 continue
     else:
         # Fallback: parse the whole markdown as a single memo
         try:
             memos.append(Memo.from_markdown(extracted_md))
         except Exception as e:
+            logger.debug("Markdown parse error: {}", e)
             state.output_error = f"markdown_parse_error: {e}"
             state.output_mems = []
             return state
@@ -126,6 +131,7 @@ def persistence_node(state: MemExtractionState) -> MemExtractionState:
             )
         )
     except Exception as e:
+        logger.debug("Persistence subgraph invoke error: {}", e)
         state.output_error = f"persistence_subgraph_invoke_error: {e}"
         return state
 
@@ -135,6 +141,7 @@ def persistence_node(state: MemExtractionState) -> MemExtractionState:
     return state
 
 
+@logger.catch
 def build():
     g = StateGraph(MemExtractionState)
 

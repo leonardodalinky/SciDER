@@ -2,6 +2,7 @@ import os
 from contextlib import AbstractContextManager
 from pathlib import Path
 
+from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
 
@@ -11,6 +12,7 @@ class LocalEnv(AbstractContextManager, BaseModel):
     working_dir: Path
     _original_cwd: Path | None = PrivateAttr(default=None)
 
+    @logger.catch
     def __init__(self, working_dir: str | Path, create_dir_if_missing: bool = True):
         """Initialise the environment with an optional auto-create directory flag."""
         # Resolve and validate the target directory.
@@ -29,6 +31,7 @@ class LocalEnv(AbstractContextManager, BaseModel):
         # Ensure directory exists and move into it.
         self._original_cwd = Path.cwd()
         os.chdir(self.working_dir)
+        logger.trace("Switched to directory: {}", self.working_dir)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> bool:
@@ -37,4 +40,5 @@ class LocalEnv(AbstractContextManager, BaseModel):
         if self._original_cwd is not None:
             os.chdir(self._original_cwd)
             self._original_cwd = None
+        logger.trace("Switched back to directory: {}", self.working_dir)
         return False

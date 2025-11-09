@@ -7,6 +7,7 @@ from secrets import randbelow
 from threading import RLock
 
 from dotenv import load_dotenv
+from loguru import logger
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ class Brain:
     _instance: Brain | None = None
     _lock: RLock = RLock()
 
+    @logger.catch
     def __new__(cls) -> Brain:
         if cls._instance is None:
             with cls._lock:
@@ -26,6 +28,8 @@ class Brain:
                     brain_dir = os.getenv("BRAIN_DIR")
                     if brain_dir is None:
                         raise ValueError("BRAIN_DIR environment variable must be set.")
+
+                    logger.info("Brain directory: {}", brain_dir)
 
                     cls._instance.brain_dir = Path(brain_dir)
                     cls._instance.brain_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +44,7 @@ class Brain:
     def new_session_named(cls, session_name: str, session_prefix: str = "ss_") -> BrainSession:
         """Create a new session directory with a named session."""
         session_dir = cls.instance().brain_dir / f"{session_prefix}{session_name}"
+        logger.info("New session directory: {}", session_dir)
         return BrainSession(session_dir)
 
     @classmethod
@@ -74,6 +79,7 @@ class BrainSession:
         agent_dir = self.session_dir / agent_name
         agent_dir.mkdir(parents=True, exist_ok=True)
         self._agent_dirs[agent_name] = agent_dir
+        logger.debug("New agent directory: {}", agent_dir)
         return agent_dir
 
     @property

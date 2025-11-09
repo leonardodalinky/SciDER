@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
+from loguru import logger
 from pydantic import BaseModel
 
 from scievo.core.llms import ModelRegistry
@@ -16,13 +17,16 @@ class MemPersistenceState(BaseModel):
 
 
 def mem_persistence_node(state: MemPersistenceState) -> MemPersistenceState:
+    logger.debug("Memory Persistence begin: {} mems -> {}", len(state.input_mems), state.save_dir)
     if len(state.input_mems) == 0:
         state.output_error = "no mem entries provided"
+        logger.debug("Persistence error: {}", state.output_error)
         return state
 
     first_llm = state.input_mems[0].llm
     if not all(entry.llm == first_llm for entry in state.input_mems):
         state.output_error = "All mem entries must have the same llm"
+        logger.debug("Persistence error: {}", state.output_error)
         return state
 
     # ensure save directory exists
@@ -38,15 +42,19 @@ def mem_persistence_node(state: MemPersistenceState) -> MemPersistenceState:
         try:
             entry.memo.to_markdown_file(md_path)
             entries_markdown[base_name] = entry.memo.to_markdown()
+            logger.debug("Persisted memo markdown: {}", md_path)
         except Exception as e:
             state.output_error = f"persist_markdown_error({base_name}): {e}"
+            logger.debug("Persistence error: {}", state.output_error)
             return state
 
     # compute and persist embeddings as json
     try:
         vecs = ModelRegistry.embedding(LLM_NAME, list(entries_markdown.values()))
+        logger.debug("Computed embeddings for {} mems", len(vecs))
     except Exception as e:
         state.output_error = f"embedding_error({base_name}): {e}"
+        logger.debug("Persistence error: {}", state.output_error)
         return state
 
     for base_name, vec in zip(entries_markdown.keys(), vecs):
@@ -58,13 +66,17 @@ def mem_persistence_node(state: MemPersistenceState) -> MemPersistenceState:
         try:
             with open(emb_json_path, "w") as f:
                 f.write(mem_emb.model_dump_json(indent=2))
+            logger.debug("Persisted memo embedding: {}", emb_json_path)
         except Exception as e:
             state.output_error = f"persist_embedding_error({base_name}): {e}"
+            logger.debug("Persistence error: {}", state.output_error)
             return state
 
+    logger.debug("Memory Persistence end: {} items persisted", len(entries_markdown))
     return state
 
 
+@logger.catch
 def build():
     g = StateGraph(MemPersistenceState)
 

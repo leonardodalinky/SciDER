@@ -1,9 +1,22 @@
 from pathlib import Path
+from typing import Self
 
 from litellm import Message as LLMessage
 from pydantic import BaseModel
+from rich.console import Console
+from rich.style import Style
 
 from .code_env import LocalEnv
+
+console = Console()
+
+styles = {
+    "assistant": Style(color="green"),
+    "user": Style(color="white"),
+    "system": Style(color="red"),
+    "tool": Style(color="magenta"),
+    "function": Style(color="yellow"),
+}
 
 
 class Message(LLMessage):
@@ -109,32 +122,75 @@ class Message(LLMessage):
 
         return ret
 
-    def to_plain_text(self) -> str:
+    def to_plain_text(self, verbose_tool: bool = False) -> str:
+        # format .tool_calls
+        tool_text = ""
+        if self.tool_name:
+            tool_text += f"- Tool Name: {self.tool_name}\n"
+        if verbose_tool and self.tool_call_id:
+            tool_text += f"- Tool Call ID: {self.tool_call_id}\n"
+        if self.tool_calls and len(self.tool_calls) > 0:
+            tool_text += "- Tool Calls:\n"
+            for tool_call in self.tool_calls:
+                if verbose_tool:
+                    tool_text += f"  - {tool_call.function.name}({tool_call.function.arguments}), id: {tool_call.id}\n"
+                else:
+                    tool_text += f"  - {tool_call.function.name}\n"
+
         if self.reasoning_text is None:
             return f"""\
 ## Metadata
-Role: {self.role}
-Agent Sender: {self.agent_sender}
-Tool Name: {self.tool_name or "N/A"}
-Tool Call ID: {self.tool_call_id or "N/A"}
+
+- Role: {self.role}
+- Agent Sender: {self.agent_sender or "N/A"}
+{tool_text}
 
 ## Content
+
 {self.content}
 """
         else:
             return f"""\
 ## Metadata
-Role: {self.role}
-Agent Sender: {self.agent_sender}
-Tool Name: {self.tool_name or "N/A"}
-Tool Call ID: {self.tool_call_id or "N/A"}
+
+- Role: {self.role}
+- Agent Sender: {self.agent_sender or "N/A"}
+{tool_text}
 
 ## Thinking Process
+
 {self.reasoning_text}
 
 ## Content
+
 {self.content}
 """
+
+    def with_log(self, cond: bool | None = None) -> Self:
+        """
+        Log the message to console and other loggers. Returns self.
+
+        Returns:
+            self
+        """
+        if cond is not None and not cond:
+            return self
+
+        if self.agent_sender:
+            text = f"""
+--- Message from `{self.role}` of Agent `{self.agent_sender}`  ---
+{self.to_plain_text(verbose_tool=True)}
+--- Message End ---
+"""
+        else:
+            text = f"""
+--- Message from `{self.role}`  ---
+{self.to_plain_text(verbose_tool=True)}
+--- Message End ---
+"""
+        console.print(text, style=styles.get(self.role, Style()))
+
+        return self
 
 
 class GraphState(BaseModel):

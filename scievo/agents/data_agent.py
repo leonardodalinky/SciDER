@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from functional import seq
 from langgraph.graph import END, START, StateGraph
+from loguru import logger
 
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
@@ -30,7 +31,7 @@ MEM_EXTRACTION_ROUND_FREQ = int(os.getenv("MEM_EXTRACTION_ROUND_FREQ", 8))
 def gateway_node(graph_state: GraphState) -> GraphState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
     # Check `gateway_conditional` for the actual logic
-    agent_state = graph_state.agents[AGENT_NAME]
+    logger.trace("gateway_node of Agent {}", AGENT_NAME)
     return graph_state
 
 
@@ -71,6 +72,7 @@ def _memos_to_markdown(memos: list["Memo"]) -> str:
 
 
 def llm_chat_node(graph_state: GraphState) -> GraphState:
+    logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
     agent_state = graph_state.agents[AGENT_NAME]
     agent_state.round += 1
     agent_state.skip_mem_extraction = False
@@ -118,13 +120,15 @@ def llm_chat_node(graph_state: GraphState) -> GraphState:
         system_prompt,
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
-    )
+    ).with_log()
     agent_state.data_msgs.append(msg)
+
     return graph_state
 
 
 def tool_calling_node(graph_state: GraphState) -> GraphState:
     """Execute tool calls from the last message and update the graph state"""
+    logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
     agent_state = graph_state.agents[AGENT_NAME]
     # Get the last message which contains tool calls
     last_msg = agent_state.data_msgs[-1]
@@ -154,7 +158,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response).with_log())
             continue
 
         # Parse tool arguments
@@ -169,7 +173,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response).with_log())
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -179,7 +183,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response).with_log())
             continue
 
         # Execute the tool
@@ -207,7 +211,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            agent_state.data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response).with_log())
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -217,7 +221,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response))
+            agent_state.data_msgs.append(Message(**tool_response).with_log())
 
     return graph_state
 
@@ -227,9 +231,11 @@ mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
 
 
 def mem_extraction_node(graph_state: GraphState) -> GraphState:
+    logger.debug("mem_extraction_node of Agent {}", AGENT_NAME)
     agent_state = graph_state.agents[AGENT_NAME]
     agent_state.skip_mem_extraction = True
     context_window = agent_state.data_msgs[-MEM_EXTRACTION_CONTEXT_WINDOW:]
+    logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
     try:
         res = mem_extraction_subgraph_compiled.invoke(
             mem_extraction.MemExtractionState(
@@ -243,7 +249,7 @@ def mem_extraction_node(graph_state: GraphState) -> GraphState:
                 role="assistant",
                 content=f"mem_extraction_error: {e}",
                 agent_sender=AGENT_NAME,
-            )
+            ).with_log()
         )
         return graph_state
 
@@ -254,11 +260,12 @@ def mem_extraction_node(graph_state: GraphState) -> GraphState:
                 role="assistant",
                 content=f"mem_extraction_error: {err}",
                 agent_sender=AGENT_NAME,
-            )
+            ).with_log()
         )
     return graph_state
 
 
+@logger.catch
 def build():
     g = StateGraph(GraphState)
 
