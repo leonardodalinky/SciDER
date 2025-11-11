@@ -9,7 +9,7 @@ from litellm.types.utils import Usage
 from loguru import logger
 
 from ..tools import ToolRegistry
-from .constant import __GRAPH_STATE_NAME__
+from .constant import __AGENT_STATE_NAME__
 from .types import Message
 
 
@@ -82,9 +82,9 @@ class ModelRegistry:
         tools_json_schemas = [function_to_json_schema(tool) for tool in tools] if tools else []
         for schema in tools_json_schemas:
             params = schema["function"]["parameters"]
-            params["properties"].pop(__GRAPH_STATE_NAME__, None)
-            if __GRAPH_STATE_NAME__ in params["required"]:
-                params["required"].remove(__GRAPH_STATE_NAME__)
+            params["properties"].pop(__AGENT_STATE_NAME__, None)
+            if __AGENT_STATE_NAME__ in params["required"]:
+                params["required"].remove(__AGENT_STATE_NAME__)
 
         messages = [Message(role="system", content=system_prompt)] + history
 

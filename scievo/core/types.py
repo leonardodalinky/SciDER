@@ -1,12 +1,9 @@
-from pathlib import Path
 from typing import Self
 
 from litellm import Message as LLMessage
 from pydantic import BaseModel
 from rich.console import Console
 from rich.style import Style
-
-from .code_env import LocalEnv
 
 console = Console()
 
@@ -193,23 +190,6 @@ class Message(LLMessage):
         return self
 
 
-class GraphState(BaseModel):
-    """State of the graph"""
-
-    agents: dict[str, "AgentState"]
-
-
-class AgentState(BaseModel):
-    """State of an agent"""
-
-    round: int = 0
-    # Local environment for the agent
-    local_env: LocalEnv
-    # session dir (mem storage)
-    sess_dir: str | Path
+class ToolsetState(BaseModel):
     # List of toolsets available to the agent
-    toolsets: list[str] = ["noop"]
-    # List of messages sent to the agent
-    data_msgs: list[Message] = []
-    # skip mem extraction for this round
-    skip_mem_extraction: bool = False
+    toolsets: list[str] = ["todo"]

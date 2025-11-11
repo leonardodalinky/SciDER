@@ -7,7 +7,7 @@ def str_to_bool(s: str | bool) -> bool:
     return s.lower() in ("true", "1", "t")
 
 
-__GRAPH_STATE_NAME__ = "graph_state"
+__AGENT_STATE_NAME__ = "agent_state"
 __CTX_NAME__ = "ctx"
 
 LOG_MEM_SUBGRAPH = str_to_bool(os.getenv("LOG_MEM_SUBGRAPH", False))

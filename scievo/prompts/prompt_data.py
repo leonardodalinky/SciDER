@@ -18,6 +18,10 @@ class DummyPrompts(BaseModel):
 
 class DataPrompts(BaseModel):
     system_prompt: str
+    planner_system_prompt: str
+    replanner_system_prompt: str
+    replanner_user_prompt: str
+    replanner_user_response: str
 
 
 class RBankPrompts(BaseModel):

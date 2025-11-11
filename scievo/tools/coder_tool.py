@@ -6,7 +6,6 @@ from aider.io import InputOutput
 from aider.models import Model
 
 from scievo.core import constant
-from scievo.core.types import GraphState
 
 from .registry import register_tool, register_toolset_desc
 
@@ -58,9 +57,7 @@ register_toolset_desc(
         },
     },
 )
-def run_coder(
-    graph_state: GraphState, fnames: list[str] | None = None, instruction: str = ""
-) -> str:
+def run_coder(fnames: list[str] | None = None, instruction: str = "") -> str:
     """
     Execute a coding task using aider.
 

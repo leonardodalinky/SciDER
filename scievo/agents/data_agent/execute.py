@@ -3,21 +3,22 @@ Agent for data understanding and processing
 """
 
 import json
-import logging
 import os
 from typing import TYPE_CHECKING
 
 from functional import seq
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import END
 from loguru import logger
 
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
-from scievo.core.types import GraphState, Message
+from scievo.core.types import Message
 from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
 from scievo.prompts import PROMPTS
 from scievo.rbank.subgraph import mem_extraction, mem_retrieval
 from scievo.tools import Tool, ToolRegistry
+
+from .state import DataAgentState
 
 if TYPE_CHECKING:
     from scievo.rbank.memo import Memo
@@ -28,15 +29,15 @@ MEM_EXTRACTION_CONTEXT_WINDOW = int(os.getenv("MEM_EXTRACTION_CONTEXT_WINDOW", 1
 MEM_EXTRACTION_ROUND_FREQ = int(os.getenv("MEM_EXTRACTION_ROUND_FREQ", 8))
 
 
-def gateway_node(graph_state: GraphState) -> GraphState:
+def gateway_node(agent_state: DataAgentState) -> DataAgentState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
     # Check `gateway_conditional` for the actual logic
     logger.trace("gateway_node of Agent {}", AGENT_NAME)
-    return graph_state
+    return agent_state
 
 
-def gateway_conditional(graph_state: GraphState) -> str:
-    agent_state = graph_state.agents[AGENT_NAME]
+def gateway_conditional(agent_state: DataAgentState) -> str:
+    agent_state = agent_state
 
     if (
         not agent_state.skip_mem_extraction
@@ -45,7 +46,7 @@ def gateway_conditional(graph_state: GraphState) -> str:
     ):
         return "mem_extraction"
 
-    last_msg = agent_state.data_msgs[-1]
+    last_msg = agent_state.history[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
 
@@ -53,7 +54,7 @@ def gateway_conditional(graph_state: GraphState) -> str:
         case "user" | "tool":
             return "llm_chat"
         case "assistant":
-            return END
+            return "replanner"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
@@ -71,9 +72,9 @@ def _memos_to_markdown(memos: list["Memo"]) -> str:
     return ret
 
 
-def llm_chat_node(graph_state: GraphState) -> GraphState:
+def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
-    agent_state = graph_state.agents[AGENT_NAME]
+    agent_state = agent_state
     agent_state.round += 1
     agent_state.skip_mem_extraction = False
 
@@ -86,12 +87,12 @@ def llm_chat_node(graph_state: GraphState) -> GraphState:
     try:
         res = mem_retrieval_subgraph_compiled.invoke(
             mem_retrieval.MemRetrievalState(
-                input_msgs=agent_state.data_msgs,
+                input_msgs=agent_state.history,
                 mem_dirs=[agent_state.sess_dir / f"mem_{AGENT_NAME}"],  # TODO: more mem dirs
             )
         )
     except Exception as e:
-        logging.exception("mem_retrieval_error")
+        logger.exception("mem_retrieval_error")
         res = {"output_error": f"mem_retrieval_error with exception {e}"}
 
     if err := res.get("output_error", None):
@@ -107,31 +108,32 @@ def llm_chat_node(graph_state: GraphState) -> GraphState:
             ToolRegistry.get_toolsets_desc(["fs"]),
         ),
         memory=wrap_text_with_block(memory_text, "markdown"),
+        current_plan=agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else "",
     )
 
     tools: dict[str, Tool] = {}
     for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
-    tools.update(ToolRegistry.get_toolset("noop"))
+    tools.update(ToolRegistry.get_toolset("todo"))
     tools.update(ToolRegistry.get_toolset("state"))
     msg = ModelRegistry.completion(
         LLM_NAME,
-        seq(agent_state.data_msgs).filter_not(lambda msg: msg.hidden).to_list(),
+        seq(agent_state.history).filter_not(lambda msg: msg.hidden).to_list(),
         system_prompt,
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
     ).with_log()
-    agent_state.data_msgs.append(msg)
+    agent_state.history.append(msg)
 
-    return graph_state
+    return agent_state
 
 
-def tool_calling_node(graph_state: GraphState) -> GraphState:
+def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
     """Execute tool calls from the last message and update the graph state"""
     logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
-    agent_state = graph_state.agents[AGENT_NAME]
+    agent_state = agent_state
     # Get the last message which contains tool calls
-    last_msg = agent_state.data_msgs[-1]
+    last_msg = agent_state.history[-1]
 
     if not last_msg.tool_calls:
         raise ValueError("No tool calls found in the last message")
@@ -140,7 +142,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
     tools: dict[str, Tool] = {}
     for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
-    tools.update(ToolRegistry.get_toolset("noop"))
+    tools.update(ToolRegistry.get_toolset("todo"))
     tools.update(ToolRegistry.get_toolset("state"))
 
     function_map = {tool.name: tool.func for tool in tools.values()}
@@ -158,7 +160,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response).with_log())
+            agent_state.history.append(Message(**tool_response).with_log())
             continue
 
         # Parse tool arguments
@@ -173,7 +175,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response).with_log())
+            agent_state.history.append(Message(**tool_response).with_log())
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -183,7 +185,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response).with_log())
+            agent_state.history.append(Message(**tool_response).with_log())
             continue
 
         # Execute the tool
@@ -191,17 +193,17 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
             # Pass the graph state to the tool function
             func = function_map[tool_name]
 
-            # Check if function expects graph_state parameter
+            # Check if function expects agent_state parameter
             import inspect
 
             sig = inspect.signature(func)
-            if constant.__GRAPH_STATE_NAME__ in sig.parameters:
-                args.update({constant.__GRAPH_STATE_NAME__: graph_state})
+            if constant.__AGENT_STATE_NAME__ in sig.parameters:
+                args.update({constant.__AGENT_STATE_NAME__: agent_state})
             if constant.__CTX_NAME__ in sig.parameters:
                 args.update({constant.__CTX_NAME__: {"current_agent": AGENT_NAME}})
 
             # Execute the tool in the agent's local environment
-            with graph_state.agents[AGENT_NAME].local_env:
+            with agent_state.local_env:
                 result = func(**args)
 
             # Create tool response message
@@ -211,7 +213,7 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            agent_state.data_msgs.append(Message(**tool_response).with_log())
+            agent_state.history.append(Message(**tool_response).with_log())
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -221,75 +223,45 @@ def tool_calling_node(graph_state: GraphState) -> GraphState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            agent_state.data_msgs.append(Message(**tool_response).with_log())
+            agent_state.history.append(Message(**tool_response).with_log())
 
-    return graph_state
+    return agent_state
 
 
 mem_extraction_subgraph = mem_extraction.build()
 mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
 
 
-def mem_extraction_node(graph_state: GraphState) -> GraphState:
+def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("mem_extraction_node of Agent {}", AGENT_NAME)
-    agent_state = graph_state.agents[AGENT_NAME]
+    agent_state = agent_state
     agent_state.skip_mem_extraction = True
-    context_window = agent_state.data_msgs[-MEM_EXTRACTION_CONTEXT_WINDOW:]
+    context_window = agent_state.history[-MEM_EXTRACTION_CONTEXT_WINDOW:]
     logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
     try:
         res = mem_extraction_subgraph_compiled.invoke(
             mem_extraction.MemExtractionState(
-                save_dir=agent_state.sess_dir / f"mem_{AGENT_NAME}",
+                save_dir=Path(agent_state.sess_dir) / f"mem_{AGENT_NAME}",
                 input_msgs=context_window,
             )
         )
     except Exception as e:
-        agent_state.data_msgs.append(
+        agent_state.history.append(
             Message(
                 role="assistant",
                 content=f"mem_extraction_error: {e}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
-        return graph_state
+        return agent_state
 
     err = res.get("output_error", None)
     if err:
-        agent_state.data_msgs.append(
+        agent_state.history.append(
             Message(
                 role="assistant",
                 content=f"mem_extraction_error: {err}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
-    return graph_state
-
-
-@logger.catch
-def build():
-    g = StateGraph(GraphState)
-
-    # nodes
-    g.add_node("gateway", gateway_node)
-    g.add_node("llm_chat", llm_chat_node)
-    g.add_node("tool_calling", tool_calling_node)
-    g.add_node("mem_extraction", mem_extraction_node)
-
-    # edges from gateway to nodes
-    g.add_edge(START, "gateway")
-    g.add_conditional_edges(
-        "gateway",
-        gateway_conditional,
-        [
-            "llm_chat",
-            "tool_calling",
-            "mem_extraction",
-            END,
-        ],
-    )
-
-    # edges from nodes to gateway
-    g.add_edge("llm_chat", "gateway")
-    g.add_edge("tool_calling", "gateway")
-    g.add_edge("mem_extraction", "gateway")
-    return g
+    return agent_state

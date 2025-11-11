@@ -13,8 +13,6 @@ try:  # pragma: no cover - platform dependent
 except ImportError:  # pragma: no cover - Windows fallback
     pwd = None  # type: ignore[assignment]
 
-from scievo.core.types import GraphState
-
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("fs", "File system toolset.")
@@ -37,7 +35,7 @@ register_toolset_desc("fs", "File system toolset.")
         },
     },
 )
-def list_files(graph_state: GraphState, path: str) -> str:
+def list_files(path: str) -> str:
     def _resolve_owner(uid: int) -> str:
         if pwd is None:
             return str(uid)
@@ -174,7 +172,7 @@ def list_files(graph_state: GraphState, path: str) -> str:
         },
     },
 )
-def read_head(graph_state: GraphState, path: str, n: int = 10) -> str:
+def read_head(path: str, n: int = 10) -> str:
     try:
         lines = []
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -213,7 +211,7 @@ def read_head(graph_state: GraphState, path: str, n: int = 10) -> str:
         },
     },
 )
-def read_file(graph_state: GraphState, path: str, max_char: int = 32000) -> str:
+def read_file(path: str, max_char: int = 32000) -> str:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read()
@@ -242,7 +240,7 @@ def read_file(graph_state: GraphState, path: str, max_char: int = 32000) -> str:
         },
     },
 )
-def save_file(graph_state: GraphState, path: str, content: str) -> str:
+def save_file(path: str, content: str) -> str:
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -268,7 +266,7 @@ def save_file(graph_state: GraphState, path: str, content: str) -> str:
         },
     },
 )
-def create_dir(graph_state: dict, path: str) -> str:
+def create_dir(path: str) -> str:
     try:
         p = Path(path)
         p.mkdir(parents=True, exist_ok=True)

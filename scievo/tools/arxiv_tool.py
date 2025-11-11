@@ -3,8 +3,6 @@ import urllib.parse
 
 import feedparser
 
-from scievo.core.types import GraphState
-
 from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
@@ -36,7 +34,7 @@ register_toolset_desc("arxiv", "ArXiv paper search toolset.")
         },
     },
 )
-def search_arxiv(graph_state: GraphState, query: str, max_results: int = 10) -> str:
+def search_arxiv(query: str, max_results: int = 10) -> str:
     try:
         # Build API URL
         base_url = "http://export.arxiv.org/api/query?"

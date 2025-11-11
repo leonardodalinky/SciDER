@@ -1978,6 +1978,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.53.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/9c/be1d84106529aeacbe6151c1e1dc202f5a5cfa0d9bac748d4a1039ebb913/json_repair-0.53.0.tar.gz", hash = "sha256:97fcbf1eea0bbcf6d5cc94befc573623ab4bbba6abdc394cfd3b933a2571266d", size = 36204, upload-time = "2025-11-08T13:45:15.807Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/49/e588ec59b64222c8d38585f9ceffbf71870c3cbfb2873e53297c4f4afd0b/json_repair-0.53.0-py3-none-any.whl", hash = "sha256:17f7439e41ae39964e1d678b1def38cb8ec43d607340564acf3e62d8ce47a727", size = 27404, upload-time = "2025-11-08T13:45:14.464Z" },
+]
+
+[[package]]
 name = "json5"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4672,6 +4681,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "epam-indigo" },
     { name = "feedparser" },
+    { name = "json-repair" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
     { name = "litellm" },
@@ -4711,6 +4721,7 @@ dev = [
 requires-dist = [
     { name = "epam-indigo", specifier = "==1.35.0" },
     { name = "feedparser", specifier = ">=6.0.12" },
+    { name = "json-repair", specifier = ">=0.53.0" },
     { name = "langchain-text-splitters", specifier = ">=1.0.0" },
     { name = "langgraph", specifier = ">=1.0.2" },
     { name = "litellm", specifier = ">=1.79.0" },
