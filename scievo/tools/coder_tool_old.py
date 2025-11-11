@@ -1,13 +1,17 @@
 """
-This is the new version of the coder tool, which uses aider as a command line tool.
+**Deprecated**
+
+This is the old version of the coder tool, which uses aider as a library in the current Python environment.
 """
 
-import re
-import shutil
-import subprocess
-import tempfile
+import io
+from contextlib import redirect_stdout
 
-from loguru import logger
+from aider.coders import Coder
+from aider.io import InputOutput
+from aider.models import Model
+
+from scievo.core import constant
 
 from .registry import register_tool, register_toolset_desc
 
@@ -16,7 +20,7 @@ register_toolset_desc(
     "Coder toolset. This toolset allows you to call an AI coding agent using natural language instructions. "
     "The agent can modify, create, or edit code files based on your instructions. "
     "But you have to provide the details, like the file structure, the file names, the file paths, the file content, etc."
-    "Note: The coding agent has no memory of previous interactions and operates independently on each call. And it will not chat and exit the session after it's done.",
+    "Note: The coding agent has no memory of previous interactions and operates independently on each call.",
 )
 
 
@@ -32,7 +36,6 @@ register_toolset_desc(
                 "But you have to provide the details, like the file structure, the file names, the file paths, the file content, etc."
                 "IMPORTANT: The coding agent has no memory of previous interactions - each call is independent. "
                 "Provide clear, complete instructions for each task."
-                "And the coding agent will not chat and exit the session after it's done."
             ),
             "parameters": {
                 "type": "object",
@@ -71,66 +74,30 @@ def run_coder(fnames: list[str] | None = None, instruction: str = "") -> str:
     Returns:
         Result message from the coding agent
     """
-
-    # Use OS command line to call `aider` and pass the instruction via stdin
-    logger.debug("Running aider with fnames: \n{}\n\ninstruction: \n{}", fnames, instruction)
     try:
-        if not instruction.strip():
-            return "Error: instruction must be a non-empty string."
-        aider_path = shutil.which("aider")
-        if not aider_path:
-            err_text = "Error: 'aider' executable not found in PATH. Please install aider and ensure it is available."
-            logger.error(err_text)
-            return err_text
+        # Create the model with configuration from constants
+        model = Model(constant.AIDER_MODEL, verbose=constant.AIDER_VERBOSE)
+        model.set_reasoning_effort(constant.AIDER_REASONING_EFFORT)
 
-        # create temp file to store the instruction
-        with tempfile.NamedTemporaryFile(mode="w") as temp_file:
-            temp_file.write(instruction)
-            temp_file.flush()
+        # Create a coder object with the specified files (or empty list if None)
+        coder = Coder.create(
+            main_model=model,
+            fnames=fnames or [],
+            io=InputOutput(yes=True),
+            use_git=constant.AIDER_GIT,
+            auto_commits=constant.AIDER_AUTO_COMMITS,
+            dirty_commits=constant.AIDER_DIRTY_COMMITS,
+        )
 
-            temp_file_path = temp_file.name
+        # Redirect stdout to capture and discard aider's logging output
+        stdout_capture = io.StringIO()
+        with redirect_stdout(stdout_capture):
+            # Execute the instruction
+            result = coder.run(instruction)
 
-            cmd = [aider_path, "--message-file", temp_file_path, "--yes", "--exit"]
-
-            if fnames:
-                cmd.extend(fnames)
-
-            result = subprocess.run(
-                cmd,
-                text=True,
-                capture_output=True,
-            )
-
-            if result.returncode != 0:
-                return "Error executing coding task: " + (
-                    result.stderr.strip() or f"Non-zero exit status {result.returncode}"
-                )
-
-            output_text = result.stdout.strip()
-            output_text = _parse_aider_output(output_text)
-
-            return output_text or "Coding task completed."
+        # Discard the captured stdout (aider's logs)
+        # Only return the actual result
+        return f"Coding task completed. Result: {result}"
 
     except Exception as e:
         return f"Error executing coding task: {str(e)}"
-
-
-def _parse_aider_output(output_text: str) -> str:
-    """Parse aider output to extract the result message."""
-    lines = output_text.splitlines()
-    result = ""
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if line.startswith("Repo-map:"):
-            result = "\n".join(lines[i + 1 :])
-            break
-    else:
-        result = "\n".join(lines)
-
-    result = result.strip()
-
-    # remove all the color codes in the results
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    result = ansi_escape.sub("", result)
-
-    return result

@@ -13,10 +13,5 @@ uv sync --extra cu128
 
 After install uv's dependencies, install `aider`:
 ```shell
-uv pip install aider-chat
-```
-
-Since the `aider` break the tool system, the running command should be now:
-```shell
-uv run --no-sync <python_script>
+uv tool install --force --python python3.12 aider-chat@latest
 ```
