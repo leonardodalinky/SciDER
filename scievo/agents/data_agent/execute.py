@@ -4,6 +4,7 @@ Agent for data understanding and processing
 
 import json
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from functional import seq
@@ -102,13 +103,13 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
         memory_text = _memos_to_markdown(memos)
 
     # update system prompt
-    system_prompt = PROMPTS.data.system_prompt.format(
-        state=wrap_dict_to_toon(selected_state),
-        toolsets_desc=wrap_dict_to_toon(
-            ToolRegistry.get_toolsets_desc(["fs"]),
+    system_prompt = PROMPTS.data.system_prompt.render(
+        state_text=wrap_dict_to_toon(selected_state),
+        toolsets_desc=ToolRegistry.get_toolsets_desc(["fs"]),
+        memory_text=wrap_text_with_block(memory_text, "markdown"),
+        current_plan=(
+            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
         ),
-        memory=wrap_text_with_block(memory_text, "markdown"),
-        current_plan=agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else "",
     )
 
     tools: dict[str, Tool] = {}

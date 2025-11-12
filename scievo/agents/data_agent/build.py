@@ -6,6 +6,12 @@ from scievo.agents.data_agent.state import DataAgentState
 from . import execute, plan
 
 
+def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
+    assert agent_state.talk_mode
+    agent_state.remaining_plans = ["Response to users' query."]
+    return agent_state
+
+
 @logger.catch
 def build():
     g = StateGraph(DataAgentState)
@@ -44,7 +50,8 @@ def build():
         plan.should_replan,
         [
             "gateway",
-            END,
+            "prepare_for_talk_mode",
         ],
     )
+    g.add_edge("prepare_for_talk_mode", END)
     return g

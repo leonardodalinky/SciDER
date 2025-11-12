@@ -156,37 +156,55 @@ def list_files(path: str) -> str:
         "type": "function",
         "function": {
             "name": "read_head",
-            "description": "Read the first N lines of a file (default 10). Truncate output to 2000 characters if longer.",
+            "description": "Read the first N lines of multiple files (default 10 lines each). Truncate output to 2000 characters per file if longer.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to the file"},
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of file paths to read (at least one required)",
+                        "minItems": 1,
+                    },
                     "n": {
                         "type": "integer",
-                        "description": "Number of lines to read from the head",
+                        "description": "Number of lines to read from the head of each file",
                         "default": 10,
                     },
                 },
-                "required": ["path"],
+                "required": ["paths"],
             },
         },
     },
 )
-def read_head(path: str, n: int = 10) -> str:
-    try:
-        lines = []
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            for _ in range(max(0, n)):
-                line = f.readline()
-                if not line:
-                    break
-                lines.append(line)
-        text = "".join(lines)
-        if len(text) > 2000:
-            text = text[:2000]
-        return text
-    except Exception as e:
-        return f"Error reading file '{path}': {e}"
+def read_head(paths: list[str], n: int = 10) -> str:
+    if not paths:
+        return "Error: At least one path must be provided"
+
+    def _read_single_file(path: str, n: int) -> str:
+        try:
+            lines = []
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                for _ in range(max(0, n)):
+                    line = f.readline()
+                    if not line:
+                        break
+                    lines.append(line)
+            text = "".join(lines)
+            if len(text) > 2000:
+                text = text[:2000]
+            return text
+        except Exception as e:
+            return f"Error reading file '{path}': {e}"
+
+    results = []
+    for path in paths:
+        file_content = _read_single_file(path, n)
+        results.append(f"=== {path} ===")
+        results.append(file_content)
+        results.append(f"=== End of {path} ===")
+
+    return "\n".join(results).rstrip()
 
 
 @register_tool(

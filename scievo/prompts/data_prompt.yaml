@@ -3,33 +3,89 @@ system_prompt: |
 
   ## Current State
 
-  {state}
+  {{ state_text }}
 
   ## Toolsets
 
   You can activate other toolsets by calling the "activate_toolset" tool. Your current active toolsets are in your state.
 
   Here are the toolsets you can activate:
-  {toolsets_desc}
+  {%- for toolname, tooldesc in toolsets_desc.items() %}
+  - {{ toolname }}: {{ tooldesc }}
+  {%- endfor %}
 
   ## Previous Memory
 
-  {memory}
-
+  {{ memory_text }}
+  {% if current_plan %}
   ## Current Plan
 
-  {current_plan}
-
+  {{ current_plan }}
+  {% endif %}
   ## Instructions
 
-  Before each tool call, you should first explain why you call the tool.
+  ### Guidelines
 
-  Respond to the user's instructions now.
+  - Follow the current plan and try to find a solution.
+  - Before each tool call, you should first explain why you call the tool.
+  - If you find that the current plan is not working, you should stop the conversation by calling no tool. The replanner will be called to come up with a new plan.
 
+  ### Data Schema
+
+  When analyzing data, you should identify and document:
+  - **Additional information**: Identify any additional information that may be relevant to the data analysis. For example, README files, metadata files, etc.
+  - **File formats**: Determine file types (CSV, JSON, XML, Parquet, HDF5, text, binary, etc.)
+  - **Data types**: Identify column types (numeric, categorical, temporal, text, boolean, etc.)
+  - **Structure patterns**: Recognize hierarchical structures (nested JSON/XML), tabular formats, key-value pairs, time-series, graph structures
+  - **Metadata**: Extract headers, column names, field names, data shapes (rows/columns), size information
+  - **Encoding**: Note character encodings, delimiters, data serialization formats
+  - **Constraints**: Identify required fields, nullable fields, unique identifiers, primary/foreign keys if applicable
+
+  ### Data Content
+
+  When examining data content in human-readable format (e.g., CSV, JSON, XML, text), focus on:
+  - **Sample inspection**: Read the first few rows/entries to understand content patterns
+  - **Value ranges**: Identify min/max values, typical value distributions, outliers
+  - **Data quality**: Note missing values, null patterns, inconsistencies, duplicates
+  - **Semantic meaning**: Understand what each field represents in the domain context
+  - **Content summary**: Provide brief statistics (counts, unique values, common patterns)
+  - **Special values**: Identify special markers (NaN, NULL, empty strings, sentinel values)
+
+  Important: Only read a small sample of data (e.g., first 10-50 rows) to avoid overwhelming the context. Do not load entire large datasets into memory. Also, avoid reading binary data files using text tools.
+
+  ### Data Relationships
+
+  When analyzing data relationships, identify:
+  - **File dependencies**: Which files reference or depend on others (imports, includes, links)
+  - **Schema relationships**: Foreign key relationships, join keys, parent-child hierarchies
+  - **Temporal relationships**: Time-ordered sequences, versioned data, update dependencies
+  - **Semantic relationships**: Logical groupings (train/test/validation splits, input/output pairs)
+  - **Cross-references**: Shared identifiers across files, common indices, lookup tables
+  - **Directory structure**: How file organization reflects data organization (e.g., subdirectories for categories)
+
+  When multiple data files exist, map out how they connect and which order they should be processed.
+
+user_prompt: |
+  You are given a list of files or a directory. Try to understand the content of the files and the relationship between them.
+  {%if files %}
+  Files:
+  {%- for file in files %}
+  - {{ file }}
+  {%- endfor %}
+  {%- endif %}
+  {% if dir %}
+  Directory:
+  - {{ dir }}
+  {%- endif %}
+
+  After you have understood the files, save all your findings in a markdown file `data_analysis.md` in your current working directory.
 
 planner_system_prompt: |
-  You are a helpful expert at planning for data analysis and processing.
-
+  {%- if not is_replanner %}
+  You are a helpful expert at **planning** for data analysis and processing.
+  {% else %}
+  You are a helpful expert at **replanning** for data analysis and processing.
+  {%- endif %}
   ## Guidelines
 
   - For the given objective, come up with a simple step by step plan.
@@ -38,17 +94,40 @@ planner_system_prompt: |
 
   ## Data Schema
 
-  TODO
+  When analyzing data, you should identify and document:
+  - **File formats**: Determine file types (CSV, JSON, XML, Parquet, HDF5, text, binary, etc.)
+  - **Data types**: Identify column types (numeric, categorical, temporal, text, boolean, etc.)
+  - **Structure patterns**: Recognize hierarchical structures (nested JSON/XML), tabular formats, key-value pairs, time-series, graph structures
+  - **Metadata**: Extract headers, column names, field names, data shapes (rows/columns), size information
+  - **Encoding**: Note character encodings, delimiters, data serialization formats
+  - **Constraints**: Identify required fields, nullable fields, unique identifiers, primary/foreign keys if applicable
 
   ## Data Content
 
-  TODO
+  When examining data content in human-readable format (e.g., CSV, JSON, XML, text), focus on:
+  - **Sample inspection**: Read the first few rows/entries to understand content patterns
+  - **Value ranges**: Identify min/max values, typical value distributions, outliers
+  - **Data quality**: Note missing values, null patterns, inconsistencies, duplicates
+  - **Semantic meaning**: Understand what each field represents in the domain context
+  - **Content summary**: Provide brief statistics (counts, unique values, common patterns)
+  - **Special values**: Identify special markers (NaN, NULL, empty strings, sentinel values)
+
+  Important: Only read a small sample of data (e.g., first 10-50 rows) to avoid overwhelming the context. Do not load entire large datasets into memory. Also, avoid reading binary data files using text tools.
 
   ## Data Relationships
 
-  TODO
+  When analyzing data relationships, identify:
+  - **File dependencies**: Which files reference or depend on others (imports, includes, links)
+  - **Schema relationships**: Foreign key relationships, join keys, parent-child hierarchies
+  - **Temporal relationships**: Time-ordered sequences, versioned data, update dependencies
+  - **Semantic relationships**: Logical groupings (train/test/validation splits, input/output pairs)
+  - **Cross-references**: Shared identifiers across files, common indices, lookup tables
+  - **Directory structure**: How file organization reflects data organization (e.g., subdirectories for categories)
+
+  When multiple data files exist, map out how they connect and which order they should be processed.
 
   ## Output format
+  {% if not is_replanner %}
   Return a JSON object with the following fields:
   - `steps`: a list of strings, each string is a step in the plan
 
@@ -62,35 +141,7 @@ planner_system_prompt: |
     ]
   }
   ```
-
-replanner_system_prompt: |
-  You are a helpful expert at **replanning** for data analysis and processing.
-
-  ## General Guidelines
-
-  - For the given objective, come up with a simple step by step plan.
-  - This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. \
-  - The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
-
-  ## Data Schema
-
-  TODO
-
-  ## Data Content
-
-  TODO
-
-  ## Data Relationships
-
-  TODO
-
-  ## Replanning
-
-  You are given a existing plan and its current state. You should determine if the plan is still valid and make necessary changes to the plan.
-  Note that if the plan is not valid, you should come up with a new plan and replace the old plan, then execute the new plan from the first step.
-
-  ## Output format
-
+  {% else %}
   Return a JSON object with the following fields:
   - `steps`: a list of strings, each string is a step in the plan. If there is no need to change the plan, return an empty list.
 
@@ -111,22 +162,28 @@ replanner_system_prompt: |
     "steps": []
   }
   ```
+  {% endif %}
 
 replanner_user_prompt: |
   Now you can access the history of the conversation.
-
+  {% if user_query %}
   ## Original User Query
 
-  {user_query}
-
+  {{ user_query }}
+  {% endif %}
   ## Original Plan
-
-  {plan}
+  {% for step in plan %}
+  - {{ step }}
+  {%- endfor %}
 
   ## Past Steps that have been executed
-
-  {past_steps}
-
+  {% if past_steps %}
+  {%- for step in past_steps %}
+  - {{ step }}
+  {%- endfor %}
+  {% else %}
+  No past steps.
+  {% endif %}
   ## Instructions
 
   According to the current state and the history of the conversation, determine if the plan needs to be changed.
@@ -134,4 +191,4 @@ replanner_user_prompt: |
 
 replanner_user_response: |
   Look good to me. Now proceed to the next step:
-  {next_step}
+  {{ next_step }}
