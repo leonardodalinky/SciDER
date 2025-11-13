@@ -2,34 +2,48 @@ from functional import seq
 from jinja2 import Template
 from langgraph.graph import END
 from loguru import logger
+from pydantic import BaseModel
 
 from scievo.core.llms import ModelRegistry
 from scievo.core.plan import Plan
 from scievo.core.types import Message
-from scievo.core.utils import array_to_bullets, parse_json_from_llm_response
+from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
 
 from .state import DataAgentState
 
 LLM_NAME = "plan"
-AGENT_NAME = "data"
+AGENT_NAME = "data_planner"
 
 
 @logger.catch
 def planner_node(agent_state: DataAgentState) -> DataAgentState:
     logger.trace("planner_node of Agent {}", AGENT_NAME)
 
-    assert len(agent_state.history) == 1, "History should only have one message for planner node"
+    user_query_msg = Message(
+        role="user",
+        content=agent_state.user_query,
+        agent_sender=AGENT_NAME,
+    )
 
     msg = ModelRegistry.completion(
         LLM_NAME,
-        [agent_state.history[0]],
+        [user_query_msg],
         PROMPTS.data.planner_system_prompt.render(is_replanner=False),
         agent_sender=AGENT_NAME,
     ).with_log()
 
     # NOTE: we don't add the message to the history
     plans = parse_json_from_llm_response(msg, Plan)
+
+    # NOTE:
+    agent_state.add_message(
+        Message(
+            role="user",
+            content="Follow the current plan.",
+            agent_sender=AGENT_NAME,
+        )
+    )
 
     agent_state.plans = plans
     agent_state.remaining_plans = plans.steps
@@ -41,6 +55,7 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
         content=PROMPTS.data.replanner_user_response.render(
             next_step=agent_state.remaining_plans[0],
         ),
+        agent_sender=AGENT_NAME,
     ).with_log()
 
     return agent_state
@@ -58,42 +73,46 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
         # agent_state.remaining_plans = ["Response to users' query."]
         return agent_state
 
-    user_query: Message | None = (
-        seq(agent_state.history).filter(lambda msg: msg.role == "user").head_option(no_wrap=True)
-    )
+    user_query = agent_state.user_query
 
     user_msg = Message(
         role="user",
         content=PROMPTS.data.replanner_user_prompt.render(
-            user_query=user_query.content,
+            user_query=user_query,
             plan=agent_state.plans.steps,
             past_steps=agent_state.past_plans,
         ),
+        agent_sender=AGENT_NAME,
     ).with_log()
 
     msg = ModelRegistry.completion(
         LLM_NAME,
-        agent_state.history + [user_msg],
+        agent_state.patched_history + [user_msg],
         PROMPTS.data.planner_system_prompt.render(is_replanner=True),
         agent_sender=AGENT_NAME,
     ).with_log()
 
-    # NOTE: we don't add the message to the history
-    plans = parse_json_from_llm_response(msg, Plan)
+    class Replan(BaseModel):
+        continued: bool = False
+        modified: list[str] = []
 
-    if len(plans.steps) == 0:
+    # NOTE: we don't add the message to the history
+    plans = parse_json_from_llm_response(msg, Replan)
+
+    if plans.continued:
         # no edits to plan
         pass
     else:
-        agent_state.plans = plans
-        agent_state.remaining_plans = plans.steps
+        agent_state.plans = Plan(steps=plans.modified)
+        agent_state.remaining_plans = plans.modified
 
-    agent_state.history.append(
+    agent_state.add_message(
         Message(
             role="user",
             content=PROMPTS.data.replanner_user_response.render(
                 next_step=agent_state.remaining_plans[0],
             ),
+            agent_sender=AGENT_NAME,
         )
     )
 
@@ -102,6 +121,6 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
 
 def should_replan(agent_state: DataAgentState) -> str:
     if agent_state.talk_mode:
-        return END
+        return "prepare_for_talk_mode"
     else:
         return "gateway"

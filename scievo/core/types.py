@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 from typing import Self
 
+import tiktoken
+from functional import seq
 from litellm import Message as LLMessage
 from pydantic import BaseModel
 from rich.console import Console
@@ -14,6 +18,8 @@ styles = {
     "tool": Style(color="magenta"),
     "function": Style(color="yellow"),
 }
+
+ENCODING = tiktoken.get_encoding("cl100k_base")
 
 
 class Message(LLMessage):
@@ -40,7 +46,7 @@ class Message(LLMessage):
         "tool_name",
         "completion_tokens",
         "prompt_tokens",
-        "hidden",
+        "_n_tokens",
     ]
 
     # --- custom fields ---
@@ -50,8 +56,7 @@ class Message(LLMessage):
     tool_name: str | None = None
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
-    # whether the message is visible to the llms
-    hidden: bool | None = None
+    _n_tokens: int | None = None
 
     @classmethod
     def from_ll_message(cls, msg: LLMessage) -> "Message":
@@ -59,10 +64,17 @@ class Message(LLMessage):
         return o
 
     @property
-    def total_tokens(self) -> int | None:
-        if self.completion_tokens is None and self.prompt_tokens is None:
-            return None
-        return (self.completion_tokens or 0) + (self.prompt_tokens or 0)
+    def n_tokens(self) -> int:
+        """
+        Returns the number of tokens in the message.
+        """
+        if self._n_tokens is not None:
+            return self._n_tokens
+        if self.prompt_tokens is not None:
+            return self.prompt_tokens
+        # Calculate n_tokens if not cached
+        self._n_tokens = len(ENCODING.encode(self.to_plain_text()))
+        return self._n_tokens
 
     @property
     def reasoning_text(self) -> str | None:
@@ -77,7 +89,7 @@ class Message(LLMessage):
         self.reasoning_content = value
 
     def to_ll_message(self) -> LLMessage | dict:
-        return LLMessage(**self.model_dump(exclude=fields_to_exclude))
+        return LLMessage(**self.model_dump(exclude=self.__CUSTOM_FIELDS__))
 
     def to_ll_response_message(
         self,
@@ -193,3 +205,101 @@ class Message(LLMessage):
 class ToolsetState(BaseModel):
     # List of toolsets available to the agent
     toolsets: list[str] = ["todo"]
+
+
+class HistoryState(BaseModel):
+    # List of messages sent to the agent
+    history: list[Message] = []
+    # List of patches to the history, used to compress the history
+    # NOTE: patches are applied in order by patch_id, and patched history could still be patched in the next patches.
+    history_patches: list["HistoryState.HistoryPatch"] = []
+
+    class HistoryPatch(BaseModel):
+        # patch id, used to identify the patch
+        patch_id: int
+        # start index (inclusive)
+        start_idx: int
+        # end index (exclusive)
+        end_idx: int
+        # The compressed/summarized message that replaces the range
+        patched_message: Message
+
+        @property
+        def n_messages(self) -> int:
+            return max(self.end_idx - self.start_idx, 0)
+
+    @property
+    def patched_history(self) -> list[Message]:
+        """
+        Returns the history with all patches applied in order.
+        Each patch replaces a range of messages with a single compressed message.
+        """
+        if not self.history_patches:
+            return self.history.copy()
+
+        # Apply patches in order
+        result = self.history.copy()
+        # Sort patches by patch_id to ensure proper order
+        sorted_patches = sorted(self.history_patches, key=lambda p: p.patch_id)
+
+        for patch in sorted_patches:
+            # Adjust indices based on previous patches
+            adjusted_start = patch.start_idx
+            adjusted_end = patch.end_idx
+
+            # Validate indices
+            if adjusted_start < 0 or adjusted_end > len(result):
+                continue
+
+            # Replace the range with the patched message
+            result = result[:adjusted_start] + [patch.patched_message] + result[adjusted_end:]
+
+        return result
+
+    @property
+    def total_patched_tokens(self) -> int:
+        return sum(m.n_tokens for m in self.patched_history)
+
+    def next_patch_id(self) -> int:
+        if not self.history_patches or len(self.history_patches) == 0:
+            return 0
+        return max(p.patch_id for p in self.history_patches) + 1
+
+    def partial_history_of_patch(self, patch_id: int) -> list[Message]:
+        """Get the history of a specific patch."""
+        patch = self.get_patch_by_id(patch_id)
+        if patch is None:
+            raise ValueError(f"Patch {patch_id} not found")
+
+        # sort patches by patch_id to ensure proper order
+        sorted_patches = sorted(self.history_patches, key=lambda p: p.patch_id)
+
+        # apply patches in order
+        his = self.history.copy()
+        for patch in sorted_patches:
+            if patch.patch_id >= patch_id:
+                break
+            his = his[: patch.start_idx] + [patch.patched_message] + his[patch.end_idx :]
+
+        # get the history of the patch
+        return his[patch.start_idx : patch.end_idx]
+
+    def add_message(self, message: Message) -> None:
+        """Add a new message to the history."""
+        self.history.append(message)
+
+    def get_patch_by_id(self, patch_id: int) -> HistoryState.HistoryPatch | None:
+        """
+        Get a patch by its ID.
+
+        Args:
+            patch_id: The ID of the patch to retrieve
+
+        Returns:
+            The patch if found, None otherwise
+        """
+        return (
+            seq(self.history_patches)
+            .filter(lambda patch: patch.patch_id == patch_id)
+            .head_option(no_wrap=True)
+        )

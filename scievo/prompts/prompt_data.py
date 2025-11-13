@@ -15,6 +15,7 @@ class Prompts:
     dummy: "DummyPrompts"
     data: "DataPrompts"
     rbank: "RBankPrompts"
+    history: "HistoryPrompts"
 
 
 @dataclass
@@ -37,6 +38,14 @@ class RBankPrompts:
     mem_extraction_user_prompt: Template
 
 
+@dataclass
+class HistoryPrompts:
+    compression_system_prompt: Template
+    compression_user_prompt: Template
+    compressed_patch_template: Template
+    recall_tool_response: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -51,11 +60,14 @@ def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
 
 def init():
     DIR = os.path.dirname(__file__)
+
     global PROMPTS
+
     PROMPTS = Prompts(
         dummy=parse_yaml_as_templates(DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")),
         data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
         rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
+        history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
     )
 
 

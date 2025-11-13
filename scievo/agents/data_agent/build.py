@@ -24,6 +24,8 @@ def build():
     g.add_node("llm_chat", execute.llm_chat_node)
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("mem_extraction", execute.mem_extraction_node)
+    g.add_node("history_compression", execute.history_compression_node)
+    g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
     # edges from gateway to nodes
     g.add_edge(START, "planner")
@@ -35,6 +37,7 @@ def build():
             "llm_chat",
             "tool_calling",
             "mem_extraction",
+            "history_compression",
             "replanner",  # END
         ],
     )
@@ -43,6 +46,7 @@ def build():
     g.add_edge("llm_chat", "gateway")
     g.add_edge("tool_calling", "gateway")
     g.add_edge("mem_extraction", "gateway")
+    g.add_edge("history_compression", "gateway")
 
     # edges from gateway to replanner
     g.add_conditional_edges(

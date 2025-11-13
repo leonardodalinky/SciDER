@@ -13,10 +13,11 @@ system_prompt: |
   {%- for toolname, tooldesc in toolsets_desc.items() %}
   - {{ toolname }}: {{ tooldesc }}
   {%- endfor %}
-
+  {% if memory_text %}
   ## Previous Memory
 
   {{ memory_text }}
+  {% endif %}
   {% if current_plan %}
   ## Current Plan
 
@@ -78,18 +79,19 @@ user_prompt: |
   - {{ dir }}
   {%- endif %}
 
-  After you have understood the files, save all your findings in a markdown file `data_analysis.md` in your current working directory.
+  After you have understood the files, switch to `fs` toolset and save all your findings to a markdown file `./data_analysis.md` using `save_file` tool.
 
 planner_system_prompt: |
   {%- if not is_replanner %}
-  You are a helpful expert at **planning** for data analysis and processing.
+  You are a helpful expert at **planning** for data analysis and processing. You should not ask users for any input. Just come up with a plan and follow the JSON output format.
   {% else %}
-  You are a helpful expert at **replanning** for data analysis and processing.
+  You are a helpful expert at **replanning** for data analysis and processing. You should not ask users for any input. Just come up with a plan and follow the JSON output format.
   {%- endif %}
   ## Guidelines
 
   - For the given objective, come up with a simple step by step plan.
-  - This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. \
+  - The initial plan should not be too complex and have few steps, it should be easy to change and adjust.
+  - This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps.
   - The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
 
   ## Data Schema
@@ -142,26 +144,25 @@ planner_system_prompt: |
   }
   ```
   {% else %}
-  Return a JSON object with the following fields:
-  - `steps`: a list of strings, each string is a step in the plan. If there is no need to change the plan, return an empty list.
+  Return a JSON object as below:
 
-  For example:
+  Example for no change and continue the current plan:
   ```json
   {
-    "steps": [
-      "Step 1",
-      "Step 2",
-      "Step 3"
+    "continued": true
+  }
+  ```
+
+  Or example for changing the plan (WARNING: this should be called cautiously and be sure to only include steps that are still needed):
+  ```json
+  {
+    "modified": [
+      "New Step 2",
+      "New Step 3",
     ]
   }
   ```
 
-  Or example for no change:
-  ```json
-  {
-    "steps": []
-  }
-  ```
   {% endif %}
 
 replanner_user_prompt: |

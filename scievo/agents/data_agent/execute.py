@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from functional import seq
-from langgraph.graph import END
 from loguru import logger
 
+from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
@@ -38,16 +38,22 @@ def gateway_node(agent_state: DataAgentState) -> DataAgentState:
 
 
 def gateway_conditional(agent_state: DataAgentState) -> str:
-    agent_state = agent_state
+    # compress history if needed
+    if (
+        constant.HISTORY_AUTO_COMPRESSION
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+    ):
+        return "history_compression"
 
     if (
-        not agent_state.skip_mem_extraction
+        constant.REASONING_BANK_ENABLED
+        and not agent_state.skip_mem_extraction
         and agent_state.round > 0
         and agent_state.round % MEM_EXTRACTION_ROUND_FREQ == 0
     ):
         return "mem_extraction"
 
-    last_msg = agent_state.history[-1]
+    last_msg = agent_state.patched_history[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
 
@@ -75,7 +81,6 @@ def _memos_to_markdown(memos: list["Memo"]) -> str:
 
 def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
-    agent_state = agent_state
     agent_state.round += 1
     agent_state.skip_mem_extraction = False
 
@@ -85,22 +90,25 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     }
 
     # retrieve memos
-    try:
-        res = mem_retrieval_subgraph_compiled.invoke(
-            mem_retrieval.MemRetrievalState(
-                input_msgs=agent_state.history,
-                mem_dirs=[agent_state.sess_dir / f"mem_{AGENT_NAME}"],  # TODO: more mem dirs
+    if constant.REASONING_BANK_ENABLED:
+        try:
+            res = mem_retrieval_subgraph_compiled.invoke(
+                mem_retrieval.MemRetrievalState(
+                    input_msgs=agent_state.patched_history,
+                    mem_dirs=[agent_state.sess_dir / f"mem_{AGENT_NAME}"],  # TODO: more mem dirs
+                )
             )
-        )
-    except Exception as e:
-        logger.exception("mem_retrieval_error")
-        res = {"output_error": f"mem_retrieval_error with exception {e}"}
+        except Exception as e:
+            logger.exception("mem_retrieval_error")
+            res = {"output_error": f"mem_retrieval_error with exception {e}"}
 
-    if err := res.get("output_error", None):
-        memory_text = err
+        if err := res.get("output_error", None):
+            memory_text = err
+        else:
+            memos: list[Memo] = res.get("output_memos", [])
+            memory_text = _memos_to_markdown(memos)
     else:
-        memos: list[Memo] = res.get("output_memos", [])
-        memory_text = _memos_to_markdown(memos)
+        memory_text = None
 
     # update system prompt
     system_prompt = PROMPTS.data.system_prompt.render(
@@ -119,12 +127,12 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     tools.update(ToolRegistry.get_toolset("state"))
     msg = ModelRegistry.completion(
         LLM_NAME,
-        seq(agent_state.history).filter_not(lambda msg: msg.hidden).to_list(),
+        agent_state.patched_history,
         system_prompt,
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
     ).with_log()
-    agent_state.history.append(msg)
+    agent_state.add_message(msg)
 
     return agent_state
 
@@ -132,9 +140,8 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
 def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
     """Execute tool calls from the last message and update the graph state"""
     logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
-    agent_state = agent_state
     # Get the last message which contains tool calls
-    last_msg = agent_state.history[-1]
+    last_msg = agent_state.patched_history[-1]
 
     if not last_msg.tool_calls:
         raise ValueError("No tool calls found in the last message")
@@ -161,7 +168,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.history.append(Message(**tool_response).with_log())
+            agent_state.add_message(Message(**tool_response).with_log())
             continue
 
         # Parse tool arguments
@@ -176,7 +183,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.history.append(Message(**tool_response).with_log())
+            agent_state.add_message(Message(**tool_response).with_log())
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -186,7 +193,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_call_id": tool_call.id,
                 "content": error_msg,
             }
-            agent_state.history.append(Message(**tool_response).with_log())
+            agent_state.add_message(Message(**tool_response).with_log())
             continue
 
         # Execute the tool
@@ -214,7 +221,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            agent_state.history.append(Message(**tool_response).with_log())
+            agent_state.add_message(Message(**tool_response).with_log())
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -224,7 +231,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            agent_state.history.append(Message(**tool_response).with_log())
+            agent_state.add_message(Message(**tool_response).with_log())
 
     return agent_state
 
@@ -235,9 +242,8 @@ mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
 
 def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("mem_extraction_node of Agent {}", AGENT_NAME)
-    agent_state = agent_state
     agent_state.skip_mem_extraction = True
-    context_window = agent_state.history[-MEM_EXTRACTION_CONTEXT_WINDOW:]
+    context_window = agent_state.patched_history[-MEM_EXTRACTION_CONTEXT_WINDOW:]
     logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
     try:
         res = mem_extraction_subgraph_compiled.invoke(
@@ -247,7 +253,7 @@ def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
             )
         )
     except Exception as e:
-        agent_state.history.append(
+        agent_state.add_message(
             Message(
                 role="assistant",
                 content=f"mem_extraction_error: {e}",
@@ -258,11 +264,58 @@ def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
 
     err = res.get("output_error", None)
     if err:
-        agent_state.history.append(
+        agent_state.add_message(
             Message(
                 role="assistant",
                 content=f"mem_extraction_error: {err}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+    return agent_state
+
+
+history_compress_subgraph = history_compression.build()
+history_compress_subgraph_compiled = history_compress_subgraph.compile()
+
+
+def history_compression_node(agent_state: DataAgentState) -> DataAgentState:
+    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
+    try:
+        res = history_compress_subgraph_compiled.invoke(
+            history_compression.HistoryCompressionState(
+                input_history_state=agent_state,
+            )
+        )
+    except Exception as e:
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"history_compression_error: {e}",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+        return agent_state
+
+    err = res.get("output_error", None)
+    if err:
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"history_compression_error: {err}",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
+    output_patch = res.get("output_patch", None)
+    if output_patch:
+        agent_state.history_patches.append(output_patch)
+    else:
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content="history_compression_error: No output patch",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
     return agent_state

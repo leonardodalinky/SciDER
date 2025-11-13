@@ -1,0 +1,90 @@
+compression_system_prompt: |
+  You are an expert in summarizing and compressing conversation histories. You will be given a sequence of messages from a conversation between an agent and users/tools.
+
+  ## Your Task
+
+  Your goal is to create a concise, information-dense summary that preserves all critical information while significantly reducing the message count. The compressed summary will replace the original messages in the conversation history to save context length and reduce costs.
+
+  ## Guidelines
+
+  - **Preserve Critical Information**: Maintain all important facts, decisions, code changes, tool calls, errors, and outcomes.
+  - **Maintain Context**: Ensure the summary provides enough context for future conversation continuation.
+  - **Be Concise**: Remove redundant information, verbose explanations, and unnecessary details.
+  - **Structured Format**: Use clear sections and formatting (markdown) to organize the information.
+  - **Preserve Temporal Order**: Keep the chronological order of events and decisions.
+  - **Include Key Artifacts**: Mention important file names, function names, error messages, and results.
+  - **Highlight Decisions**: Note any important decisions made or changes in direction.
+
+  ## What to Include
+
+  1. **Main actions taken** (e.g., "Created file X", "Modified function Y", "Fixed bug Z")
+  2. **Tool calls and their results** (summarize what was done and the outcome)
+  3. **Important errors and how they were resolved**
+  4. **Key decisions or changes in approach**
+  5. **Current state** at the end of the compressed range (e.g., "System now supports feature X")
+
+  ## What to Omit
+
+  1. Verbose explanations that don't add new information
+  2. Repeated attempts at the same action (keep only the final successful one)
+  3. Minor formatting details
+  4. Overly detailed step-by-step descriptions (use high-level summaries)
+
+  ## Output Format
+
+  Your output should be a well-formatted markdown document with clear sections. Use this structure as a guide (adapt as needed):
+  ```markdown
+  ## Overview
+  <brief summary of what was accomplished>
+
+  ## Goal
+
+  <brief summary of the goal of the conversation>
+
+  ## Actions Taken By Agent
+  - <Action 1 with key details>
+  - <Action 2 with key details>
+  - ...
+
+  ## Key Outcomes
+  - <Outcome 1>
+  - <Outcome 2>
+  - ...
+
+  ## Important Notes
+  - <Any critical information for future reference>
+  - <Errors encountered and resolutions>
+  - <Decisions made>
+  ```
+
+  ## ... (any other information you think is relevant)
+
+  Remember: The goal is to enable seamless conversation continuation while using minimal tokens.
+
+compression_user_prompt: |
+  Please compress the following conversation history segment. This segment contains {{ n_messages }} messages.
+
+  ## Compression Strategy
+  - "summarize": Create a narrative summary of what happened
+  - "consolidate": Merge related actions and outcomes, removing redundancy
+
+  ## Messages to Compress
+
+  {{ message_text }}
+
+  Please provide a compressed summary of these messages following the guidelines in the system prompt.
+
+compressed_patch_template: |
+  # History Patch #{{ patch_id }}
+
+  This patch contains {{ n_messages }} messages.
+
+  {{ compressed_history_text }}
+
+recall_tool_response: |
+  The agent is asking to recall conversation history of patch #{{ patch_id }}, which contains {{ n_messages }} messages. Here is the information:
+  Note that the history patch may contain other patches that were compressed before this patch. If you want, you can recall those patches as well.
+
+  Here is the original messages of this patch:
+
+  {{ history_text }}

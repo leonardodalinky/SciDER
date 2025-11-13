@@ -2,19 +2,19 @@ from pathlib import Path
 
 from scievo.core.code_env import LocalEnv
 from scievo.core.plan import PlanState
-from scievo.core.types import Message, ToolsetState
+from scievo.core.types import HistoryState, Message, ToolsetState
 
 
-class DataAgentState(ToolsetState, PlanState):
+class DataAgentState(ToolsetState, PlanState, HistoryState):
     """State of an agent"""
+
+    user_query: str
 
     round: int = 0
     # Local environment for the agent
     local_env: LocalEnv
     # session dir (mem storage)
     sess_dir: str | Path
-    # List of messages sent to the agent
-    history: list[Message] = []
     # skip mem extraction for this round
     skip_mem_extraction: bool = False
 
