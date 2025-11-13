@@ -16,7 +16,7 @@ from scievo.core import constant
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
-    "coder",
+    "coder-old",
     "Coder toolset. This toolset allows you to call an AI coding agent using natural language instructions. "
     "The agent can modify, create, or edit code files based on your instructions. "
     "But you have to provide the details, like the file structure, the file names, the file paths, the file content, etc."

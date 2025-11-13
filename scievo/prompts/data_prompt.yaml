@@ -66,6 +66,12 @@ system_prompt: |
 
   When multiple data files exist, map out how they connect and which order they should be processed.
 
+  ### External knowledge
+
+  You can use the `web` tool to search the web and fetch content from URLs. You can also use the web tool to search for files on the web if needed.
+
+  Important: Only use external knowledge if it is relevant to the data analysis. Do not use external knowledge to answer questions that can be answered by the data.
+
 user_prompt: |
   You are given a list of files or a directory. Try to understand the content of the files and the relationship between them.
   {%if files %}

@@ -4631,6 +4631,8 @@ name = "scievo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "ddgs" },
     { name = "epam-indigo" },
     { name = "feedparser" },
     { name = "jinja2" },
@@ -4672,6 +4674,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.14.2" },
+    { name = "ddgs", specifier = ">=9.6.1" },
     { name = "epam-indigo", specifier = "==1.35.0" },
     { name = "feedparser", specifier = ">=6.0.12" },
     { name = "jinja2", specifier = ">=3.1.6" },

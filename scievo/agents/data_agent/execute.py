@@ -29,6 +29,13 @@ AGENT_NAME = "data"
 MEM_EXTRACTION_CONTEXT_WINDOW = int(os.getenv("MEM_EXTRACTION_CONTEXT_WINDOW", 16))
 MEM_EXTRACTION_ROUND_FREQ = int(os.getenv("MEM_EXTRACTION_ROUND_FREQ", 8))
 
+BUILTIN_TOOLSETS = [
+    # "todo",
+    "state",
+    "history",
+]
+ALLOWED_TOOLSETS = ["fs", "web"]
+
 
 def gateway_node(agent_state: DataAgentState) -> DataAgentState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
@@ -113,18 +120,20 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     # update system prompt
     system_prompt = PROMPTS.data.system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
-        toolsets_desc=ToolRegistry.get_toolsets_desc(["fs"]),
+        toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         memory_text=wrap_text_with_block(memory_text, "markdown"),
         current_plan=(
             agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
         ),
     )
 
+    # construct tools
     tools: dict[str, Tool] = {}
     for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
-    tools.update(ToolRegistry.get_toolset("todo"))
-    tools.update(ToolRegistry.get_toolset("state"))
+    for toolset in BUILTIN_TOOLSETS:
+        tools.update(ToolRegistry.get_toolset(toolset))
+
     msg = ModelRegistry.completion(
         LLM_NAME,
         agent_state.patched_history,
@@ -146,12 +155,12 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
     if not last_msg.tool_calls:
         raise ValueError("No tool calls found in the last message")
 
-    # Create a function map for available tools
+    # construct tools
     tools: dict[str, Tool] = {}
     for toolset in agent_state.toolsets:
         tools.update(ToolRegistry.get_toolset(toolset))
-    tools.update(ToolRegistry.get_toolset("todo"))
-    tools.update(ToolRegistry.get_toolset("state"))
+    for toolset in BUILTIN_TOOLSETS:
+        tools.update(ToolRegistry.get_toolset(toolset))
 
     function_map = {tool.name: tool.func for tool in tools.values()}
 
