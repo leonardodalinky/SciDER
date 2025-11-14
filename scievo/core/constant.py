@@ -13,7 +13,9 @@ __CTX_NAME__ = "ctx"
 # ReasoningBank
 REASONING_BANK_ENABLED = str_to_bool(os.getenv("REASONING_BANK_ENABLED", True))
 
+# Logging
 LOG_MEM_SUBGRAPH = str_to_bool(os.getenv("LOG_MEM_SUBGRAPH", False))
+LOG_SYSTEM_PROMPT = str_to_bool(os.getenv("LOG_SYSTEM_PROMPT", False))
 
 # Aider
 AIDER_GIT = str_to_bool(os.getenv("AIDER_GIT", False))

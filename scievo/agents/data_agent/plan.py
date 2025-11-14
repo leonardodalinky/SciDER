@@ -1,9 +1,7 @@
-from functional import seq
-from jinja2 import Template
-from langgraph.graph import END
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.plan import Plan
 from scievo.core.types import Message
@@ -29,7 +27,13 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
     msg = ModelRegistry.completion(
         LLM_NAME,
         [user_query_msg],
-        PROMPTS.data.planner_system_prompt.render(is_replanner=False),
+        system_prompt=(
+            Message(
+                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=False)
+            )
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
         agent_sender=AGENT_NAME,
     ).with_log()
 
@@ -66,7 +70,7 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
 
     agent_state.past_plans.append(agent_state.remaining_plans.pop(0))
 
-    # TODO: when all the plans are done, go into the talk mode
+    # NOTE: when all the plans are done, go into the talk mode
     if len(agent_state.remaining_plans) == 0:
         logger.debug("All plans are done, going into talk mode")
         agent_state.talk_mode = True
@@ -88,7 +92,13 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
     msg = ModelRegistry.completion(
         LLM_NAME,
         agent_state.patched_history + [user_msg],
-        PROMPTS.data.planner_system_prompt.render(is_replanner=True),
+        system_prompt=(
+            Message(
+                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=True)
+            )
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
         agent_sender=AGENT_NAME,
     ).with_log()
 

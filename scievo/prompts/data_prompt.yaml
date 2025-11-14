@@ -5,12 +5,12 @@ system_prompt: |
 
   {{ state_text }}
 
-  ## Toolsets
+  ## Available Toolsets
 
   You can activate other toolsets by calling the "activate_toolset" tool. Your current active toolsets are in your state.
 
   Here are the toolsets you can activate:
-  {%- for toolname, tooldesc in toolsets_desc.items() %}
+  {% for toolname, tooldesc in toolsets_desc.items() %}
   - {{ toolname }}: {{ tooldesc }}
   {%- endfor %}
   {% if memory_text %}

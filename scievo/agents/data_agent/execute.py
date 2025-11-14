@@ -92,8 +92,8 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.skip_mem_extraction = False
 
     selected_state = {
-        "working_dir": agent_state.local_env.working_dir,
-        "toolsets": agent_state.toolsets,
+        "current_working_dir": agent_state.local_env.working_dir,
+        "current_activated_toolsets": agent_state.toolsets,
     }
 
     # retrieve memos
@@ -137,7 +137,11 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     msg = ModelRegistry.completion(
         LLM_NAME,
         agent_state.patched_history,
-        system_prompt,
+        system_prompt=(
+            Message(role="system", content=system_prompt)
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
     ).with_log()

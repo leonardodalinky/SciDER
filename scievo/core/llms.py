@@ -180,6 +180,9 @@ class ModelRegistry:
             )
             return msg
         else:
+            logger.trace("Using completion API for model: {}", name)
+
+            # completion API
             from litellm import completion as ll_completion
 
             params = model_params.copy()

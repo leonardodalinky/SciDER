@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo.core import constant
 from scievo.core.constant import LOG_MEM_SUBGRAPH
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
@@ -46,7 +47,11 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
     mem_msg = ModelRegistry.completion(
         LLM_NAME,
         [user_msg],
-        system_prompt,
+        system_prompt=(
+            Message(role="system", content=system_prompt)
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
         agent_sender=AGENT_NAME,
     ).with_log(LOG_MEM_SUBGRAPH)
     mem_text = mem_msg.content

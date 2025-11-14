@@ -42,17 +42,18 @@ class Message(LLMessage):
     __CUSTOM_FIELDS__ = [
         "llm_sender",
         "agent_sender",
-        "tool_call_id",
         "tool_name",
         "completion_tokens",
         "prompt_tokens",
         "_n_tokens",
     ]
 
+    # --- tool call fields ---
+    tool_call_id: str | None = None
+
     # --- custom fields ---
     llm_sender: str | None = None
     agent_sender: str | None = None
-    tool_call_id: str | None = None
     tool_name: str | None = None
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
@@ -88,8 +89,10 @@ class Message(LLMessage):
     def reasoning_text(self, value: str | None):
         self.reasoning_content = value
 
-    def to_ll_message(self) -> LLMessage | dict:
-        return LLMessage(**self.model_dump(exclude=self.__CUSTOM_FIELDS__))
+    def to_ll_message(self, exclude_none: bool = True) -> LLMessage | dict:
+        return LLMessage(
+            **self.model_dump(exclude=self.__CUSTOM_FIELDS__, exclude_none=exclude_none)
+        )
 
     def to_ll_response_message(
         self,
@@ -204,7 +207,7 @@ class Message(LLMessage):
 
 class ToolsetState(BaseModel):
     # List of toolsets available to the agent
-    toolsets: list[str] = ["todo"]
+    toolsets: list[str] = []
 
 
 class HistoryState(BaseModel):

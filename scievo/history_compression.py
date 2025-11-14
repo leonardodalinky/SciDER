@@ -106,7 +106,11 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
         compressed_msg = ModelRegistry.completion(
             LLM_NAME,
             [user_msg],
-            system_prompt,
+            system_prompt=(
+                Message(role="system", content=system_prompt)
+                .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+                .content
+            ),
             agent_sender=AGENT_NAME,
         )
 
