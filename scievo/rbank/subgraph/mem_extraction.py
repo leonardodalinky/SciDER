@@ -36,7 +36,7 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
     input_msgs_text: str = "\n".join(input_msgs_texts)
 
     system_prompt = PROMPTS.rbank.mem_extraction_system_prompt
-    user_prompt = PROMPTS.rbank.mem_extraction_user_prompt.format(
+    user_prompt = PROMPTS.rbank.mem_extraction_user_prompt.render(
         trajectory=input_msgs_text,
     )
     user_msg = Message(

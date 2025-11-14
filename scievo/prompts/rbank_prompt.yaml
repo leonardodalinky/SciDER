@@ -40,4 +40,8 @@ mem_extraction_user_prompt: |
   Please extract and summarize useful insights in the format of memory items based on the agent's trajectory. The goal of summarized memory items is to be helpful and generalizable for future similar tasks.
 
   Trajectory:
-  {trajectory}
+  {{ trajectory }}
+mem_consolidation_system_prompt: |
+  pass
+mem_consolidation_user_prompt: |
+  pass
