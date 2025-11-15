@@ -99,10 +99,16 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     # retrieve memos
     if constant.REASONING_BANK_ENABLED:
         try:
+            mem_dirs = [agent_state.sess_dir / "short_term"]
+            if d := agent_state.long_term_mem_dir:
+                mem_dirs.append(d)
+            if d := agent_state.project_mem_dir:
+                mem_dirs.append(d)
             res = mem_retrieval_subgraph_compiled.invoke(
                 mem_retrieval.MemRetrievalState(
                     input_msgs=agent_state.patched_history,
-                    mem_dirs=[agent_state.sess_dir / f"mem_{AGENT_NAME}"],  # TODO: more mem dirs
+                    mem_dirs=mem_dirs,
+                    max_num_memos=constant.MEM_EXTRACTION_MAX_NUM_MEMOS,
                 )
             )
         except Exception as e:
@@ -261,8 +267,9 @@ def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
     try:
         res = mem_extraction_subgraph_compiled.invoke(
             mem_extraction.MemExtractionState(
-                save_dir=Path(agent_state.sess_dir) / f"mem_{AGENT_NAME}",
+                mem_dir=Path(agent_state.sess_dir) / f"short_term",
                 input_msgs=context_window,
+                input_agent_name=AGENT_NAME,
             )
         )
     except Exception as e:

@@ -34,7 +34,8 @@ class DataPrompts:
 
 @dataclass
 class RBankPrompts:
-    mem_extraction_system_prompt: Template
+    mem_extraction_long_term_system_prompt: Template
+    mem_extraction_project_system_prompt: Template
     mem_extraction_user_prompt: Template
 
 

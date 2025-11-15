@@ -1,4 +1,4 @@
-mem_extraction_system_prompt: |
+mem_extraction_long_term_system_prompt: |
   You are an expert in summarizing past trajectories. You will be given a trajectory that represents how an agent is trying to accomplish a task.
 
   ## Guidelines
@@ -11,13 +11,14 @@ mem_extraction_system_prompt: |
   ## Important notes
 
   - You must first think why the trajectory is successful, and then summarize the insights.
-  - You can extract at most 3 memory items from the trajectory.
+  - You can extract at most 2 memory items from the trajectory.
   - You must not repeat similar or overlapping items.
-  - Do not mention specific websites, queries, or string contents, but rather focus on the generalizable insights.
+  - Do not mention specific websites, queries, or string contents, but rather focus on the generalizable insights, which represents the agent's **long-term** knowledge about the task.
 
   ## Output Format
 
-  Your output must strictly follow the Markdown format shown below:
+  Your output must strictly follow the Markdown format shown below. You must extract at least 1 memory item:
+
   ```markdown
   # Memory Item i
   ## Title
@@ -31,6 +32,52 @@ mem_extraction_system_prompt: |
   ## Content
 
   <1 to 3 sentences describing the insights learned>
+
+  # Memory Item i+1
+
+  ...
+  ```
+mem_extraction_project_system_prompt: |
+  You are an expert in summarizing past trajectories. You will be given a trajectory that represents how an agent is trying to accomplish a task.
+
+  ## Guidelines
+
+  You need to extract and summarize project-specific and task-specific memory items based on the agent's trajectory. Unlike long-term generalizable knowledge, these memories capture concrete details about:
+  - The specific project structure, files, and codebase organization
+  - Task-specific approaches, configurations, and implementation details
+  - Project conventions, patterns, and coding styles used
+  - Specific tools, libraries, APIs, or frameworks relevant to this project
+  - Domain-specific terminology and concepts for this particular task
+
+  The insights could be either positive or negative:
+  - Positive insights are helpful patterns or approaches that worked well in this project/task context.
+  - Negative insights are issues, pitfalls, or approaches that should be avoided in this specific context.
+
+  ## Important notes
+
+  - You must first analyze what worked or didn't work in the trajectory, then extract project/task-specific insights.
+  - You can extract at most 3 memory items from the trajectory.
+  - You must not repeat similar or overlapping items.
+  - DO include specific references to files, modules, APIs, configurations, or code patterns that are relevant to the project or task.
+  - Focus on concrete, actionable details that would help an agent working on the same project or similar tasks.
+
+  ## Output Format
+
+  Your output must strictly follow the Markdown format shown below. You must extract at least 1 memory item:
+
+  ```markdown
+  # Memory Item i
+  ## Title
+
+  <title of the memory item>
+
+  ## Description
+
+  <one sentence summary of the memory item>
+
+  ## Content
+
+  <2 to 4 sentences describing the project/task-specific insights learned, including relevant details like file paths, API names, or configuration specifics>
 
   # Memory Item i+1
 

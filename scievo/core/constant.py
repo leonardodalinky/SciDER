@@ -12,6 +12,12 @@ __CTX_NAME__ = "ctx"
 
 # ReasoningBank
 REASONING_BANK_ENABLED = str_to_bool(os.getenv("REASONING_BANK_ENABLED", True))
+MEM_EXTRACTION_ROUND_FREQ = int(os.getenv("MEM_EXTRACTION_ROUND_FREQ", 99))
+MEM_EXTRACTION_CONTEXT_WINDOW = int(os.getenv("MEM_EXTRACTION_CONTEXT_WINDOW", 16))
+MEM_EXTRACTION_MAX_NUM_MEMOS = int(os.getenv("MEM_EXTRACTION_MAX_NUM_MEMOS", 3))
+MEM_LONG_TERM_DIR = os.getenv("MEM_LONG_TERM_DIR", "tmp_brain/mem_long_term")
+MEM_PROJECT_DIR = os.getenv("MEM_PROJECT_DIR", "tmp_brain/mem_project")
+
 
 # Logging
 LOG_MEM_SUBGRAPH = str_to_bool(os.getenv("LOG_MEM_SUBGRAPH", False))

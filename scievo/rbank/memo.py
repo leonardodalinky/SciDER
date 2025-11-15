@@ -32,6 +32,7 @@ class Memo(BaseModel):
     description: str
     content: str
 
+    # TODO: cached
     @classmethod
     def from_markdown_file(cls, path: str | Path) -> "Memo":
         with open(path, "r") as f:
@@ -113,3 +114,13 @@ class MemoEmbeddings(BaseModel):
             if e.llm == llm:
                 return np.array(e.embedding, dtype=np.float32)
         return None
+
+    # TODO: cached
+    @classmethod
+    def from_json_file(cls, path: str | Path) -> "MemoEmbeddings":
+        with open(path, "r") as f:
+            return cls.model_validate_json(f.read())
+
+    def to_json_file(self, path: str | Path) -> None:
+        with open(path, "w") as f:
+            f.write(self.model_dump_json(indent=2))

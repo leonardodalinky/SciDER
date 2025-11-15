@@ -2,13 +2,38 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
 from scievo.agents.data_agent.state import DataAgentState
+from scievo.core import constant
+from scievo.core.types import Message
+from scievo.rbank.subgraph import mem_consolidation
 
 from . import execute, plan
+
+mem_consolidation_subgraph = mem_consolidation.build()
+mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
 
 
 def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
     assert agent_state.talk_mode
     agent_state.remaining_plans = ["Response to users' query."]
+
+    # consolidate mems
+    if constant.REASONING_BANK_ENABLED:
+        try:
+            mem_consolidation_subgraph_compiled.invoke(
+                mem_consolidation.MemConsolidationState(
+                    mem_dir=agent_state.sess_dir / "short_term",
+                    long_term_mem_dir=agent_state.long_term_mem_dir,
+                    project_mem_dir=agent_state.project_mem_dir,
+                )
+            )
+        except Exception as e:
+            agent_state.add_message(
+                Message(
+                    role="assistant",
+                    content=f"mem_consolidation_error: {e}",
+                    agent="noname",
+                ).with_log()
+            )
     return agent_state
 
 

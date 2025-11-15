@@ -23,7 +23,7 @@ AGENT_NAME = "mem_retrieval"
 class MemRetrievalState(BaseModel):
     input_msgs: list[Message]
     mem_dirs: list[str | Path]
-    max_num_memos: int = 2
+    max_num_memos: int
 
     # intermediate
     summary_embedding: list[float] = []
@@ -116,9 +116,7 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
         for json_path in json_files:
             try:
                 # Load the embedding
-                with open(json_path, "r") as f:
-                    memo_emb_data = json.load(f)
-                memo_emb = MemoEmbeddings.model_validate(memo_emb_data)
+                memo_emb = MemoEmbeddings.from_json_file(json_path)
 
                 # Get the embedding for the same LLM
                 emb_vec = memo_emb.get_embedding(LLM_NAME)

@@ -35,7 +35,7 @@ def mem_persistence_node(state: MemPersistenceState) -> MemPersistenceState:
 
     entries_markdown: dict[str, str] = {}
     for entry in state.input_mems:
-        base_name = f"{entry.time_str}_{entry.id}"
+        base_name = f"{entry.agent}_{entry.time_str}_{entry.id}"
 
         # persist memo markdown
         md_path = save_dir / f"{base_name}.md"
