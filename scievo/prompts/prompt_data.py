@@ -16,6 +16,7 @@ class Prompts:
     data: "DataPrompts"
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
+    experiment: "ExperimentPrompts"
 
 
 @dataclass
@@ -46,6 +47,16 @@ class HistoryPrompts:
     compressed_patch_template: Template
     recall_tool_response: Template
 
+@dataclass
+class ExperimentPrompts:
+    planner_system_prompt: Template
+    planner_user_prompt: Template
+    replanner_system_prompt: Template
+    replanner_user_prompt: Template
+    replanner_user_response: Template
+    experiment_chat_system_prompt: Template
+    experiment_chat_user_prompt: Template
+    experiment_summary_prompt: Template
 
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
@@ -69,6 +80,7 @@ def init():
         data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
         rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
         history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
+        experiment=parse_yaml_as_templates(ExperimentPrompts, os.path.join(DIR, "experiment_prompt.yaml")),
     )
 
 

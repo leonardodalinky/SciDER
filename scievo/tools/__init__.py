@@ -8,5 +8,6 @@ from . import (
     state_tool,
     todo_tool,
     web_tool,
+    github_tool,
 )
 from .registry import Tool, ToolRegistry
