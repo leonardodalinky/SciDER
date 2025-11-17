@@ -1,6 +1,7 @@
+from pathlib import Path
+
 from loguru import logger
 from pydantic import BaseModel
-from pathlib import Path
 
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
@@ -8,12 +9,48 @@ from scievo.core.plan import Plan
 from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
-
 from scievo.tools import ToolRegistry
+
 from .state import ExperimentAgentState
 
 LLM_NAME = "plan"
 AGENT_NAME = "experiment_planner"
+
+
+import json
+
+
+def should_replan(agent_state: ExperimentAgentState) -> str:
+    """
+    Decide whether to continue (go to 'gateway')
+    or finish (go to END).
+    """
+
+    last_msg = agent_state.patched_history[-1]
+    content = (last_msg.content or "").strip()
+
+    # Try JSON parse
+    try:
+        data = json.loads(content)
+    except:
+        # If not JSON → treat as continue
+        return "gateway"
+
+    # Case: continue
+    if isinstance(data, dict) and data.get("continued") is True:
+        return "gateway"
+
+    # Case: end (no more work)
+    if isinstance(data, dict) and data.get("continued") is False:
+        return "end"
+
+    # Case: new plan created (interpreted as finishing replanner stage)
+    if isinstance(data, dict) and "modified" in data:
+        # modified means replanner finished → next step will recreate plan outside
+        return "end"
+
+    # fallback
+    return "gateway"
 
 
 @logger.catch
@@ -24,10 +61,10 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     repo_url = agent_state.user_query.strip()
     if not repo_url.startswith("http"):
         raise ValueError(f"User query is not a valid GitHub URL: {repo_url}")
-    
+
     # Clone the repository using github.clone_repo tool
     tools = ToolRegistry.get_toolset("github")
-    clone_func = tools["clone_repo"].func     # native python function
+    clone_func = tools["clone_repo"].func
 
     # clone into: ~/.experiment_repos/<repo_name>
     local_root = Path.home() / ".experiment_repos"
@@ -69,11 +106,10 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Call planning model to generate plan
     planning_msg = ModelRegistry.completion(
         LLM_NAME,
-        [],   # planner uses no chat history, it's stateless
+        [],  # planner uses no chat history, it's stateless
         system_prompt=system_prompt,
         agent_sender=AGENT_NAME,
     ).with_log()
-
 
     # Parse JSON output into Plan model
     try:
@@ -89,7 +125,7 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Add a control message: “Follow the current plan.”
     agent_state.add_message(
         Message(
-            role="user",
+            role="assistant",
             content="Follow the current plan.",
             agent_sender=AGENT_NAME,
         )
@@ -97,11 +133,44 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 
     # Logging next step (not added to history)
     Message(
-        role="user",
+        role="assistant",
         content=PROMPTS.experiment.replanner_user_response.render(
             next_step=agent_state.remaining_plans[0],
         ),
         agent_sender=AGENT_NAME,
     ).with_log()
 
+    return agent_state
+
+
+def replanner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
+    logger.trace("replanner_node of Agent {}", AGENT_NAME)
+
+    system_prompt = PROMPTS.experiment.replanner_system_prompt.render()
+    replanner_user_prompt = PROMPTS.experiment.replanner_user_prompt.render(
+        user_query=agent_state.user_query,
+        plan=agent_state.plans.steps if agent_state.plans else [],
+        past_steps=agent_state.past_plans or [],
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": replanner_user_prompt},
+    ]
+
+    raw = ModelRegistry.completion(
+        LLM_NAME, [], system_prompt=system_prompt, agent_sender=AGENT_NAME, messages=messages
+    )
+
+    llm_msg = (
+        raw
+        if isinstance(raw, Message)
+        else Message(
+            role="assistant",
+            content=str(raw),
+            agent_sender=AGENT_NAME,
+        ).with_log()
+    )
+
+    agent_state.add_message(llm_msg)
     return agent_state

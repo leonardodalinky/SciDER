@@ -30,4 +30,3 @@ class ExperimentAgentState(ToolsetState, PlanState, HistoryState):
     # === Newly added for ExperimentAgent ===
     repo_dir: str | Path | None = None
     readme_text: str | None = None
-

@@ -18,9 +18,29 @@ def build():
 
     # nodes
     g.add_node("planner", plan.planner_node)
+    g.add_node("tool_calling", execute.tool_calling_node)
+    g.add_node("replanner", plan.replanner_node)
+    g.add_node("gateway", execute.gateway_node)
 
     # edges
     g.add_edge(START, "planner")
-    g.add_edge("planner", END)
-    
+    g.add_edge("planner", "tool_calling")
+    g.add_edge("tool_calling", "gateway")
+    g.add_conditional_edges(
+        "gateway",
+        execute.gateway_conditional,
+        [
+            "replanner",
+            END,
+        ],
+    )
+    g.add_conditional_edges(
+        "replanner",
+        plan.should_replan,
+        [
+            "gateway",
+            END,
+        ],
+    )
+
     return g

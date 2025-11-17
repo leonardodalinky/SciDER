@@ -4,11 +4,10 @@ from pathlib import Path
 
 from .registry import register_tool, register_toolset_desc
 
-register_toolset_desc("github", "Tools for interacting with GitHub repositories on the local system.")
+register_toolset_desc(
+    "github", "Tools for interacting with GitHub repositories on the local system."
+)
 
-###############################################################################
-# Tool 1: clone_repo
-###############################################################################
 
 @register_tool(
     "github",
@@ -22,11 +21,11 @@ register_toolset_desc("github", "Tools for interacting with GitHub repositories 
                 "properties": {
                     "repo_url": {
                         "type": "string",
-                        "description": "HTTP(S) URL of the GitHub repository to clone."
+                        "description": "HTTP(S) URL of the GitHub repository to clone.",
                     },
                     "dest_dir": {
                         "type": "string",
-                        "description": "Local directory path where the repository will be cloned."
+                        "description": "Local directory path where the repository will be cloned.",
                     },
                 },
                 "required": ["repo_url", "dest_dir"],
@@ -68,10 +67,6 @@ def clone_repo(repo_url: str, dest_dir: str) -> str:
         return f"Error cloning repository: {e}"
 
 
-###############################################################################
-# Tool 2: read_readme
-###############################################################################
-
 @register_tool(
     "github",
     {
@@ -84,7 +79,7 @@ def clone_repo(repo_url: str, dest_dir: str) -> str:
                 "properties": {
                     "repo_dir": {
                         "type": "string",
-                        "description": "Local directory where repository was cloned."
+                        "description": "Local directory where repository was cloned.",
                     },
                 },
                 "required": ["repo_dir"],
@@ -118,10 +113,6 @@ def read_readme(repo_dir: str) -> str:
     except Exception as e:
         return f"Error reading README: {e}"
 
-
-###############################################################################
-# Tool 3: list_repo_files
-###############################################################################
 
 @register_tool(
     "github",
@@ -167,10 +158,6 @@ def list_repo_files(repo_dir: str) -> str:
     except Exception as e:
         return f"Error listing repository files: {e}"
 
-
-###############################################################################
-# Tool 4: get_file_content
-###############################################################################
 
 @register_tool(
     "github",
