@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from scievo.core import constant
+from scievo.core.errors import AgentError
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import HistoryState, Message
 from scievo.core.utils import parse_markdown_from_llm_response
@@ -24,8 +25,6 @@ class HistoryCompressionState(BaseModel):
 
     # Output: the compressed message
     output_patch: HistoryState.HistoryPatch | None = None
-    # Output: error message if any
-    output_error: str | None = None
 
 
 def validate_compression_input(state: HistoryCompressionState) -> HistoryCompressionState:
@@ -37,17 +36,10 @@ def validate_compression_input(state: HistoryCompressionState) -> HistoryCompres
         < constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
     ):
         e = f"Input history state has {state.input_history_state.total_patched_tokens} tokens, which is less than the threshold of {constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD}."
-        logger.error(e)
-        state.output_error = e
+        logger.debug("Consolidation error: {}", e)
+        raise AgentError(e, agent_name=AGENT_NAME)
 
     return state
-
-
-def should_skip_compression(state: HistoryCompressionState) -> str:
-    """Route to skip compression if there's an error."""
-    if state.output_error:
-        return "end"
-    return "compress"
 
 
 def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionState:
@@ -137,9 +129,8 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
         return state
 
     except Exception as e:
-        logger.error(f"Compression error: {e}")
-        state.output_error = f"Compression error: {e}"
-        return state
+        logger.debug("Consolidation error: {}", e)
+        raise AgentError(f"history_compression_error", agent_name=AGENT_NAME) from e
 
 
 @logger.catch
@@ -153,11 +144,7 @@ def build():
 
     # Add edges
     g.add_edge(START, "validate")
-    g.add_conditional_edges(
-        "validate",
-        should_skip_compression,
-        ["compress", END],
-    )
+    g.add_edge("validate", "compress")
     g.add_edge("compress", END)
 
     return g

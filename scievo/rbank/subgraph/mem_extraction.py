@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from scievo.core import constant
 from scievo.core.constant import LOG_MEM_SUBGRAPH
+from scievo.core.errors import AgentError
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import parse_markdown_from_llm_response
@@ -30,7 +31,6 @@ class MemExtractionState(BaseModel):
 
     input_msgs: list[Message]
     output_mems: list[MemEntry] = []
-    output_error: str | None = None
 
 
 def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
@@ -92,14 +92,10 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
                 memos.append(Memo.from_markdown(extracted_md))
             except Exception as e:
                 logger.debug("Markdown parse error: {}", e)
-                state.output_error = f"markdown_parse_error: {e}"
-                state.output_mems = []
-                return [], False
+                raise AgentError(f"markdown_parse_error: {e}", agent_name=AGENT_NAME) from e
 
         if len(memos) == 0:
-            state.output_error = "no_valid_memos"
-            state.output_mems = []
-            return [], False
+            raise AgentError("no valid memos", agent_name=AGENT_NAME)
 
         return memos, True
 
@@ -108,8 +104,7 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
     # long_term mems
     long_term_mems, long_term_success = extract_mems(long_term_system_prompt)
     if not long_term_success:
-        state.output_error += ", long_term_mem_extraction_failed"
-        return state
+        raise AgentError("long term mem extraction failed", agent_name=AGENT_NAME)
     ## Build MemEntry list
     entries: list[MemEntry] = []
     id = secrets.token_hex(4)
@@ -128,8 +123,7 @@ def mem_extraction_node(state: MemExtractionState) -> MemExtractionState:
     # project mems
     project_mems, project_success = extract_mems(project_system_prompt)
     if not project_success:
-        state.output_error += ", project_mem_extraction_failed"
-        return state
+        raise AgentError("project mem extraction failed", agent_name=AGENT_NAME)
     ## Build MemEntry list
     entries: list[MemEntry] = []
     id = secrets.token_hex(4)
@@ -155,41 +149,17 @@ persist_subgraph_compiled = persist_subgraph.compile()
 
 def persistence_node(state: MemExtractionState) -> MemExtractionState:
     # Call the persistence subgraph to persist extracted mem entries
-    if state.output_error:
-        return state
-
     try:
-        # long_term mems
-        res = persist_subgraph_compiled.invoke(
+        # persist all mems
+        persist_subgraph_compiled.invoke(
             MemPersistenceState(
                 input_mems=state.output_mems,
                 save_dir=state.mem_dir,
             )
         )
-        err = res.get("output_error", None)
-        if err:
-            state.output_error = (
-                f"persist_error in persistence subgraph of mem extraction for long_term mems: {err}"
-            )
-            return state
-
-        # project mems
-        res = persist_subgraph_compiled.invoke(
-            MemPersistenceState(
-                input_mems=state.output_mems,
-                save_dir=state.mem_dir,
-            )
-        )
-        err = res.get("output_error", None)
-        if err:
-            state.output_error = (
-                f"persist_error in persistence subgraph of mem extraction for project mems: {err}"
-            )
-            return state
     except Exception as e:
         logger.debug("Persistence subgraph invoke error: {}", e)
-        state.output_error = f"persistence_subgraph_invoke_error: {e}"
-        return state
+        raise AgentError(f"persistence_subgraph_invoke_error: {e}", agent_name=AGENT_NAME) from e
 
     return state
 

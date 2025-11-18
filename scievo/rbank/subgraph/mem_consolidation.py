@@ -9,6 +9,7 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo.core.errors import AgentError
 from scievo.core.llms import ModelRegistry
 from scievo.rbank.memo import Memo, MemoEmbeddings
 
@@ -34,8 +35,6 @@ class MemConsolidationState(BaseModel):
     long_term_mem_pairs: list[MemPair] = []
     project_mem_pairs: list[MemPair] = []
 
-    output_error: str | None = None
-
 
 def _load_mem_pair(md_path: Path) -> MemPair:
     embed_path = md_path.with_suffix(".json")
@@ -49,7 +48,7 @@ def _load_mem_pair(md_path: Path) -> MemPair:
     try:
         embed = MemoEmbeddings.from_json_file(embed_path)
     except Exception as e:
-        raise ValueError(f"Failed to load embedding from {embed_path}: {e}")
+        raise ValueError(f"Failed to load embedding from {embed_path}") from e
 
     base_name = md_path.name
     return (memo, embed, base_name)
@@ -75,9 +74,9 @@ def compute_embeddings_node(state: MemConsolidationState) -> MemConsolidationSta
     mem_dir_path = Path(state.mem_dir)
 
     if not mem_dir_path.exists() or not mem_dir_path.is_dir():
-        state.output_error = f"mem_dir does not exist or is not a directory: {mem_dir_path}"
-        logger.debug("Consolidation error: {}", state.output_error)
-        return state
+        raise AgentError(
+            f"mem_dir does not exist or is not a directory: {mem_dir_path}", agent_name=AGENT_NAME
+        )
 
     # Find all markdown files in the directory
     md_files = list(mem_dir_path.glob("*.md"))
@@ -94,26 +93,25 @@ def compute_embeddings_node(state: MemConsolidationState) -> MemConsolidationSta
         try:
             mem_pair = _load_mem_pair(md_path)
         except Exception as e:
-            state.output_error = f"Failed to load mem pair from {md_path}: {e}"
-            logger.debug("Consolidation error: {}", state.output_error)
-            return state
+            logger.debug("Consolidation error: {}", e)
+            raise AgentError(
+                f"Failed to load mem pair from {md_path}", agent_name=AGENT_NAME
+            ) from e
 
         if (typ := _identify_mem_type(md_path)) == "L":
             l_list.append(mem_pair)
         elif typ == "P":
             p_list.append(mem_pair)
         else:
-            state.output_error = f"Unknown mem type: {typ}"
-            logger.debug("Consolidation error: {}", state.output_error)
-            return state
+            err_txt = f"Unknown mem type: {typ}"
+            logger.debug("Consolidation error: {}", err_txt)
+            raise AgentError(err_txt, agent_name=AGENT_NAME)
 
     state.mem_pairs_dict = {"L": l_list, "P": p_list}
     return state
 
 
 def load_existing_mems_node(state: MemConsolidationState) -> MemConsolidationState:
-    if state.output_error:
-        return state
     # load existing mem pairs from long_term_mem_dir and project_mem_dir
     long_term_mem_pairs: list[MemPair] = []
     project_mem_pairs: list[MemPair] = []
@@ -123,9 +121,10 @@ def load_existing_mems_node(state: MemConsolidationState) -> MemConsolidationSta
         try:
             mem_pair = _load_mem_pair(md_path)
         except Exception as e:
-            state.output_error = f"Failed to load mem pair from {md_path}: {e}"
-            logger.debug("Consolidation error: {}", state.output_error)
-            return state
+            logger.debug("Consolidation error: {}", e)
+            raise AgentError(
+                f"Failed to load mem pair from {md_path}", agent_name=AGENT_NAME
+            ) from e
 
         long_term_mem_pairs.append(mem_pair)
 
@@ -134,9 +133,10 @@ def load_existing_mems_node(state: MemConsolidationState) -> MemConsolidationSta
         try:
             mem_pair = _load_mem_pair(md_path)
         except Exception as e:
-            state.output_error = f"Failed to load mem pair from {md_path}: {e}"
-            logger.debug("Consolidation error: {}", state.output_error)
-            return state
+            logger.debug("Consolidation error: {}", e)
+            raise AgentError(
+                f"Failed to load mem pair from {md_path}", agent_name=AGENT_NAME
+            ) from e
 
         project_mem_pairs.append(mem_pair)
 
@@ -146,8 +146,6 @@ def load_existing_mems_node(state: MemConsolidationState) -> MemConsolidationSta
 
 
 def merge_mems_node(state: MemConsolidationState) -> MemConsolidationState:
-    if state.output_error:
-        return state
     Path(state.long_term_mem_dir).mkdir(parents=True, exist_ok=True)
     Path(state.project_mem_dir).mkdir(parents=True, exist_ok=True)
 

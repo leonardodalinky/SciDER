@@ -12,6 +12,7 @@ from loguru import logger
 
 from scievo import history_compression
 from scievo.core import constant
+from scievo.core.errors import sprint_chained_exception
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
@@ -111,15 +112,11 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
                     max_num_memos=constant.MEM_EXTRACTION_MAX_NUM_MEMOS,
                 )
             )
-        except Exception as e:
-            logger.exception("mem_retrieval_error")
-            res = {"output_error": f"mem_retrieval_error with exception {e}"}
-
-        if err := res.get("output_error", None):
-            memory_text = err
-        else:
             memos: list[Memo] = res.get("output_memos", [])
             memory_text = _memos_to_markdown(memos)
+        except Exception:
+            logger.exception("mem_retrieval_error")
+            memory_text = None
     else:
         memory_text = None
 
@@ -265,7 +262,7 @@ def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
     context_window = agent_state.patched_history[-MEM_EXTRACTION_CONTEXT_WINDOW:]
     logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
     try:
-        res = mem_extraction_subgraph_compiled.invoke(
+        _ = mem_extraction_subgraph_compiled.invoke(
             mem_extraction.MemExtractionState(
                 mem_dir=Path(agent_state.sess_dir) / f"short_term",
                 input_msgs=context_window,
@@ -276,21 +273,11 @@ def mem_extraction_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"mem_extraction_error: {e}",
+                content=f"mem_extraction_error: {sprint_chained_exception(e)}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
-        return agent_state
 
-    err = res.get("output_error", None)
-    if err:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"mem_extraction_error: {err}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
     return agent_state
 
 
@@ -310,21 +297,11 @@ def history_compression_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"history_compression_error: {e}",
+                content=f"history_compression_error: {sprint_chained_exception(e)}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
         return agent_state
-
-    err = res.get("output_error", None)
-    if err:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"history_compression_error: {err}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
 
     output_patch = res.get("output_patch", None)
     if output_patch:
