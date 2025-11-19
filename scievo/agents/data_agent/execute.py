@@ -3,7 +3,6 @@ Agent for data understanding and processing
 """
 
 import json
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 
@@ -14,7 +13,7 @@ from scievo.agents import critic_agent
 from scievo.core import constant
 from scievo.core.errors import sprint_chained_exception
 from scievo.core.llms import ModelRegistry
-from scievo.core.types import Message
+from scievo.core.types import HistoryState, Message, RBankState
 from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
 from scievo.prompts import PROMPTS
 from scievo.rbank.subgraph import mem_extraction, mem_retrieval
@@ -23,10 +22,9 @@ from scievo.tools import Tool, ToolRegistry
 from .state import DataAgentState
 
 if TYPE_CHECKING:
-    from scievo.core.types import HistoryState, RBankState
     from scievo.rbank.memo import Memo
 
-    MemHistoryMixin = TypeVar("MemHistoryMixin", HistoryState, RBankState)
+MemHistoryMixin = TypeVar("MemHistoryMixin", HistoryState, RBankState)
 
 LLM_NAME = "data"
 AGENT_NAME = "data"
@@ -70,7 +68,7 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
         case "user" | "tool":
             return "llm_chat"
         case "assistant":
-            return "replanner"
+            return "critic_before_replan"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
