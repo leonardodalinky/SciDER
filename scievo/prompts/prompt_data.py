@@ -17,6 +17,7 @@ class Prompts:
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
     experiment: "ExperimentPrompts"
+    critic: "CriticPrompts"
 
 
 @dataclass
@@ -60,6 +61,12 @@ class ExperimentPrompts:
     experiment_summary_prompt: Template
 
 
+class CriticPrompts:
+    system_prompt: Template
+    user_prompt: Template
+    user_prompt_summary: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -85,6 +92,7 @@ def init():
         experiment=parse_yaml_as_templates(
             ExperimentPrompts, os.path.join(DIR, "experiment_prompt.yaml")
         ),
+        critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
     )
 
 

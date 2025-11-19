@@ -1,12 +1,12 @@
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
-from scievo.agents.data_agent.state import DataAgentState
 from scievo.core import constant
 from scievo.core.types import Message
 from scievo.rbank.subgraph import mem_consolidation
 
 from . import execute, plan
+from .state import DataAgentState
 
 mem_consolidation_subgraph = mem_consolidation.build()
 mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
@@ -50,6 +50,8 @@ def build():
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("mem_extraction", execute.mem_extraction_node)
     g.add_node("history_compression", execute.history_compression_node)
+    # g.add_node("critic", execute.critic_node) # not used for now
+    g.add_node("critic_before_replan", execute.critic_node)
     g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
     # edges from gateway to nodes
@@ -63,7 +65,7 @@ def build():
             "tool_calling",
             "mem_extraction",
             "history_compression",
-            "replanner",  # END
+            "critic_before_replan",  # plan END
         ],
     )
 
@@ -72,6 +74,8 @@ def build():
     g.add_edge("tool_calling", "gateway")
     g.add_edge("mem_extraction", "gateway")
     g.add_edge("history_compression", "gateway")
+
+    g.add_edge("critic_before_replan", "replanner")
 
     # edges from gateway to replanner
     g.add_conditional_edges(

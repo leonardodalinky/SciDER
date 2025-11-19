@@ -10,6 +10,7 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo.core.errors import AgentError
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.prompts import PROMPTS
@@ -30,7 +31,6 @@ class MemRetrievalState(BaseModel):
 
     # output
     output_memos: list[Memo] = []
-    output_error: str | None = None
 
 
 def format_input_msgs(
@@ -71,30 +71,24 @@ def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
         if embeddings and len(embeddings) > 0:
             state.summary_embedding = embeddings[0]
         else:
-            state.output_error = "embedding returned empty result"
-            logger.debug("Retrieval error: {}", state.output_error)
+            logger.debug("Retrieval error: embedding returned empty result")
+            raise AgentError("embedding returned empty result", agent_name=AGENT_NAME)
     except Exception as e:
-        state.output_error = f"embedding_error: {e}"
-        logger.debug("Retrieval error: {}", state.output_error)
+        logger.debug("Retrieval error: embedding_error: {}", e)
+        raise AgentError("embedding_error", agent_name=AGENT_NAME) from e
 
-    if not state.output_error:
-        logger.debug(
-            "Mem Retrieval embedding end: {} dims",
-            len(state.summary_embedding) if state.summary_embedding else 0,
-        )
+    logger.debug(
+        "Mem Retrieval embedding end: {} dims",
+        len(state.summary_embedding) if state.summary_embedding else 0,
+    )
     return state
 
 
 def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
     """Retrieve the top-k most relevant memos from the memory bank."""
-    if state.output_error:
-        logger.debug("Retrieval skipped due to existing error: {}", state.output_error)
-        return state
-
     if not state.summary_embedding:
-        state.output_error = "no summary embedding available"
-        logger.debug("Retrieval error: {}", state.output_error)
-        return state
+        logger.debug("Retrieval error: no summary embedding available")
+        raise AgentError("no summary embedding available", agent_name=AGENT_NAME)
 
     # Convert query embedding to numpy array
     query_emb = np.array(state.summary_embedding, dtype=np.float32)

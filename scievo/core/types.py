@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Self
 
 import tiktoken
 from functional import seq
+from langgraph.graph import START
 from litellm import Message as LLMessage
 from pydantic import BaseModel
 from rich.console import Console
@@ -216,6 +218,7 @@ class HistoryState(BaseModel):
     # List of patches to the history, used to compress the history
     # NOTE: patches are applied in order by patch_id, and patched history could still be patched in the next patches.
     history_patches: list["HistoryState.HistoryPatch"] = []
+    node_history: list[str] = [START]
 
     class HistoryPatch(BaseModel):
         # patch id, used to identify the patch
@@ -263,6 +266,13 @@ class HistoryState(BaseModel):
     def total_patched_tokens(self) -> int:
         return sum(m.n_tokens for m in self.patched_history)
 
+    @property
+    def round(self) -> int:
+        return len(self.node_history) - 1
+
+    def add_node_history(self, node_name: str) -> None:
+        self.node_history.append(node_name)
+
     def next_patch_id(self) -> int:
         if not self.history_patches or len(self.history_patches) == 0:
             return 0
@@ -306,3 +316,12 @@ class HistoryState(BaseModel):
             .filter(lambda patch: patch.patch_id == patch_id)
             .head_option(no_wrap=True)
         )
+
+
+class RBankState(BaseModel):
+    # session dir (short-term mem storage)
+    sess_dir: str | Path
+    # long-term mem save dirs (input & output)
+    long_term_mem_dir: str | Path
+    # project mem save dirs (input & output)
+    project_mem_dir: str | Path
