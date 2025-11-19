@@ -1,26 +1,20 @@
 """
-Agent for data understanding and processing
+Agent for criticizing and giving feedback on the agent's actions
 """
 
-import json
-import os
-from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 
 from loguru import logger
 
-from scievo import history_compression
-from scievo.agents import critic_agent
 from scievo.core import constant
-from scievo.core.errors import sprint_chained_exception
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
 from scievo.prompts import PROMPTS
-from scievo.rbank.subgraph import mem_extraction, mem_retrieval
+from scievo.rbank.subgraph import mem_retrieval
 from scievo.tools import Tool, ToolRegistry
 
-from .state import DataAgentState
+from .state import CriticAgentState
 
 if TYPE_CHECKING:
     from scievo.core.types import HistoryState, RBankState
@@ -28,40 +22,53 @@ if TYPE_CHECKING:
 
     MemHistoryMixin = TypeVar("MemHistoryMixin", HistoryState, RBankState)
 
-LLM_NAME = "data"
-AGENT_NAME = "data"
+LLM_NAME = "critic"
+AGENT_NAME = "critic"
 
 BUILTIN_TOOLSETS = [
     # "todo",
     "state",
     "history",
+    "web",
 ]
 ALLOWED_TOOLSETS = ["fs", "web"]
 
 
-def gateway_node(agent_state: DataAgentState) -> DataAgentState:
-    # NOTE: this node does nothing, it's just a placeholder for the conditional edges
-    # Check `gateway_conditional` for the actual logic
+def create_first_user_msg_node(agent_state: CriticAgentState) -> CriticAgentState:
+    logger.debug("create_first_user_msg_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("create_first_user_msg")
+
+    # Stringify all input messages
+    input_msgs_texts = []
+    for i, msg in enumerate(agent_state.input_msgs):
+        plain = msg.to_plain_text()
+        input_msgs_texts.append(f"--- Message {i} Begin ---\n{plain}\n--- Message {i} End ---")
+    trajectory_text: str = "\n".join(input_msgs_texts)
+
+    # Format using user_prompt template
+    user_prompt_content = PROMPTS.critic.user_prompt.render(
+        plan_text=agent_state.plan,
+        trajectory_text=trajectory_text,
+        is_data_agent=agent_state.is_data_agent,
+        is_exp_agent=agent_state.is_exp_agent,
+    )
+
+    # Add as first user message
+    agent_state.add_message(
+        Message(role="user", content=user_prompt_content, agent_sender=AGENT_NAME)
+    )
+
+    return agent_state
+
+
+def gateway_node(agent_state: CriticAgentState) -> CriticAgentState:
+    # NOTE: Same as data agent
     logger.trace("gateway_node of Agent {}", AGENT_NAME)
     return agent_state
 
 
-def gateway_conditional(agent_state: DataAgentState) -> str:
-    # compress history if needed
-    if (
-        constant.HISTORY_AUTO_COMPRESSION
-        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
-    ):
-        return "history_compression"
-
-    if (
-        constant.REASONING_BANK_ENABLED
-        and agent_state.node_history[-1] != "mem_extraction"
-        and agent_state.round > 0
-        and agent_state.round % constant.MEM_EXTRACTION_ROUND_FREQ == 0
-    ):
-        return "mem_extraction"
-
+def gateway_conditional(agent_state: CriticAgentState) -> str:
+    # NOTE: Same as data agent
     last_msg = agent_state.patched_history[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
@@ -70,7 +77,8 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
         case "user" | "tool":
             return "llm_chat"
         case "assistant":
-            return "replanner"
+            # finish this round of critic, go to "summary" node
+            return "summary"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
@@ -79,21 +87,11 @@ mem_retrieval_subgraph = mem_retrieval.build()
 mem_retrieval_subgraph_compiled = mem_retrieval_subgraph.compile()
 
 
-def _memos_to_markdown(memos: list["Memo"]) -> str:
-    ret = ""
-    if len(memos) == 0:
-        return "No memory retrieved."
-    for i, memo in enumerate(memos):
-        ret += f"# Memo {i + 1}\n\n{memo.to_markdown()}\n\n"
-    return ret
-
-
-def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
+def llm_chat_node(agent_state: CriticAgentState) -> CriticAgentState:
     logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "current_working_dir": agent_state.local_env.working_dir,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
@@ -113,6 +111,8 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
                 )
             )
             memos: list[Memo] = res.get("output_memos", [])
+            from scievo.agents.data_agent.execute import _memos_to_markdown
+
             memory_text = _memos_to_markdown(memos)
         except Exception:
             logger.exception("mem_retrieval_error")
@@ -121,13 +121,12 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
         memory_text = None
 
     # update system prompt
-    system_prompt = PROMPTS.data.system_prompt.render(
+    system_prompt = PROMPTS.critic.system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         memory_text=wrap_text_with_block(memory_text, "markdown"),
-        current_plan=(
-            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
-        ),
+        is_data_agent=agent_state.is_data_agent,
+        is_exp_agent=agent_state.is_exp_agent,
     )
 
     # construct tools
@@ -153,7 +152,7 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
-def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
+def tool_calling_node(agent_state: CriticAgentState) -> CriticAgentState:
     """Execute tool calls from the last message and update the graph state"""
     logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("tool_calling")
@@ -253,105 +252,38 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
-mem_extraction_subgraph = mem_extraction.build()
-mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
+def summary_node(agent_state: CriticAgentState) -> CriticAgentState:
+    logger.debug("summary_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("summary")
 
+    # update system prompt
+    system_prompt = PROMPTS.critic.system_prompt.render(
+        toolsets_desc={},
+        is_data_agent=agent_state.is_data_agent,
+        is_exp_agent=agent_state.is_exp_agent,
+    )
 
-def mem_extraction_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
-    logger.debug("mem_extraction_node of Agent {}", AGENT_NAME)
-    agent_state.add_node_history("mem_extraction")
-    context_window = agent_state.patched_history[-constant.MEM_EXTRACTION_CONTEXT_WINDOW :]
-    logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
-    try:
-        _ = mem_extraction_subgraph_compiled.invoke(
-            mem_extraction.MemExtractionState(
-                mem_dir=Path(agent_state.sess_dir) / f"short_term",
-                input_msgs=context_window,
-                input_agent_name=AGENT_NAME,
-            )
-        )
-    except Exception as e:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"mem_extraction_error: {sprint_chained_exception(e)}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
+    # Render the summary prompt
+    summary_prompt_content = PROMPTS.critic.user_prompt_summary.render(
+        is_data_agent=agent_state.is_data_agent,
+        is_exp_agent=agent_state.is_exp_agent,
+    )
 
-    return agent_state
+    # Add summary request as user message
+    agent_state.add_message(
+        Message(role="user", content=summary_prompt_content, agent_sender=AGENT_NAME)
+    )
 
+    # Get AI summary response
+    msg = ModelRegistry.completion(
+        LLM_NAME,
+        agent_state.patched_history,
+        system_prompt=system_prompt,
+        agent_sender=AGENT_NAME,
+    ).with_log()
+    agent_state.add_message(msg)
 
-history_compress_subgraph = history_compression.build()
-history_compress_subgraph_compiled = history_compress_subgraph.compile()
-
-
-def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
-    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
-    agent_state.add_node_history("history_compression")
-    try:
-        res = history_compress_subgraph_compiled.invoke(
-            history_compression.HistoryCompressionState(
-                input_history_state=agent_state,
-            )
-        )
-    except Exception as e:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"history_compression_error: {sprint_chained_exception(e)}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
-        return agent_state
-
-    output_patch = res.get("output_patch", None)
-    if output_patch:
-        agent_state.history_patches.append(output_patch)
-    else:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content="history_compression_error: No output patch",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
-
-    return agent_state
-
-
-critic_subgraph = critic_agent.build()
-critic_subgraph_compiled = critic_subgraph.compile()
-
-
-def critic_node(agent_state: DataAgentState) -> DataAgentState:
-    logger.trace("critic_node of Agent {}", AGENT_NAME)
-
-    if not constant.CRITIC_ENABLED:
-        return agent_state
-
-    try:
-        res = critic_subgraph_compiled.invoke(
-            critic_agent.CriticAgentState(
-                input_msgs=agent_state.patched_history[-constant.CRITIC_CONTEXT_WINDOW :],
-                plan=agent_state.remaining_plans[0],
-                is_data_agent=True,
-                # RBankState
-                sess_dir=agent_state.sess_dir,
-                long_term_mem_dir=agent_state.long_term_mem_dir,
-                project_mem_dir=agent_state.project_mem_dir,
-            )
-        )
-        assert res.get("critic_msg", None) is not None, "critic_msg is None"
-        critic_msg: Message = res.get("critic_msg")
-        agent_state.add_message(critic_msg.with_log())
-    except Exception as e:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"critic_error: {sprint_chained_exception(e)}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
+    # Set the summary message as the output
+    agent_state.critic_msg = msg
 
     return agent_state

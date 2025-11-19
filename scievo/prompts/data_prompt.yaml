@@ -74,7 +74,7 @@ system_prompt: |
 
 user_prompt: |
   You are given a list of files or a directory. Try to understand the content of the files and the relationship between them.
-  {%if files %}
+  {% if files %}
   Files:
   {%- for file in files %}
   - {{ file }}

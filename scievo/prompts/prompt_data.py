@@ -16,6 +16,7 @@ class Prompts:
     data: "DataPrompts"
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
+    critic: "CriticPrompts"
 
 
 @dataclass
@@ -47,6 +48,13 @@ class HistoryPrompts:
     recall_tool_response: Template
 
 
+@dataclass
+class CriticPrompts:
+    system_prompt: Template
+    user_prompt: Template
+    user_prompt_summary: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -69,6 +77,7 @@ def init():
         data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
         rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
         history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
+        critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
     )
 
 
