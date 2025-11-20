@@ -23,34 +23,85 @@ import json
 def should_replan(agent_state: ExperimentAgentState) -> str:
     """
     Decide whether to continue (go to 'gateway')
-    or finish (go to END).
+    or finish and generate report (go to 'report').
+
+    Decision logic:
+    1. If replanner says {"continued": true} → continue to gateway
+    2. If replanner says {"continued": false} → finish and generate report
+    3. If replanner says {"modified": [...]} → finish and generate report (plan modified, will be handled separately)
+    4. If no remaining plans AND no past plans → finish (nothing to do)
+    5. Otherwise → continue (fallback)
     """
 
     last_msg = agent_state.patched_history[-1]
     content = (last_msg.content or "").strip()
 
-    # Try JSON parse
+    # Check if there are any plans left
+    has_remaining_plans = agent_state.remaining_plans and len(agent_state.remaining_plans) > 0
+    has_past_plans = agent_state.past_plans and len(agent_state.past_plans) > 0
+
+    # If no plans at all, finish
+    if not has_remaining_plans and not has_past_plans:
+        logger.debug("No plans remaining, finishing experiment")
+        return "report"
+
+    # Try to extract JSON from response (handles cases where LLM adds extra text)
     try:
+        # First try direct JSON parse
         data = json.loads(content)
     except:
-        # If not JSON → treat as continue
-        return "gateway"
+        # If that fails, try to extract JSON from markdown code blocks or text
+        try:
+            import re
+
+            # Try to find JSON in markdown code blocks
+            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(1))
+            else:
+                # Try to find JSON object in the text
+                json_match = re.search(
+                    r'\{[^{}]*"continued"[^{}]*\}|"modified"[^{}]*\[[^\]]*\]', content
+                )
+                if json_match:
+                    data = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("No JSON found in response")
+        except Exception as e:
+            logger.warning(
+                f"Could not parse replanner JSON response: {e}. Content: {content[:200]}"
+            )
+            # If we can't parse and have remaining plans, continue; otherwise finish
+            if has_remaining_plans:
+                logger.debug("Could not parse JSON but has remaining plans, continuing")
+                return "gateway"
+            else:
+                logger.debug("Could not parse JSON and no remaining plans, finishing")
+                return "report"
 
     # Case: continue
     if isinstance(data, dict) and data.get("continued") is True:
+        logger.debug("Replanner says continue, going to gateway")
         return "gateway"
 
     # Case: end (no more work)
     if isinstance(data, dict) and data.get("continued") is False:
-        return "end"
+        logger.debug("Replanner says finished, generating report")
+        return "report"
 
     # Case: new plan created (interpreted as finishing replanner stage)
     if isinstance(data, dict) and "modified" in data:
-        # modified means replanner finished → next step will recreate plan outside
-        return "end"
+        # modified means replanner finished → generate report
+        logger.debug("Replanner modified plan, generating report")
+        return "report"
 
-    # fallback
-    return "gateway"
+    # fallback: if we have remaining plans, continue; otherwise finish
+    if has_remaining_plans:
+        logger.debug("Fallback: has remaining plans, continuing")
+        return "gateway"
+    else:
+        logger.debug("Fallback: no remaining plans, finishing")
+        return "report"
 
 
 @logger.catch
@@ -161,8 +212,61 @@ def replanner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
             role="assistant",
             content=str(raw),
             agent_sender=AGENT_NAME,
-        ).with_log()
+        )
     )
 
+    # Try to extract and validate JSON from response
+    # If LLM didn't return pure JSON, try to extract it
+    content = llm_msg.content or ""
+    try:
+        # First try direct parse
+        json.loads(content)
+        # If successful, it's valid JSON
+    except:
+        # Try to extract JSON from markdown or text
+        try:
+            import re
+
+            from scievo.core.utils import repair_json
+
+            # Try to find JSON in markdown code blocks
+            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
+            else:
+                # Try to find JSON object in the text
+                json_match = re.search(
+                    r'\{[^{}]*(?:"continued"|"modified")[^{}]*\}', content, re.DOTALL
+                )
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    # Last resort: try to find any JSON-like structure
+                    json_match = re.search(
+                        r'\{.*"continued".*\}|\{.*"modified".*\}', content, re.DOTALL
+                    )
+                    if json_match:
+                        json_str = json_match.group(0)
+                    else:
+                        raise ValueError("No JSON found in response")
+
+            # Repair and validate JSON
+            json_str = repair_json(json_str)
+            # Validate it's proper JSON
+            json.loads(json_str)
+            # Replace content with clean JSON
+            llm_msg.content = json_str
+            logger.debug(f"Extracted JSON from LLM response: {json_str}")
+        except Exception as e:
+            logger.warning(f"Could not extract JSON from replanner response: {e}")
+            # If we can't extract JSON, default to continue if there are remaining plans
+            if agent_state.remaining_plans and len(agent_state.remaining_plans) > 0:
+                llm_msg.content = '{"continued": true}'
+                logger.info("Defaulting to continue due to remaining plans")
+            else:
+                llm_msg.content = '{"continued": false}'
+                logger.info("Defaulting to finish due to no remaining plans")
+
+    llm_msg.with_log()
     agent_state.add_message(llm_msg)
     return agent_state

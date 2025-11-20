@@ -22,6 +22,7 @@ def build():
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("replanner", plan.replanner_node)
     g.add_node("gateway", execute.gateway_node)
+    g.add_node("report", execute.report_node)
 
     # edges
     g.add_edge(START, "planner")
@@ -43,8 +44,9 @@ def build():
         plan.should_replan,
         [
             "gateway",
-            END,
+            "report",
         ],
     )
+    g.add_edge("report", END)
 
     return g
