@@ -2,6 +2,7 @@
 from . import (
     arxiv_tool,
     coder_tool,
+    cursor_tool,
     env_tool,
     fs_tool,
     github_tool,

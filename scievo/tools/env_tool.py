@@ -4,9 +4,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from shell_tool import run_shell_cmd
-
 from .registry import register_tool, register_toolset_desc
+from .shell_tool import run_shell_cmd
+
+register_toolset_desc("environment", "Environment management toolset (virtualenv, pip, etc.).")
 
 
 @register_tool(
@@ -115,30 +116,6 @@ def pip_install_requirements(requirements_path: str, venv: str = ""):
 def check_python_import(module: str, python: str = "python3"):
     code = f"{python} -c 'import {module}; print(\"OK\")'"
     return run_shell_cmd(code)
-
-
-@register_tool(
-    "environment",
-    {
-        "type": "function",
-        "function": {
-            "name": "clone_repo",
-            "description": "Clone a Git repository using git",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "repo_url": {"type": "string"},
-                    "dest": {"type": "string", "default": ""},
-                },
-                "required": ["repo_url"],
-            },
-        },
-    },
-)
-def clone_repo(repo_url: str, dest: str = ""):
-    if dest:
-        return run_shell_cmd(f"git clone {repo_url} {dest}")
-    return run_shell_cmd(f"git clone {repo_url}")
 
 
 @register_tool(
