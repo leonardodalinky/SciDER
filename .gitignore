@@ -210,3 +210,5 @@ __marimo__/
 tmp_*
 .aider*
 data_analysis.md
+
+env
