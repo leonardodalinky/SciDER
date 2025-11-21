@@ -45,23 +45,25 @@ def gateway_conditional(agent_state: ExperimentAgentState) -> str:
 
     match last_msg.role:
         case "user" | "tool":
+            logger.debug("user or tool message, going to llm_chat_node")
             return "llm_chat"
         case "assistant":
-            # Assistant message without tool calls - check if we should continue or replan
-            # If we have remaining plans, add user message and continue to llm_chat
-            # Otherwise, go to replanner
             if agent_state.remaining_plans and len(agent_state.remaining_plans) > 0:
+                logger.debug("remaining plans, going to llm_chat_node")
                 # Add user message to trigger execution of next step
                 agent_state.add_message(
                     Message(
                         role="user",
                         content=PROMPTS.experiment.replanner_user_response.render(
                             next_step=agent_state.remaining_plans[0],
+                            selected_action=None,
+                            has_options=False,
                         ),
                     )
                 )
                 return "llm_chat"
             else:
+                logger.debug("no remaining plans, going to replanner")
                 return "replanner"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
@@ -123,6 +125,8 @@ def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         ),
     )
 
+    logger.debug(f"llm_chat_node of Agent {AGENT_NAME} system prompt: {system_prompt}")
+
     # construct tools
     tools: dict[str, Tool] = {}
     for toolset in agent_state.toolsets:
@@ -141,6 +145,7 @@ def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         agent_sender=AGENT_NAME,
         tools=[tool.name for tool in tools.values()],
     ).with_log()
+    msg.role = "user"
     agent_state.add_message(msg)
 
     return agent_state
