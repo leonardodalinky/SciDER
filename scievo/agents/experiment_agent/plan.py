@@ -122,23 +122,15 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     agent_state.remaining_plans = plans.steps
     agent_state.past_plans = []
 
-    # Add a control message: “Follow the current plan.”
+    # Add a user message to trigger execution of the first step
     agent_state.add_message(
         Message(
-            role="assistant",
-            content="Follow the current plan.",
-            agent_sender=AGENT_NAME,
+            role="user",
+            content=PROMPTS.experiment.replanner_user_response.render(
+                next_step=agent_state.remaining_plans[0],
+            ),
         )
     )
-
-    # Logging next step (not added to history)
-    Message(
-        role="assistant",
-        content=PROMPTS.experiment.replanner_user_response.render(
-            next_step=agent_state.remaining_plans[0],
-        ),
-        agent_sender=AGENT_NAME,
-    ).with_log()
 
     return agent_state
 

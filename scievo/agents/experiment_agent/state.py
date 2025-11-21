@@ -10,8 +10,6 @@ class ExperimentAgentState(ToolsetState, PlanState, HistoryState):
 
     user_query: str
 
-    round: int = 0
-
     # User's instructions
     user_instructions: str = ""
 

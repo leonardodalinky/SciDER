@@ -61,6 +61,7 @@ class ExperimentPrompts:
     experiment_summary_prompt: Template
 
 
+@dataclass
 class CriticPrompts:
     system_prompt: Template
     user_prompt: Template
