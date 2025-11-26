@@ -108,40 +108,47 @@ def should_replan(agent_state: ExperimentAgentState) -> str:
 def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     logger.trace("planner_node of Agent {}", AGENT_NAME)
 
-    # Extract the GitHub repo URL from user_query
-    repo_url = agent_state.user_query.strip()
-    if not repo_url.startswith("http"):
-        raise ValueError(f"User query is not a valid GitHub URL: {repo_url}")
+    # Extract the local folder path from user_query
+    folder_path = agent_state.user_query.strip()
 
-    # Clone the repository using github.clone_repo tool
-    tools = ToolRegistry.get_toolset("github")
-    clone_func = tools["clone_repo"].func
+    # Expand user home directory and environment variables
+    folder_path = Path(folder_path).expanduser()
 
-    # clone into: ~/.experiment_repos/<repo_name>
-    local_root = Path.home() / ".experiment_repos"
-    local_root.mkdir(parents=True, exist_ok=True)
+    # Validate that the path exists and is a directory
+    if not folder_path.exists():
+        raise ValueError(f"Folder path does not exist: {folder_path}")
+    if not folder_path.is_dir():
+        raise ValueError(f"Path is not a directory: {folder_path}")
 
-    clone_result = clone_func(repo_url=repo_url, dest_dir=str(local_root))
+    # Set the repo_dir to the local folder path
+    repo_dir = folder_path.resolve()
+    agent_state.repo_dir = repo_dir
 
-    logger.debug(f"[ExperimentAgent] clone_repo result: {clone_result}")
+    # Update the working directory in local_env
+    # Create a new LocalEnv with the project folder as working directory
+    from scievo.core.code_env import LocalEnv
 
-    # Determine cloned repo path
-    repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
-    repo_dir = local_root / repo_name
-    agent_state.repo_dir = repo_dir  # save path to agent state
+    agent_state.local_env = LocalEnv(working_dir=repo_dir, create_dir_if_missing=False)
 
-    # Read README using read_readme tool
-    readme_func = tools["read_readme"].func
-    readme_text = readme_func(repo_dir=str(repo_dir))
-    agent_state.readme_text = readme_text
+    logger.debug(f"[ExperimentAgent] Using local folder: {repo_dir}")
 
-    logger.debug(f"[ExperimentAgent] README loaded ({len(readme_text)} chars)")
+    # Try to read README if it exists (optional)
+    readme_text = ""
+    readme_candidates = ["README.md", "readme.md", "Readme.md", "README.MD", "README.txt"]
+    for readme_name in readme_candidates:
+        readme_path = repo_dir / readme_name
+        if readme_path.exists():
+            readme_text = readme_path.read_text(errors="ignore")
+            logger.debug(f"[ExperimentAgent] README loaded ({len(readme_text)} chars)")
+            break
+
+    agent_state.readme_text = readme_text if readme_text else "No README found."
 
     # Construct a planning prompt for the LLM
     user_prompt = PROMPTS.experiment.planner_system_prompt.render(
-        repo_url=repo_url,
+        repo_url="",  # Not used for local folders
         repo_dir=str(repo_dir),
-        readme_text=readme_text,
+        readme_text=readme_text if readme_text else "No README found in the project folder.",
         user_instruction=agent_state.user_instructions,
     )
 

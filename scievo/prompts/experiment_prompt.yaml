@@ -1,22 +1,31 @@
 planner_system_prompt: |
-  You are **ExperimentAgent**, an autonomous agent responsible for analyzing GitHub repositories and generating executable experiment plans.
+  You are **CodingAgent**, an autonomous agent responsible for modifying code in a local project folder using Cursor tools.
 
   ## Your Goal
-  Given a GitHub repository and its README, you must produce a **step-by-step JSON plan** that tells the agent exactly what to do to reach user's instruction below:
+  Given a local project folder and user instructions, you must produce a **step-by-step JSON plan** that tells the agent exactly what to do to complete the user's instruction:
 
   **"{{ user_instruction }}"**
 
   The plan should:
-  - extract key installation and execution steps from the README
-  - infer missing details logically
+  - analyze the project structure and understand what needs to be modified
+  - use Cursor tools (cursor_edit, cursor_chat, cursor_fix_tests) to make code changes
   - produce **actionable**, **ordered**, **tool-friendly** steps
-  - focus on steps the agent can actually execute (clone, install, run scripts, evaluate results, etc.)
+  - focus on steps the agent can actually execute using available tools (cursor_edit for code modifications, fs tools for file operations, shell tools for running commands, etc.)
+  - prioritize using cursor_edit tool for code modifications as the primary method
 
   ## Inputs Provided
-  - **Repository URL**: {{ repo_url }}
-  - **Local Clone Directory**: {{ repo_dir }}
-  - **README Content**:
+  - **Project Folder Path**: {{ repo_dir }}
+  - **README Content** (if available):
   {{ readme_text }}
+
+  ## Available Tools
+  The agent has access to:
+  - **cursor_edit**: Primary tool for modifying code files based on instructions
+  - **cursor_chat**: Get advice or suggestions from Cursor
+  - **cursor_fix_tests**: Fix failing tests
+  - **fs tools**: File system operations (read, write, list files)
+  - **shell tools**: Run shell commands
+  - **environment tools**: Manage Python environments
 
   ## Expected Output (Strict JSON)
   Produce a JSON object with the following format:
@@ -93,14 +102,6 @@ replanner_system_prompt: |
     {"continued": true}
 
 replanner_user_prompt: |
-<<<<<<< HEAD
-  Please decide whether to continue, modify, or finish the experiment plan.
-
-  Consider:
-  - If all experiment steps are completed and objectives are met, return {"continued": false}
-  - If there are more steps to execute, return {"continued": true}
-  - If the plan needs adjustment due to errors, return {"modified": [...]}
-=======
   You are the Replanner Agent.
 
   The user has issued a new query or updated instruction:
@@ -127,35 +128,36 @@ replanner_user_prompt: |
   {% endif %}
 
   Your task:
-  Choose one of the following options:
+  Please decide whether to continue, modify, or finish the experiment plan.
 
-  1. **keep** – keep the existing plan unchanged.
-     Use this if the new user query does not require modifying the plan.
+  Consider:
+  - If all experiment steps are completed and objectives are met, return {"continued": false}
+  - If there are more steps to execute, return {"continued": true}
+  - If the plan needs adjustment due to errors, return {"modified": ["step1", "step2", ...]}
 
-  2. **update** – modify the existing plan.
-     Use this if the new user query requires additional steps, correction of steps, or removal of steps.
-
-  3. **replan** – discard the old plan and generate a completely new plan.
-     Use this when the user query substantially changes the task or the old plan is no longer relevant.
-
-  4. **stop** – terminate the entire process.
-     Use this if the user explicitly requests to stop or the goal has been fully achieved.
-
-  Provide your answer in the following JSON format:
+  Provide your answer in the following JSON format (STRICT - output ONLY JSON, no markdown, no explanations):
 
   {
-    "decision": "<keep|update|replan|stop>",
-    "new_plan": [
-      "... only required if decision is update or replan ..."
-    ]
+    "continued": true
+  }
+
+  OR
+
+  {
+    "continued": false
+  }
+
+  OR
+
+  {
+    "modified": ["New Step 1", "New Step 2", ...]
   }
 
   Make sure:
   - Do NOT repeat previously executed steps.
   - If you generate a new plan, it must be fully valid and executable.
   - Plans should be high-level, deterministic, and contain minimal steps.
-
->>>>>>> ee8e858ec8883aa813c798a8fe0a5ddf0938d5f7
+  - Output must be valid JSON only, no markdown formatting.
 
 replanner_user_response: |
   {% if has_options and selected_action %}

@@ -1,9 +1,8 @@
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
-from scievo.agents.experiment_agent.state import ExperimentAgentState
-
 from . import execute, plan
+from .state import ExperimentAgentState
 
 
 def prepare_for_talk_mode(agent_state: ExperimentAgentState) -> ExperimentAgentState:
