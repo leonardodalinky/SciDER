@@ -15,6 +15,7 @@ dependencies = [
     "langgraph>=1.0.2",
     "litellm>=1.79.0",
     "loguru>=0.7.3",
+    "pexpect>=4.9.0",
     "pydantic>=2.12.3",
     "pyfunctional>=1.5.0",
     "python-toon>=0.1.2",
