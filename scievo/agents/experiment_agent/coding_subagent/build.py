@@ -1,9 +1,8 @@
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
-from scievo.agents.experiment_agent.state import ExperimentAgentState
-
 from . import execute, plan
+from .state import ExperimentAgentState
 
 
 def prepare_for_talk_mode(agent_state: ExperimentAgentState) -> ExperimentAgentState:
@@ -22,6 +21,7 @@ def build():
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("replanner", plan.replanner_node)
     g.add_node("gateway", execute.gateway_node)
+    g.add_node("report", execute.report_node)
 
     # edges
     g.add_edge(START, "planner")
@@ -43,8 +43,9 @@ def build():
         plan.should_replan,
         [
             "gateway",
-            END,
+            "report",
         ],
     )
+    g.add_edge("report", END)
 
     return g

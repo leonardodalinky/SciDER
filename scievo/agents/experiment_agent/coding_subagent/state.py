@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from pydantic import Field
+
 from scievo.core.code_env import LocalEnv
 from scievo.core.plan import PlanState
 from scievo.core.types import HistoryState, ToolsetState
@@ -28,3 +30,8 @@ class ExperimentAgentState(ToolsetState, PlanState, HistoryState):
     # === Newly added for ExperimentAgent ===
     repo_dir: str | Path | None = None
     readme_text: str | None = None
+
+    # Track consecutive question responses to prevent infinite loops
+    consecutive_questions: int = Field(
+        default=0, description="Counter for consecutive question responses"
+    )

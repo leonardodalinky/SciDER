@@ -52,3 +52,8 @@ def parse_markdown_from_llm_response(llm_response: str | Message) -> str:
 
 def array_to_bullets(arr: list[str]) -> str:
     return "\n".join([f"- {s}" for s in arr])
+
+
+def hello_world() -> None:
+    """Print 'Hello, World!' to the console."""
+    print("Hello, World!")
