@@ -1,3 +1,5 @@
+import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -57,6 +59,51 @@ def run_shell(cmd: str, cwd: Path | None = None, agent_state=None) -> CursorResu
     )
 
 
+def run_cursor_direct(args: list[str], cwd: Path | None = None, agent_state=None) -> CursorResult:
+    """
+    Run Cursor CLI directly by calling the executable, bypassing the shell script.
+    This avoids shell parsing issues with special characters.
+
+    Args:
+        args: List of arguments to pass to Cursor CLI (e.g., ["edit", "file.py", "--message", "msg"])
+        cwd: Optional working directory
+        agent_state: Optional agent state to get working directory from
+    """
+    if cwd is None and agent_state is not None:
+        if hasattr(agent_state, "local_env") and hasattr(agent_state.local_env, "working_dir"):
+            cwd = agent_state.local_env.working_dir
+        elif hasattr(agent_state, "repo_dir") and agent_state.repo_dir:
+            cwd = Path(agent_state.repo_dir)
+
+    if cwd is None:
+        cwd = Path.cwd()
+
+    electron_path = "/Applications/Cursor.app/Contents/MacOS/Cursor"
+    cli_js_path = "/Applications/Cursor.app/Contents/Resources/app/out/cli.js"
+
+    cmd_list = [electron_path, cli_js_path] + args
+
+    env = os.environ.copy()
+    env["ELECTRON_RUN_AS_NODE"] = "1"
+
+    proc = subprocess.Popen(
+        cmd_list,
+        cwd=str(cwd),
+        shell=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    out, err = proc.communicate()
+    return CursorResult(
+        command=" ".join(cmd_list),
+        returncode=proc.returncode,
+        stdout=out,
+        stderr=err,
+    )
+
+
 @register_tool(
     "cursor",
     {
@@ -81,33 +128,9 @@ def cursor_chat_tool(message: str, **kwargs) -> str:
     try:
         # Get agent_state from kwargs if available
         agent_state = kwargs.get(constant.__AGENT_STATE_NAME__)
-        cmd = f"cursor chat --message {message!r}"
-        result = run_shell(cmd, agent_state=agent_state)
-
-        # Check if cursor command failed - might be due to missing installation or API key
-        if result.returncode != 0:
-            error_msg = result.stderr or result.stdout or "Unknown error"
-            if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
-                    {
-                        "error": "Cursor CLI not found. Please ensure Cursor editor is installed and 'cursor' command is available in PATH.",
-                        "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
-                    }
-                )
-            elif (
-                "api" in error_msg.lower()
-                or "key" in error_msg.lower()
-                or "auth" in error_msg.lower()
-            ):
-                return wrap_dict_to_toon(
-                    {
-                        "error": "Cursor API key not configured or invalid.",
-                        "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
-                        "You can use OpenAI, Anthropic, or other supported providers.",
-                    }
-                )
-            else:
-                return wrap_dict_to_toon(result.dict())
+        # Use direct call instead of shell to avoid eval issues
+        args = ["chat", "--message", message]
+        result = run_cursor_direct(args, agent_state=agent_state)
 
         return wrap_dict_to_toon(result.dict())
     except Exception as e:
@@ -143,10 +166,15 @@ def cursor_edit_tool(message: str, files: list[str] | None = None, **kwargs) -> 
     try:
         # Get agent_state from kwargs if available
         agent_state = kwargs.get(constant.__AGENT_STATE_NAME__)
-        files_arg = " ".join(files) if files else ""
-        cmd = f"cursor edit {files_arg} --message {message!r}"
 
-        result = run_shell(cmd, agent_state=agent_state)
+        # Build arguments list - use direct call to avoid shell parsing issues
+        args = ["edit"]
+        if files:
+            args.extend(files)
+        args.extend(["--message", message])
+
+        # Use direct call instead of shell to avoid eval issues
+        result = run_cursor_direct(args, agent_state=agent_state)
 
         # Check if cursor command failed - might be due to missing installation or API key
         if result.returncode != 0:

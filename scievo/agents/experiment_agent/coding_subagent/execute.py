@@ -137,6 +137,33 @@ def _parse_and_select_action(content: str, current_plan: str | None) -> str | No
 def gateway_conditional(agent_state: ExperimentAgentState) -> str:
 
     last_msg = agent_state.patched_history[-1]
+
+    # If the last message is a tool message (tool execution completed),
+    # move the current step from remaining_plans to past_plans
+    # and trigger execution of the next step
+    if (
+        last_msg.role == "tool"
+        and agent_state.remaining_plans
+        and len(agent_state.remaining_plans) > 0
+    ):
+        completed_step = agent_state.remaining_plans.pop(0)
+        agent_state.past_plans.append(completed_step)
+        logger.debug(f"Step completed and moved to past_plans: {completed_step[:80]}...")
+
+        # If there are more steps remaining, add a user message to trigger next step execution
+        if agent_state.remaining_plans and len(agent_state.remaining_plans) > 0:
+            agent_state.add_message(
+                Message(
+                    role="user",
+                    content=PROMPTS.experiment.replanner_user_response.render(
+                        next_step=agent_state.remaining_plans[0],
+                    ),
+                )
+            )
+            logger.debug(
+                f"Added user message to trigger next step: {agent_state.remaining_plans[0][:80]}..."
+            )
+
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
 
