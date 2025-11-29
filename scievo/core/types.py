@@ -7,9 +7,11 @@ import tiktoken
 from functional import seq
 from langgraph.graph import START
 from litellm import Message as LLMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from rich.console import Console
 from rich.style import Style
+
+from .exec import SessionBase
 
 console = Console()
 
@@ -93,7 +95,7 @@ class Message(LLMessage):
 
     def to_ll_message(self, exclude_none: bool = True) -> LLMessage | dict:
         return LLMessage(
-            **self.model_dump(exclude=self.__CUSTOM_FIELDS__, exclude_none=exclude_none)
+            **self.model_dump(exclude=self.__CUSTOM_FIELDS__, exclude_none=exclude_none)  # type: ignore
         )
 
     def to_ll_response_message(
@@ -315,7 +317,7 @@ class HistoryState(BaseModel):
             seq(self.history_patches)
             .filter(lambda patch: patch.patch_id == patch_id)
             .head_option(no_wrap=True)
-        )
+        )  # type: ignore
 
 
 class RBankState(BaseModel):
@@ -325,3 +327,17 @@ class RBankState(BaseModel):
     long_term_mem_dir: str | Path
     # project mem save dirs (input & output)
     project_mem_dir: str | Path
+
+
+class ExecState(BaseModel):
+    # Current execution state
+    session: SessionBase
+
+    @field_validator("session")
+    @classmethod
+    def validate_session_is_subclass(cls, v):
+        if type(v) is SessionBase:
+            raise ValueError(
+                "session must be an instance of a SessionBase subclass, not SessionBase itself"
+            )
+        return v
