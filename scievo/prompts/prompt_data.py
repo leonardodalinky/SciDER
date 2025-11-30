@@ -17,6 +17,7 @@ class Prompts:
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
     experiment: "ExperimentPrompts"
+    experiment_exec: "ExperimentExecPrompts"
     critic: "CriticPrompts"
 
 
@@ -62,6 +63,18 @@ class ExperimentPrompts:
 
 
 @dataclass
+class ExperimentExecPrompts:
+    exec_system_prompt: Template
+    exec_user_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
+    monitoring_system_prompt: Template
+    monitoring_user_prompt: Template
+    monitoring_end_user_prompt: Template
+    monitoring_ctrlc_user_prompt: Template
+
+
+@dataclass
 class CriticPrompts:
     system_prompt: Template
     user_prompt: Template
@@ -73,7 +86,7 @@ def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
         data = yaml.safe_load(f)
 
     data2 = {}
-    for field in model_type.__dataclass_fields__.keys():
+    for field in model_type.__dataclass_fields__.keys():  # type: ignore
         if field.startswith("_"):
             continue
         data2[field] = Template(data[field])
@@ -92,6 +105,9 @@ def init():
         history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
         experiment=parse_yaml_as_templates(
             ExperimentPrompts, os.path.join(DIR, "experiment_prompt.yaml")
+        ),
+        experiment_exec=parse_yaml_as_templates(
+            ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
         ),
         critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
     )

@@ -4,6 +4,7 @@ from . import (
     coder_tool,
     cursor_tool,
     env_tool,
+    exec_tool,
     fs_tool,
     github_tool,
     history_tool,
