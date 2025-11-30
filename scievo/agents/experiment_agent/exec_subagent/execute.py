@@ -7,11 +7,12 @@ import json
 import time
 
 from loguru import logger
+from pydantic import BaseModel
 
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
-from scievo.core.utils import wrap_dict_to_toon
+from scievo.core.utils import parse_json_from_llm_response, wrap_dict_to_toon
 from scievo.prompts import PROMPTS
 from scievo.tools import Tool, ToolRegistry
 
@@ -28,7 +29,7 @@ BUILTIN_TOOLSETS = [
 ]
 ALLOWED_TOOLSETS = []  # Can be extended if needed
 
-MONITORING_INTERVALS = [5, 10, 20, 20, 30, 45, 60]  # in seconds
+MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120]  # in seconds
 
 
 def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
@@ -40,7 +41,7 @@ def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
 def gateway_conditional(agent_state: ExecAgentState) -> str:
     """Determine the next node based on the last message"""
     # Check if there's a command currently running in the session
-    if agent_state.force_monitoring or agent_state.session.is_running_command():
+    if agent_state.is_monitor_mode:
         # A command is running -> go to monitoring node
         time2sleep = MONITORING_INTERVALS[
             min(agent_state.monitoring_attempts, len(MONITORING_INTERVALS) - 1)
@@ -115,7 +116,15 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     logger.debug("monitoring_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("monitoring")
     agent_state.monitoring_attempts += 1
-    agent_state.force_monitoring = False
+
+    if agent_state.monitoring_attempts <= len(MONITORING_INTERVALS):
+        total_monitoring_seconds = sum(MONITORING_INTERVALS[: agent_state.monitoring_attempts])
+    else:
+        total_monitoring_seconds = (
+            sum(MONITORING_INTERVALS)
+            + (agent_state.monitoring_attempts - len(MONITORING_INTERVALS))
+            * MONITORING_INTERVALS[-1]
+        )
 
     # Get the current running command context
     ctx = agent_state.session.get_current_context()
@@ -123,11 +132,34 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
         # No command running, this shouldn't happen but handle it gracefully
         logger.warning("monitoring_node called but no command is running")
         agent_state.monitoring_attempts = 0
+        agent_state.is_monitor_mode = False
         return agent_state
 
     # Get current output from the running command
     current_output = ctx.get_input_output()
 
+    if not agent_state.session.is_running_command():
+        # Command has completed while we were waiting
+        logger.debug("The monitored command has completed.")
+        agent_state.monitoring_attempts = 0
+        agent_state.is_monitor_mode = False
+
+        # Add monitoring end user prompt message
+        monitoring_end_user_msg = Message(
+            role="user",
+            content=PROMPTS.experiment_exec.monitoring_end_user_prompt.render(
+                command=ctx.command,
+                final_output=current_output,
+                error_text=ctx.get_error(),
+                total_monitoring_seconds=total_monitoring_seconds,
+            ),
+            agent_sender=AGENT_NAME,
+        ).with_log()
+        agent_state.add_message(monitoring_end_user_msg)
+
+        return agent_state
+
+    history = agent_state.patched_history.copy()
     # Prepare monitoring prompt
     monitoring_user_msg = Message(
         role="user",
@@ -135,20 +167,16 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
             command=ctx.command,
             monitoring_attempts=agent_state.monitoring_attempts,
             current_output=current_output,
+            total_monitoring_seconds=total_monitoring_seconds,
         ),
         agent_sender=AGENT_NAME,
     )
-    agent_state.add_message(monitoring_user_msg)
-
-    # Construct tools (only exec_ctrlc and exec_check are relevant)
-    tools: dict[str, Tool] = {}
-    for toolset in ["exec"]:
-        tools.update(ToolRegistry.get_toolset(toolset))
+    history.append(monitoring_user_msg)
 
     # Ask monitoring LLM to decide
     msg = ModelRegistry.completion(
         LLM_MONITOR_NAME,
-        agent_state.patched_history,
+        history,
         system_prompt=(
             Message(
                 role="system",
@@ -158,10 +186,36 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
             .content
         ),
         agent_sender=AGENT_NAME,
-        tools=[tool.name for tool in tools.values() if tool.name in ["exec_ctrlc", "exec_check"]],
+        tools=None,
     ).with_log()
 
-    agent_state.add_message(msg)
+    class MonitorDecisionModel(BaseModel):
+        action: str
+
+    r = parse_json_from_llm_response(msg, MonitorDecisionModel)  # just to validate JSON format
+
+    if "wait" in r.action.lower():
+        logger.debug("Monitoring decision: continue waiting for the command to complete.")
+        agent_state.is_monitor_mode = True
+    elif "ctrlc" in r.action.lower():
+        logger.debug("Monitoring decision: interrupting the running command.")
+        ctx.cancel()
+        agent_state.is_monitor_mode = False
+        monitoring_ctrlc_user_msg = Message(
+            role="user",
+            content=PROMPTS.experiment_exec.monitoring_ctrlc_user_prompt.render(
+                command=ctx.command,
+                output_before_interrupt=current_output,
+                total_monitoring_seconds=total_monitoring_seconds,
+            ),
+            agent_sender=AGENT_NAME,
+        )
+        agent_state.add_message(monitoring_ctrlc_user_msg)
+    else:
+        logger.warning(
+            f"Unknown monitoring action '{r.action}' received. Continuing to wait by default."
+        )
+        agent_state.is_monitor_mode = True
 
     return agent_state
 
@@ -201,9 +255,6 @@ def summary_node(agent_state: ExecAgentState) -> ExecAgentState:
 
     # Parse JSON summary from the response
     try:
-        from pydantic import BaseModel
-
-        from scievo.core.utils import parse_json_from_llm_response
 
         class ExecutionSummary(BaseModel):
             status: str
@@ -310,11 +361,12 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
             }
             agent_state.add_message(Message(**tool_response).with_log())
 
-            # if
-            flag_text = "Use `exec_check` to check the execution status later."
+            # if this is a long-running exec_command, check for monitoring flag
+            flag_text = "Try to check the execution status later."
             if tool_name == "exec_command" and flag_text in tool_response["content"]:
-                # The command is still running, force monitoring in the next step
-                agent_state.force_monitoring = True
+                logger.debug("The executed command is still running, entering monitor mode.")
+                # The command is still running, go into monitor mode in the next step
+                agent_state.is_monitor_mode = True
 
         except Exception as e:
             logger.exception(f"Tool {tool_name} execution failed")

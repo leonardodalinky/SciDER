@@ -7,7 +7,7 @@ import tiktoken
 from functional import seq
 from langgraph.graph import START
 from litellm import Message as LLMessage
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, PrivateAttr
 from rich.console import Console
 from rich.style import Style
 
@@ -331,13 +331,12 @@ class RBankState(BaseModel):
 
 class ExecState(BaseModel):
     # Current execution state
-    session: SessionBase
+    _session: SessionBase = PrivateAttr(init=True)
 
-    @field_validator("session")
-    @classmethod
-    def validate_session_is_subclass(cls, v):
-        if type(v) is SessionBase:
-            raise ValueError(
-                "session must be an instance of a SessionBase subclass, not SessionBase itself"
-            )
-        return v
+    def __init__(self, _session: SessionBase, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._session = _session
+
+    @property
+    def session(self) -> SessionBase:
+        return self._session

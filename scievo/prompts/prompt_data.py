@@ -70,6 +70,8 @@ class ExperimentExecPrompts:
     summary_user_prompt: Template
     monitoring_system_prompt: Template
     monitoring_user_prompt: Template
+    monitoring_end_user_prompt: Template
+    monitoring_ctrlc_user_prompt: Template
 
 
 @dataclass

@@ -37,8 +37,8 @@ exec_system_prompt: |
      - For short commands: Call `exec_command` and process the result directly
      - For long commands:
        a. Call `exec_command` - it may return an error if not finished quickly
-       b. Wait briefly (suggest 10 seconds)
-       c. Call `exec_check` to check progress
+       b. You will be set to monitoring mode. You will be invoked later to monitor progress again
+       c. Decide whether to wait longer or interrupt in monitoring mode.
        d. Repeat step c until the command completes
 
   3. **Handle Results**:
@@ -62,7 +62,7 @@ exec_user_prompt: |
 
   {{ user_query }}
 
-  Use the `exec` toolset to run the necessary commands in the shell session located at:
+  Use the `exec` toolset to run the necessary commands in the shell session initially located at:
   {{ working_dir }}
 
   Proceed autonomously. When all necessary commands have been executed, simply respond confirming completion without calling any more tools.
@@ -106,15 +106,24 @@ monitoring_system_prompt: |
   - The output suggests the process is hung or deadlocked
   - Resource limits have been exceeded
 
-  ## Available Tools
+  ## Available actions
 
-  - `exec_check`: Check the current status and output (use this to continue monitoring)
-  - `exec_ctrlc`: Send Ctrl-C to interrupt the command (use if stuck/failed)
+  - `wait`: Continue waiting and monitoring the command
+  - `ctrlc`: Send Ctrl-C to interrupt the command (use if stuck/failed)
 
   ## Instructions
 
-  Based on the current output, decide whether to call `exec_check` (to wait longer) or `exec_ctrlc` (to interrupt).
+  Based on the current output, decide whether to call `wait` (to wait longer) or `ctrlc` (to interrupt).
   Consider the number of monitoring attempts - if we've been waiting too long without progress, it may be time to interrupt.
+  But for a training process, be patient and allow sufficient time for completion, unless there is clear evidence of failure.
+
+  ## Output Format
+
+  Respond with either in JSON format:
+  ```json
+  {
+    "action": "wait" or "ctrlc",
+  }
 
 monitoring_user_prompt: |
   **Monitoring Running Command:**
@@ -123,6 +132,8 @@ monitoring_user_prompt: |
 
   Monitoring Attempt: {{ monitoring_attempts }}
 
+  Total Monitoring Time: {{ total_monitoring_seconds }} seconds = {{ total_monitoring_seconds / 60 }} minutes
+
   **Current Output:**
   ```
   {{ current_output }}
@@ -130,5 +141,48 @@ monitoring_user_prompt: |
 
   Analyze the output above. Is the command making progress or is it stuck/failed?
 
-  - If making progress: Call `exec_check` to continue monitoring
-  - If stuck/failed: Call `exec_ctrlc` to interrupt the command
+  - If making progress: Call `wait` to continue monitoring
+  - If stuck/failed: Call `ctrlc` to interrupt the command
+
+  Respond in the specified JSON format.
+  ```json
+  {
+    "action": "wait" or "ctrlc",
+  }
+  ```
+
+monitoring_end_user_prompt: |
+  The command has completed. Here is the final output:
+
+  **Command:** `{{ command }}`
+
+  **Total Monitoring Time:** {{ total_monitoring_seconds }} seconds = {{ total_monitoring_seconds / 60 }} minutes
+
+  **Final Output:**
+  ```
+  {{ final_output }}
+  ```
+  {% if error_text %}
+  **Error:**
+  ```
+  {{ error_text }}
+  ```
+  {% endif %}
+  Process the result and continue with the next steps if needed.
+
+monitoring_ctrlc_user_prompt: |
+  The command has been interrupted with Ctrl-C.
+
+  **Command:** `{{ command }}`
+
+  **Total Monitoring Time Before Interruption:** {{ total_monitoring_seconds }} seconds = {{ total_monitoring_seconds / 60 }} minutes
+
+  **Command Output Before Interruption:**
+  ```
+  {{ output_before_interrupt }}
+  ```
+
+  The execution was stopped because the command appeared to be stuck or failed. Analyze the output and decide the next steps:
+  - You may retry the command with different parameters
+  - You may skip this step and continue with other commands
+  - You may proceed to the summary if all required commands have been executed

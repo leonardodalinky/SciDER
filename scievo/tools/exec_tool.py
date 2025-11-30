@@ -34,10 +34,10 @@ register_toolset_desc("exec", "Execution session management toolset for command 
         },
     },
 )
-def exec_command(state: "ExecState", command: str) -> str:
+def exec_command(agent_state: "ExecState", command: str) -> str:
     """Execute a command in the given execution session."""
     try:
-        session = state.session
+        session = agent_state.session
         ctx = session.exec(command, timeout=None)
 
         TIMEOUT = 3.0
@@ -47,7 +47,7 @@ def exec_command(state: "ExecState", command: str) -> str:
 
         if not is_finished or ctx.is_running():
             result = ctx.get_input_output()
-            return f"ERROR: Command execution of `{command}` is not finished in {TIMEOUT} seconds. Use `exec_check` to check the execution status later.\nCurrent input & output:\n{result}"
+            return f"ERROR: Command execution of `{command}` is not finished in {TIMEOUT} seconds. Try to check the execution status later.\nCurrent input & output:\n{result}"
 
         # Get the result
         result = ctx.get_input_output()
@@ -78,10 +78,10 @@ def exec_command(state: "ExecState", command: str) -> str:
         },
     },
 )
-def exec_ctrlc(state: "ExecState") -> str:
+def exec_ctrlc(agent_state: "ExecState") -> str:
     """Send Ctrl-C to the execution session."""
     try:
-        session = state.session
+        session = agent_state.session
         ctx = session.get_current_context()
 
         if ctx is None:
@@ -113,10 +113,10 @@ def exec_ctrlc(state: "ExecState") -> str:
         },
     },
 )
-def exec_check(state: "ExecState") -> str:
+def exec_check(agent_state: "ExecState") -> str:
     """Check the running state of the current command."""
     try:
-        session = state.session
+        session = agent_state.session
         ctx = session.get_current_context()
 
         if ctx is None:

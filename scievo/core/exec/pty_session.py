@@ -1,6 +1,5 @@
-import io
 import os
-import threading
+import re
 import time
 
 import pexpect
@@ -8,7 +7,8 @@ from loguru import logger
 
 from .session_base import CommandContextBase, CommandState, SessionBase
 
-PROMPT = r"AISHELL(\w)> "  # \w shows current working directory
+_PROMPT = r"AISHELL(\w)> "  # \w shows current working directory
+PROMPT = "AISHELL(.*)> "
 CONT_PROMPT = "AISHELL_CONT> "  # unique PS2
 
 
@@ -26,14 +26,23 @@ class LocalShellContext(CommandContextBase):
 
     def _cancel_command(self):
         """Cancel the command by sending Ctrl-C."""
-        self.session.ctrlc()
+        self.session.ctrlc(n=3)
 
     def get_input_output(self) -> str:
         """Get the input and output of the command. Used for AI conversation context."""
-        res = PROMPT + self.session.get_history(self.start_buffer_position)
+        raw_content = self.session.get_history(self.start_buffer_position)
+        # regex find last match by PRMOPT
+        matches = list(re.finditer(PROMPT, raw_content))
+        last_match = matches[-1] if len(matches) > 0 else None
+        if last_match:
+            prompt_start = last_match.group(0)
+        else:
+            prompt_start = "AISHELL> "
+
+        res = prompt_start + raw_content
         if self.end_buffer_position is not None:
             res = res[: self.end_buffer_position - self.start_buffer_position]
-        res = res.removesuffix(PROMPT).rstrip()
+        res = res.removesuffix(prompt_start)
         return res
 
     def _monitor_completion(self):
@@ -126,7 +135,7 @@ class LocalShellSession(SessionBase):
             pass
 
         # Custom PS1/PS2 so we always know where we are
-        self.process.sendline(f"export PS1='{PROMPT}'")
+        self.process.sendline(f"export PS1='{_PROMPT}'")
         self.process.expect(PROMPT, timeout=5)
         self.process.sendline(f"export PS2='{CONT_PROMPT}'")
         self.process.expect(PROMPT, timeout=5)
