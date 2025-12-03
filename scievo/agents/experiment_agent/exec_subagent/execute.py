@@ -24,10 +24,11 @@ AGENT_NAME = "experiment_exec"
 
 BUILTIN_TOOLSETS = [
     "state",
-    "history",
     "exec",  # The exec toolset is built-in for this agent
 ]
-ALLOWED_TOOLSETS = []  # Can be extended if needed
+ALLOWED_TOOLSETS = [
+    "history",
+]  # Can be extended if needed
 
 MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120]  # in seconds
 

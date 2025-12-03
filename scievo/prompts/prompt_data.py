@@ -18,6 +18,7 @@ class Prompts:
     history: "HistoryPrompts"
     experiment: "ExperimentPrompts"
     experiment_exec: "ExperimentExecPrompts"
+    experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
 
 
@@ -75,6 +76,14 @@ class ExperimentExecPrompts:
 
 
 @dataclass
+class ExperimentSummaryPrompts:
+    system_prompt: Template
+    user_prompt: Template
+    summary_system_prompt: Template
+    summary_prompt: Template
+
+
+@dataclass
 class CriticPrompts:
     system_prompt: Template
     user_prompt: Template
@@ -108,6 +117,9 @@ def init():
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
+        ),
+        experiment_summary=parse_yaml_as_templates(
+            ExperimentSummaryPrompts, os.path.join(DIR, "experiment_summary_prompt.yaml")
         ),
         critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
     )

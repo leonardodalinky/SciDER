@@ -47,6 +47,8 @@ exec_system_prompt: |
      - Continue until the experiment completes successfully or definitively fails
      - When all necessary commands have been executed, simply respond without calling any more tools
 
+  4. Avoid changing current working directory using `cd` unless absolutely necessary.
+
   ### Guidelines
 
   - Work within the directory specified in your state
