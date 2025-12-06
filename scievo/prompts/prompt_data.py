@@ -16,7 +16,7 @@ class Prompts:
     data: "DataPrompts"
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
-    experiment: "ExperimentPrompts"
+    experiment_coding: "ExperimentPrompts"
     experiment_exec: "ExperimentExecPrompts"
     experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
@@ -112,8 +112,8 @@ def init():
         data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
         rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
         history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
-        experiment=parse_yaml_as_templates(
-            ExperimentPrompts, os.path.join(DIR, "experiment_prompt.yaml")
+        experiment_coding=parse_yaml_as_templates(
+            ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")

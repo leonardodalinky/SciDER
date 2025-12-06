@@ -7,13 +7,11 @@ from typing import TYPE_CHECKING
 from functional import seq
 from loguru import logger
 
-from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
 from scievo.prompts import PROMPTS
-from scievo.rbank.subgraph import mem_extraction, mem_retrieval
 from scievo.tools import Tool, ToolRegistry
 
 from .state import ExperimentAgentState
@@ -35,11 +33,6 @@ def gateway_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # NOTE: this node does nothing, it's just a placeholder for the conditional edges
     # Check `gateway_conditional` for the actual logic
     logger.trace("gateway_node of Agent {}", AGENT_NAME)
-    # Initialize consecutive_questions if it doesn't exist (safety check for Pydantic)
-    if not hasattr(agent_state, "consecutive_questions") or not isinstance(
-        getattr(agent_state, "consecutive_questions", None), int
-    ):
-        agent_state.consecutive_questions = 0
     return agent_state
 
 
@@ -155,7 +148,7 @@ def gateway_conditional(agent_state: ExperimentAgentState) -> str:
             agent_state.add_message(
                 Message(
                     role="user",
-                    content=PROMPTS.experiment.replanner_user_response.render(
+                    content=PROMPTS.experiment_coding.replanner_user_response.render(
                         next_step=agent_state.remaining_plans[0],
                     ),
                 )
@@ -171,10 +164,6 @@ def gateway_conditional(agent_state: ExperimentAgentState) -> str:
         case "user" | "tool":
             return "llm_chat"
         case "assistant":
-            # Initialize consecutive_questions if it doesn't exist (safety check)
-            if not hasattr(agent_state, "consecutive_questions"):
-                agent_state.consecutive_questions = 0
-
             # Assistant message without tool calls - check if it's asking questions or providing options
             content = last_msg.content or ""
             content_lower = content.lower()
@@ -268,7 +257,7 @@ def gateway_conditional(agent_state: ExperimentAgentState) -> str:
                 agent_state.add_message(
                     Message(
                         role="user",
-                        content=PROMPTS.experiment.replanner_user_response.render(
+                        content=PROMPTS.experiment_coding.replanner_user_response.render(
                             next_step=agent_state.remaining_plans[0],
                         ),
                     )
@@ -278,19 +267,6 @@ def gateway_conditional(agent_state: ExperimentAgentState) -> str:
                 return "replanner"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
-
-
-mem_retrieval_subgraph = mem_retrieval.build()
-mem_retrieval_subgraph_compiled = mem_retrieval_subgraph.compile()
-
-
-def _memos_to_markdown(memos: list["Memo"]) -> str:
-    ret = ""
-    if len(memos) == 0:
-        return "No memory retrieved."
-    for i, memo in enumerate(memos):
-        ret += f"# Memo {i + 1}\n\n{memo.to_markdown()}\n\n"
-    return ret
 
 
 def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
@@ -303,34 +279,12 @@ def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         "repo_dir": str(agent_state.repo_dir) if agent_state.repo_dir else None,
     }
 
-    # retrieve memos
-    if constant.REASONING_BANK_ENABLED:
-        try:
-            mem_dirs = [agent_state.sess_dir / "short_term"]
-            if hasattr(agent_state, "long_term_mem_dir") and agent_state.long_term_mem_dir:
-                mem_dirs.append(agent_state.long_term_mem_dir)
-            if hasattr(agent_state, "project_mem_dir") and agent_state.project_mem_dir:
-                mem_dirs.append(agent_state.project_mem_dir)
-            res = mem_retrieval_subgraph_compiled.invoke(
-                mem_retrieval.MemRetrievalState(
-                    input_msgs=agent_state.patched_history,
-                    mem_dirs=mem_dirs,
-                    max_num_memos=constant.MEM_RETRIEVAL_MAX_NUM_MEMOS,
-                )
-            )
-            memos: list["Memo"] = res.get("output_memos", [])
-            memory_text = _memos_to_markdown(memos)
-        except Exception:
-            logger.exception("mem_retrieval_error")
-            memory_text = None
-    else:
-        memory_text = None
-
     # update system prompt
-    system_prompt = PROMPTS.experiment.experiment_chat_system_prompt.render(
+    system_prompt = PROMPTS.experiment_coding.experiment_chat_system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
-        memory_text=wrap_text_with_block(memory_text, "markdown"),
+        # memory_text=wrap_text_with_block(memory_text, "markdown"),
+        memory_text=None,
         current_plan=(
             agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
         ),
@@ -464,7 +418,7 @@ def report_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 
     try:
         # Generate report using LLM
-        system_prompt = PROMPTS.experiment.experiment_summary_prompt.render()
+        system_prompt = PROMPTS.experiment_coding.experiment_summary_prompt.render()
 
         # Collect execution history for summary
         execution_summary = []
