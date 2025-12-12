@@ -193,8 +193,14 @@ replanner_user_prompt: |
   {% endif %}
   ## Instructions
 
-  According to the current state and the history of the conversation, determine if the plan needs to be changed.
-  If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan.
+  According to the current state, the history of the conversation, and the critic feedback, determine if the plan needs to be changed.
+
+  Consider:
+  - Did the previous step complete successfully?
+  - Does the critic feedback indicate any issues?
+  - Are there remaining steps that need to be done?
+
+  If no more steps are needed and you can return to the user, then respond with `{"continued": false}`. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan.
 
 replanner_user_response: |
   Look good to me. Now proceed to the next step:

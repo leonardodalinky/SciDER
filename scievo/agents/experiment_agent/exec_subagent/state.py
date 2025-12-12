@@ -1,3 +1,5 @@
+from scievo.core.code_env import LocalEnv
+from scievo.core.exec.pty_session import LocalShellSession
 from scievo.core.types import ExecState, HistoryState, ToolsetState
 
 
@@ -13,8 +15,8 @@ class ExecAgentState(ExecState, ToolsetState, HistoryState):
     # The natural language query describing what experiment to run (input)
     user_query: str
 
-    # Current working directory where experiments are executed
-    working_dir: str
+    # Current working directory where experiments are executed (input)
+    workspace: LocalEnv
 
     # Raw summary of the experiment execution, try to use `execution_summary_dict` instead (output)
     execution_summary: str = ""
@@ -39,5 +41,7 @@ class ExecAgentState(ExecState, ToolsetState, HistoryState):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        _session = LocalShellSession(cwd=self.workspace.working_dir)
+        self._session = _session
         # add initial toolset
         self.toolsets.append("exec")

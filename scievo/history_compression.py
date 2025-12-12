@@ -21,10 +21,13 @@ class HistoryCompressionState(BaseModel):
     """State for history compression subgraph."""
 
     # Input: the history state to compress
-    input_history_state: HistoryState
+    hc_input_history_state: HistoryState
+
+    # Input: whether to keep the original messages (default: 4)
+    hc_keep_first_n_messages: int = 4
 
     # Output: the compressed message
-    output_patch: HistoryState.HistoryPatch | None = None
+    hc_output_patch: HistoryState.HistoryPatch | None = None
 
 
 def validate_compression_input(state: HistoryCompressionState) -> HistoryCompressionState:
@@ -32,10 +35,10 @@ def validate_compression_input(state: HistoryCompressionState) -> HistoryCompres
     logger.debug("validate_compression_input")
 
     if (
-        state.input_history_state.total_patched_tokens
+        state.hc_input_history_state.total_patched_tokens
         < constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
     ):
-        e = f"Input history state has {state.input_history_state.total_patched_tokens} tokens, which is less than the threshold of {constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD}."
+        e = f"Input history state has {state.hc_input_history_state.total_patched_tokens} tokens, which is less than the threshold of {constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD}."
         logger.debug("Consolidation error: {}", e)
         raise AgentError(e, agent_name=AGENT_NAME)
 
@@ -51,12 +54,17 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
         # Get messages to compress
         # messages = state.input_history_state.get_history_range(state.start_idx, state.end_idx)
 
+        # Skip the first n messages as specified
+        history_to_process = state.hc_input_history_state.patched_history[
+            state.hc_keep_first_n_messages :
+        ]
+
         messages_to_compress: list[Message] = []
         n_tokens = 0
         N_TOKENS_TO_COMPRESS = (
             1 - constant.HISTORY_AUTO_COMPRESSION_KEEP_RATIO
-        ) * state.input_history_state.total_patched_tokens
-        for msg in state.input_history_state.patched_history:
+        ) * state.hc_input_history_state.total_patched_tokens
+        for msg in history_to_process:
             if n_tokens > N_TOKENS_TO_COMPRESS:
                 break
             messages_to_compress.append(msg)
@@ -64,7 +72,8 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
 
         # if last msg has tool call, add those tool msgs too
         if messages_to_compress[-1].tool_calls and len(messages_to_compress[-1].tool_calls) > 0:
-            for msg in state.input_history_state.patched_history[len(messages_to_compress) :]:
+            start_index_in_full_history = state.hc_keep_first_n_messages + len(messages_to_compress)
+            for msg in state.hc_input_history_state.patched_history[start_index_in_full_history:]:
                 if msg.role != "tool":
                     break
                 messages_to_compress.append(msg)
@@ -72,8 +81,8 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
 
         assert len(messages_to_compress) > 0
 
-        start_idx = 0
-        end_idx = len(messages_to_compress)
+        start_idx = state.hc_keep_first_n_messages
+        end_idx = state.hc_keep_first_n_messages + len(messages_to_compress)
 
         # Format messages for LLM
         input_msgs_texts = []
@@ -112,15 +121,15 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
         patched_message = Message(
             role="assistant",
             content=PROMPTS.history.compressed_patch_template.render(
-                patch_id=state.input_history_state.next_patch_id(),
+                patch_id=state.hc_input_history_state.next_patch_id(),
                 n_messages=len(messages_to_compress),
                 compressed_history_text=compressed_history_text,
             ),
             agent_sender=AGENT_NAME,
         ).with_log()
 
-        state.output_patch = HistoryState.HistoryPatch(
-            patch_id=state.input_history_state.next_patch_id(),
+        state.hc_output_patch = HistoryState.HistoryPatch(
+            patch_id=state.hc_input_history_state.next_patch_id(),
             start_idx=start_idx,
             end_idx=end_idx,
             patched_message=patched_message,

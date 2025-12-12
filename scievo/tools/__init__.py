@@ -8,6 +8,7 @@ from . import (
     fs_tool,
     github_tool,
     history_tool,
+    openhands_tool,
     shell_tool,
     state_tool,
     todo_tool,

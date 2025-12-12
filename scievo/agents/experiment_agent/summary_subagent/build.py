@@ -23,7 +23,7 @@ def init_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     user_msg = Message(
         role="user",
         content=PROMPTS.experiment_summary.user_prompt.render(
-            working_dir=str(agent_state.local_env.working_dir),
+            working_dir=str(agent_state.workspace.working_dir),
             output_path=agent_state.output_path,
         ),
         agent_sender=AGENT_NAME,

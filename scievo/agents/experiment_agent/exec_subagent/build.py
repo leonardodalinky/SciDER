@@ -22,7 +22,7 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
             role="user",
             content=PROMPTS.experiment_exec.exec_user_prompt.render(
                 user_query=agent_state.user_query,
-                working_dir=agent_state.working_dir,
+                working_dir=agent_state.workspace,
             ),
         )
         agent_state.add_message(user_msg)

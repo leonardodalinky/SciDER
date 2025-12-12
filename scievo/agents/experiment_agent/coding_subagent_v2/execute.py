@@ -1,12 +1,12 @@
 """
-Summary Subagent - handles generating comprehensive experiment summaries
+Execution nodes for the Coding Subagent V2
 """
 
-import inspect
 import json
 
 from loguru import logger
 
+from scievo.agents import critic_agent
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
@@ -14,61 +14,58 @@ from scievo.core.utils import wrap_dict_to_toon
 from scievo.prompts import PROMPTS
 from scievo.tools import Tool, ToolRegistry
 
-from .state import SummaryAgentState
+from .state import CodingAgentState
 
-LLM_NAME = "execute_summary"
-AGENT_NAME = "experiment_summary"
+LLM_NAME = "experiment_coding"
+AGENT_NAME = "experiment_coding"
 
 BUILTIN_TOOLSETS = [
     "state",
-    "fs",  # Filesystem tools for reading files and listing directories
-]
-ALLOWED_TOOLSETS = [
     "history",
+    "openhands",
 ]
+ALLOWED_TOOLSETS = ["fs", "shell", "web"]  # openhands is the key toolset
 
 
-def gateway_node(agent_state: SummaryAgentState) -> SummaryAgentState:
-    """Gateway node - placeholder for conditional routing logic"""
+def gateway_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """Gateway node for routing decisions."""
     logger.trace("gateway_node of Agent {}", AGENT_NAME)
     return agent_state
 
 
-def gateway_conditional(agent_state: SummaryAgentState) -> str:
-    """Determine the next node based on the last message"""
+def gateway_conditional(agent_state: CodingAgentState) -> str:
+    """Determine the next node based on current state."""
     last_msg = agent_state.patched_history[-1]
 
-    # If the last message contains tool calls, execute them
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
         return "tool_calling"
 
-    # Route based on message role
     match last_msg.role:
         case "user" | "tool":
-            # User or tool message -> call LLM
             return "llm_chat"
         case "assistant":
-            # Assistant responded without tool calls -> go to finalize
-            return "finalize"
+            return "critic_before_replan"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
 
-def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
-    """LLM chat node - gets next action from the model"""
+def llm_chat_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """LLM chat node for generating responses."""
     logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": str(agent_state.workspace.working_dir),
-        "output_path": agent_state.output_path,
+        "workspace": agent_state.workspace.working_dir,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
-    # Update system prompt
-    system_prompt = PROMPTS.experiment_summary.system_prompt.render(
+    # Update system prompt (no memory retrieval - unlike data_agent)
+    system_prompt = PROMPTS.experiment_coding_v2.system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
+        current_plan=(
+            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
+        ),
     )
 
     # Construct tools
@@ -78,7 +75,6 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     for toolset in BUILTIN_TOOLSETS:
         tools.update(ToolRegistry.get_toolset(toolset))
 
-    # Get completion from LLM
     msg = ModelRegistry.completion(
         LLM_NAME,
         agent_state.patched_history,
@@ -92,16 +88,14 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     ).with_log()
 
     agent_state.add_message(msg)
-
     return agent_state
 
 
-def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
-    """Execute tool calls from the last message"""
+def tool_calling_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """Execute tool calls from the last message."""
     logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("tool_calling")
 
-    # Get the last message which contains tool calls
     last_msg = agent_state.patched_history[-1]
 
     if not last_msg.tool_calls:
@@ -116,11 +110,16 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
 
     function_map = {tool.name: tool.func for tool in tools.values()}
 
+    # Build context for openhands tool
+    ctx = {
+        "openhands_conversation": agent_state.openhands_conversation,
+        "working_dir": agent_state.workspace.working_dir,
+    }
+
     # Execute each tool call
     for tool_call in last_msg.tool_calls:
         tool_name = tool_call.function.name
 
-        # Check if tool exists in function map
         if tool_name not in function_map:
             error_msg = f"Tool {tool_name} not found"
             tool_response = {
@@ -132,7 +131,6 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
             agent_state.add_message(Message(**tool_response).with_log())
             continue
 
-        # Parse tool arguments
         try:
             args = json.loads(tool_call.function.arguments)
             assert isinstance(args, dict)
@@ -146,47 +144,37 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
             }
             agent_state.add_message(Message(**tool_response).with_log())
             continue
-        except AssertionError as e:
-            error_msg = f"Invalid tool arguments: {e}"
-            tool_response = {
-                "role": "tool",
-                "tool_name": tool_name,
-                "tool_call_id": tool_call.id,
-                "content": error_msg,
-            }
-            agent_state.add_message(Message(**tool_response).with_log())
-            continue
 
-        # Execute the tool
         try:
+            # Pass the graph state to the tool function
             func = function_map[tool_name]
 
             # Check if function expects agent_state parameter
+            import inspect
+
             sig = inspect.signature(func)
             if constant.__AGENT_STATE_NAME__ in sig.parameters:
                 args.update({constant.__AGENT_STATE_NAME__: agent_state})
             if constant.__CTX_NAME__ in sig.parameters:
                 args.update({constant.__CTX_NAME__: {"current_agent": AGENT_NAME}})
 
-            # Execute the tool
-            result = func(**args)
+            # Execute the tool in the agent's local environment
+            with agent_state.workspace:
+                result = func(**args)
 
-            # Create tool response message
             tool_response = {
                 "role": "tool",
-                "tool_call_id": tool_call.id,
                 "tool_name": tool_name,
-                "content": str(result),  # Ensure result is string
+                "tool_call_id": tool_call.id,
+                "content": str(result),
             }
-
         except Exception as e:
-            logger.exception(f"Tool {tool_name} execution failed")
-            error_msg = f"Tool {tool_name} execution failed: {e}"
+            logger.exception(f"Tool execution error: {tool_name}")
             tool_response = {
                 "role": "tool",
-                "tool_call_id": tool_call.id,
                 "tool_name": tool_name,
-                "content": error_msg,
+                "tool_call_id": tool_call.id,
+                "content": f"Error executing tool: {str(e)}",
             }
 
         agent_state.add_message(Message(**tool_response).with_log())
@@ -194,46 +182,46 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     return agent_state
 
 
-def finalize_node(agent_state: SummaryAgentState) -> SummaryAgentState:
-    """Generate final summary and save to file"""
-    logger.debug("finalize_node of Agent {}", AGENT_NAME)
-    agent_state.add_node_history("finalize")
+# Build and invoke critic agent
+critic_graph = critic_agent.build()
+critic_compiled = critic_graph.compile()
 
-    # Add summary generation prompt
-    summary_prompt = Message(
-        role="user",
-        content=PROMPTS.experiment_summary.summary_prompt.render(),
-        agent_sender=AGENT_NAME,
+
+def critic_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """Critic node to evaluate the plan step completion."""
+    logger.debug("critic_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("critic")
+
+    # Get current plan step
+    current_plan = agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else "N/A"
+
+    critic_state = critic_agent.CriticAgentState(
+        input_msgs=agent_state.patched_history[-10:],  # Last 10 messages for context
+        plan=current_plan,
+        is_data_agent=False,
+        is_exp_agent=True,
+        toolsets=["fs", "web"],
+        sess_dir=agent_state.workspace.working_dir,
+        long_term_mem_dir="",
+        project_mem_dir="",
     )
-    agent_state.add_message(summary_prompt)
 
-    # Get summary from LLM
-    msg = ModelRegistry.completion(
-        LLM_NAME,
-        agent_state.patched_history,
-        system_prompt=(
-            Message(
-                role="system",
-                content=PROMPTS.experiment_summary.summary_system_prompt.render(),
-            )
-            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
-            .content
-        ),
-        agent_sender=AGENT_NAME,
-        tools=None,  # No tools needed for final summary
+    try:
+        result = critic_compiled.invoke(critic_state)
+        critic_msg = result.get("critic_msg")
+        if critic_msg:
+            agent_state.critic_feedback = critic_msg.content or ""
+        else:
+            agent_state.critic_feedback = "No critic feedback available."
+    except Exception as e:
+        logger.exception("Critic agent error")
+        agent_state.critic_feedback = f"Critic evaluation failed: {str(e)}"
+
+    # Log the critic feedback
+    Message(
+        role="assistant",
+        content=f"[Critic Feedback] {agent_state.critic_feedback}",
+        agent_sender="critic",
     ).with_log()
-
-    # Store the summary text
-    agent_state.summary_text = msg.content or ""
-    agent_state.add_message(msg)
-
-    # Save summary to file
-    if agent_state.output_path is not None:
-        try:
-            with open(agent_state.output_path, "w", encoding="utf-8") as f:
-                f.write(agent_state.summary_text)
-            logger.info(f"Summary saved to {agent_state.output_path}")
-        except Exception as e:
-            logger.error(f"Failed to save summary to {agent_state.output_path}: {e}")
 
     return agent_state

@@ -77,7 +77,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "working_dir": agent_state.working_dir,
+        "workspace": agent_state.workspace,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
@@ -360,7 +360,6 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            agent_state.add_message(Message(**tool_response).with_log())
 
             # if this is a long-running exec_command, check for monitoring flag
             flag_text = "Try to check the execution status later."
@@ -378,7 +377,8 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            agent_state.add_message(Message(**tool_response).with_log())
+
+        agent_state.add_message(Message(**tool_response).with_log())
 
     # Reset monitoring attempts after tool execution
     agent_state.monitoring_attempts = 0

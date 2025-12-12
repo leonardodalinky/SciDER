@@ -8,14 +8,15 @@ from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
 
-from .state import DataAgentState
+from .state import CodingAgentState
 
 LLM_NAME = "plan"
-AGENT_NAME = "data_planner"
+AGENT_NAME = "experiment_coding_planner"
 
 
 @logger.catch
-def planner_node(agent_state: DataAgentState) -> DataAgentState:
+def planner_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """Initial planning for the coding task."""
     logger.trace("planner_node of Agent {}", AGENT_NAME)
 
     user_query_msg = Message(
@@ -31,7 +32,10 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.patched_history,
         system_prompt=(
             Message(
-                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=False)
+                role="system",
+                content=PROMPTS.experiment_coding_v2.planner_system_prompt.render(
+                    is_replanner=False
+                ),
             )
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
             .content
@@ -41,10 +45,8 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
 
     agent_state.add_message(msg)
 
-    # NOTE: we don't add the message to the history
     plans = parse_json_from_llm_response(msg, Plan)
 
-    # NOTE:
     agent_state.add_message(
         Message(
             role="user",
@@ -57,10 +59,10 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.remaining_plans = plans.steps
     agent_state.past_plans = []
 
-    # dummy user response, just for logging
+    # Dummy user response, just for logging
     Message(
         role="user",
-        content=PROMPTS.data.replanner_user_response.render(
+        content=PROMPTS.experiment_coding_v2.replanner_user_response.render(
             next_step=agent_state.remaining_plans[0],
         ),
         agent_sender=AGENT_NAME,
@@ -69,26 +71,28 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
-def replanner_node(agent_state: DataAgentState) -> DataAgentState:
+def replanner_node(agent_state: CodingAgentState) -> CodingAgentState:
+    """Replan based on critic feedback and execution results."""
     logger.trace("replanner_node of Agent {}", AGENT_NAME)
 
     agent_state.past_plans.append(agent_state.remaining_plans.pop(0))
 
-    # NOTE: when all the plans are done, go into the talk mode
+    # Check if all plans are done
     if len(agent_state.remaining_plans) == 0:
         logger.debug("All plans are done, going into talk mode")
         agent_state.talk_mode = True
-        # agent_state.remaining_plans = ["Response to users' query."]
         return agent_state
 
     user_query = agent_state.user_query
+    critic_feedback = agent_state.critic_feedback
 
     user_msg = Message(
         role="user",
-        content=PROMPTS.data.replanner_user_prompt.render(
+        content=PROMPTS.experiment_coding_v2.replanner_user_prompt.render(
             user_query=user_query,
             plan=agent_state.plans.steps,
             past_steps=agent_state.past_plans,
+            critic_feedback=critic_feedback,
         ),
         agent_sender=AGENT_NAME,
     ).with_log()
@@ -100,7 +104,10 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.patched_history,
         system_prompt=(
             Message(
-                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=True)
+                role="system",
+                content=PROMPTS.experiment_coding_v2.planner_system_prompt.render(
+                    is_replanner=True
+                ),
             )
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
             .content
@@ -111,15 +118,18 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.add_message(msg)
 
     class Replan(BaseModel):
-        continued: bool = False
+        continued: bool | None = None
         modified: list[str] = []
 
-    # NOTE: we don't add the message to the history
     plans = parse_json_from_llm_response(msg, Replan)
 
-    if plans.continued:
-        # no edits to plan
-        pass
+    if plans.continued is True:
+        pass  # No changes to plan
+    elif plans.continued is False:
+        # plans done
+        logger.debug("Replanner indicates all plans are done, going into talk mode")
+        agent_state.talk_mode = True
+        return agent_state
     else:
         agent_state.plans = Plan(steps=plans.modified)
         agent_state.remaining_plans = plans.modified
@@ -127,7 +137,7 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.add_message(
         Message(
             role="user",
-            content=PROMPTS.data.replanner_user_response.render(
+            content=PROMPTS.experiment_coding_v2.replanner_user_response.render(
                 next_step=agent_state.remaining_plans[0],
             ),
             agent_sender=AGENT_NAME,
@@ -137,8 +147,8 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
-def should_replan(agent_state: DataAgentState) -> str:
+def should_replan(agent_state: CodingAgentState) -> str:
     if agent_state.talk_mode:
-        return "prepare_for_talk_mode"
+        return "prepare_for_completion"
     else:
         return "gateway"

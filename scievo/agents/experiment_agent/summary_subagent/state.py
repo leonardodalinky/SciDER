@@ -10,7 +10,7 @@ class SummaryAgentState(ToolsetState, HistoryState):
     """
 
     # Local environment for the agent (input)
-    local_env: LocalEnv
+    workspace: LocalEnv
 
     # Conversation history (input)
     # history: list[dict]   # inherited from HistoryState

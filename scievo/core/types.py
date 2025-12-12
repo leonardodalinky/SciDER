@@ -331,11 +331,10 @@ class RBankState(BaseModel):
 
 class ExecState(BaseModel):
     # Current execution state
-    _session: SessionBase = PrivateAttr(init=True)
+    _session: SessionBase = PrivateAttr(init=False)
 
-    def __init__(self, _session: SessionBase, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._session = _session
 
     @property
     def session(self) -> SessionBase:
