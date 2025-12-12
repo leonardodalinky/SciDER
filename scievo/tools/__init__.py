@@ -1,6 +1,8 @@
 # import tools to register them
 from . import (
     arxiv_tool,
+    claude_agent_sdk_tool,
+    claude_code_tool,
     coder_tool,
     cursor_tool,
     env_tool,
