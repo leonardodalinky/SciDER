@@ -117,9 +117,13 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
     # NOTE: we don't add the message to the history
     plans = parse_json_from_llm_response(msg, Replan)
 
-    if plans.continued:
-        # no edits to plan
-        pass
+    if plans.continued is True:
+        pass  # No changes to plan
+    elif plans.continued is False:
+        # plans done
+        logger.debug("Replanner indicates all plans are done, going into talk mode")
+        agent_state.talk_mode = True
+        return agent_state
     else:
         agent_state.plans = Plan(steps=plans.modified)
         agent_state.remaining_plans = plans.modified

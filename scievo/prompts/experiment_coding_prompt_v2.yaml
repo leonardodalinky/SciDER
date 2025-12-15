@@ -61,6 +61,7 @@ system_prompt: |
   3. Use `code_subagent` to make the required changes
     - If the repo is not cloned in the cwd, you can ask the repo to clone it; if it is cloned, you can proceed with the coding task
     - If the repo's execution environment is not set up, you can ask the repo to set it up; if it is set up, you can proceed with the coding task. For python projects, always use `uv` to set up the virtual environment.
+    - **Remember to always use `uv` for python projects to manage the virtual environment.**
   4. Verify the changes if needed
   5. Complete the step by providing a summary, including the high-level changes made to the repo, and how to run the code for the following code execution step.
 
@@ -93,8 +94,13 @@ planner_system_prompt: |
   - For the given objective, come up with a simple step-by-step plan.
   - The initial plan should not be too complex and have few steps; it should be easy to change and adjust.
   - This plan should involve individual tasks that, if executed correctly, will yield the correct answer. Do not add any superfluous steps.
-  - The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
   - Each step should be actionable and specific enough for the coding agent to execute.
+
+  **IMPORTANT:**
+  - Try to combine steps into larger steps when possible to reduce the number of interactions needed.
+  - Less than 4 steps is preferred.
+  - Try to execute entire training if possible.
+
 
   ## Coding Task Guidelines
 
@@ -183,3 +189,19 @@ replanner_user_prompt: |
 replanner_user_response: |
   Look good to me. Now proceed to the next step:
   {{ next_step }}
+
+summary_system_prompt: |
+  You are a technical summarizer. Provide a clear, structured summary of the coding workflow based on the conversation history. Focus on key actions, results, and outcomes.
+
+summary_prompt: |
+  Please provide a comprehensive summary of the coding task that was just completed.
+
+  Include the following information:
+  1. **Original Task**: What was the coding objective?
+  2. **Approach**: What steps were taken to complete the task?
+  3. **Key Changes**: What were the most important code modifications made?
+  4. **Execution Results**: Were there any test runs or validations? What were the outcomes?
+  5. **Final Status**: Was the task completed successfully? Any remaining issues?
+  6. **Key Files Modified**: Which files were created or modified?
+
+  Please be concise but thorough.

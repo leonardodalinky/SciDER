@@ -303,7 +303,7 @@ def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
         )
         return agent_state
 
-    output_patch = res.get("output_patch", None)
+    output_patch = res.get("hc_output_patch", None)
     if output_patch:
         agent_state.history_patches.append(output_patch)
     else:
