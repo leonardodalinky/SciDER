@@ -145,7 +145,7 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     agent_state.readme_text = readme_text if readme_text else "No README found."
 
     # Construct a planning prompt for the LLM
-    user_prompt = PROMPTS.experiment.planner_system_prompt.render(
+    user_prompt = PROMPTS.experiment_coding.planner_system_prompt.render(
         repo_url="",  # Not used for local folders
         repo_dir=str(repo_dir),
         readme_text=readme_text if readme_text else "No README found in the project folder.",
@@ -184,7 +184,7 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     agent_state.add_message(
         Message(
             role="user",
-            content=PROMPTS.experiment.replanner_user_response.render(
+            content=PROMPTS.experiment_coding.replanner_user_response.render(
                 next_step=agent_state.remaining_plans[0],
             ),
         )
@@ -199,8 +199,8 @@ def replanner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # DON'T pop here - the step should already be moved to past_plans by gateway_conditional
     # We just need to check if we should continue or finish
 
-    system_prompt = PROMPTS.experiment.replanner_system_prompt.render()
-    replanner_user_prompt = PROMPTS.experiment.replanner_user_prompt.render(
+    system_prompt = PROMPTS.experiment_coding.replanner_system_prompt.render()
+    replanner_user_prompt = PROMPTS.experiment_coding.replanner_user_prompt.render(
         user_query=agent_state.user_query,
         plan=agent_state.plans.steps if agent_state.plans else [],
         past_steps=agent_state.past_plans or [],

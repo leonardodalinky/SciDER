@@ -8,11 +8,7 @@ class DataAgentState(ToolsetState, PlanState, HistoryState, RBankState):
 
     user_query: str
     # Local environment for the agent
-    local_env: LocalEnv
+    workspace: LocalEnv
 
     # talking mode
     talk_mode: bool = False
-
-    @property
-    def round(self) -> int:
-        return len(self.node_history) - 1

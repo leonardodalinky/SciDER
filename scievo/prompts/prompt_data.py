@@ -16,8 +16,11 @@ class Prompts:
     data: "DataPrompts"
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
-    experiment: "ExperimentPrompts"
+    experiment_coding: "ExperimentPrompts"
+    experiment_exec: "ExperimentExecPrompts"
+    experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
+    experiment_coding_v2: "ExperimentCodingV2Prompts"
 
 
 @dataclass
@@ -62,10 +65,39 @@ class ExperimentPrompts:
 
 
 @dataclass
+class ExperimentExecPrompts:
+    exec_system_prompt: Template
+    exec_user_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
+    monitoring_system_prompt: Template
+    monitoring_user_prompt: Template
+    monitoring_end_user_prompt: Template
+    monitoring_ctrlc_user_prompt: Template
+
+
+@dataclass
+class ExperimentSummaryPrompts:
+    system_prompt: Template
+    user_prompt: Template
+    summary_system_prompt: Template
+    summary_prompt: Template
+
+
+@dataclass
 class CriticPrompts:
     system_prompt: Template
     user_prompt: Template
     user_prompt_summary: Template
+
+
+@dataclass
+class ExperimentCodingV2Prompts:
+    system_prompt: Template
+    planner_system_prompt: Template
+    replanner_user_prompt: Template
+    replanner_user_response: Template
+    user_prompt: Template
 
 
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
@@ -73,7 +105,7 @@ def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
         data = yaml.safe_load(f)
 
     data2 = {}
-    for field in model_type.__dataclass_fields__.keys():
+    for field in model_type.__dataclass_fields__.keys():  # type: ignore
         if field.startswith("_"):
             continue
         data2[field] = Template(data[field])
@@ -90,8 +122,17 @@ def init():
         data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
         rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
         history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
-        experiment=parse_yaml_as_templates(
-            ExperimentPrompts, os.path.join(DIR, "experiment_prompt.yaml")
+        experiment_coding=parse_yaml_as_templates(
+            ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
+        ),
+        experiment_coding_v2=parse_yaml_as_templates(
+            ExperimentCodingV2Prompts, os.path.join(DIR, "experiment_coding_prompt_v2.yaml")
+        ),
+        experiment_exec=parse_yaml_as_templates(
+            ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
+        ),
+        experiment_summary=parse_yaml_as_templates(
+            ExperimentSummaryPrompts, os.path.join(DIR, "experiment_summary_prompt.yaml")
         ),
         critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
     )

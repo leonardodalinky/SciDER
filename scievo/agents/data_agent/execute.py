@@ -91,7 +91,7 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "current_working_dir": agent_state.local_env.working_dir,
+        "workspace": agent_state.workspace.working_dir,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
@@ -226,7 +226,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 args.update({constant.__CTX_NAME__: {"current_agent": AGENT_NAME}})
 
             # Execute the tool in the agent's local environment
-            with agent_state.local_env:
+            with agent_state.workspace:
                 result = func(**args)
 
             # Create tool response message
@@ -236,7 +236,6 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
-            agent_state.add_message(Message(**tool_response).with_log())
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -246,7 +245,8 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
-            agent_state.add_message(Message(**tool_response).with_log())
+
+        agent_state.add_message(Message(**tool_response).with_log())
 
     return agent_state
 
@@ -290,7 +290,7 @@ def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
     try:
         res = history_compress_subgraph_compiled.invoke(
             history_compression.HistoryCompressionState(
-                input_history_state=agent_state,
+                hc_input_history_state=agent_state,
             )
         )
     except Exception as e:

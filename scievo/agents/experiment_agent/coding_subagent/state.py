@@ -18,15 +18,6 @@ class ExperimentAgentState(ToolsetState, PlanState, HistoryState):
     # Local environment for the agent
     local_env: LocalEnv
 
-    # session dir (mem storage)
-    sess_dir: str | Path
-
-    # skip mem extraction for this round
-    skip_mem_extraction: bool = False
-
-    # talking mode
-    talk_mode: bool = False
-
     # === Newly added for ExperimentAgent ===
     repo_dir: str | Path | None = None
     readme_text: str | None = None
