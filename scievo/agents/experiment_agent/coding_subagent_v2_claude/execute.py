@@ -65,7 +65,7 @@ def llm_chat_node(agent_state: CodingAgentState) -> CodingAgentState:
     }
 
     # Update system prompt (no memory retrieval - unlike data_agent)
-    system_prompt = PROMPTS.experiment_coding_v2.system_prompt.render(
+    system_prompt = PROMPTS.experiment_claude_coding_v2.system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         current_plan=(

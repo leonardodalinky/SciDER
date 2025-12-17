@@ -21,6 +21,7 @@ class Prompts:
     experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
     experiment_coding_v2: "ExperimentCodingV2Prompts"
+    experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
 
 
 @dataclass
@@ -100,6 +101,15 @@ class ExperimentCodingV2Prompts:
     user_prompt: Template
 
 
+@dataclass
+class ExperimentClaudeCodingV2Prompts:
+    system_prompt: Template
+    planner_system_prompt: Template
+    replanner_user_prompt: Template
+    replanner_user_response: Template
+    user_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -127,6 +137,10 @@ def init():
         ),
         experiment_coding_v2=parse_yaml_as_templates(
             ExperimentCodingV2Prompts, os.path.join(DIR, "experiment_coding_prompt_v2.yaml")
+        ),
+        experiment_claude_coding_v2=parse_yaml_as_templates(
+            ExperimentClaudeCodingV2Prompts,
+            os.path.join(DIR, "experiment_claude_coding_prompt_v2.yaml"),
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")

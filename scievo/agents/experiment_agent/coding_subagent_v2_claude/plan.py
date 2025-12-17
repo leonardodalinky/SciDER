@@ -33,7 +33,7 @@ def planner_node(agent_state: CodingAgentState) -> CodingAgentState:
         system_prompt=(
             Message(
                 role="system",
-                content=PROMPTS.experiment_coding_v2.planner_system_prompt.render(
+                content=PROMPTS.experiment_claude_coding_v2.planner_system_prompt.render(
                     is_replanner=False
                 ),
             )
@@ -62,7 +62,7 @@ def planner_node(agent_state: CodingAgentState) -> CodingAgentState:
     # Dummy user response, just for logging
     Message(
         role="user",
-        content=PROMPTS.experiment_coding_v2.replanner_user_response.render(
+        content=PROMPTS.experiment_claude_coding_v2.replanner_user_response.render(
             next_step=agent_state.remaining_plans[0],
         ),
         agent_sender=AGENT_NAME,
@@ -88,7 +88,7 @@ def replanner_node(agent_state: CodingAgentState) -> CodingAgentState:
 
     user_msg = Message(
         role="user",
-        content=PROMPTS.experiment_coding_v2.replanner_user_prompt.render(
+        content=PROMPTS.experiment_claude_coding_v2.replanner_user_prompt.render(
             user_query=user_query,
             plan=agent_state.plans.steps,
             past_steps=agent_state.past_plans,
@@ -105,7 +105,7 @@ def replanner_node(agent_state: CodingAgentState) -> CodingAgentState:
         system_prompt=(
             Message(
                 role="system",
-                content=PROMPTS.experiment_coding_v2.planner_system_prompt.render(
+                content=PROMPTS.experiment_claude_coding_v2.planner_system_prompt.render(
                     is_replanner=True
                 ),
             )
@@ -137,7 +137,7 @@ def replanner_node(agent_state: CodingAgentState) -> CodingAgentState:
     agent_state.add_message(
         Message(
             role="user",
-            content=PROMPTS.experiment_coding_v2.replanner_user_response.render(
+            content=PROMPTS.experiment_claude_coding_v2.replanner_user_response.render(
                 next_step=agent_state.remaining_plans[0],
             ),
             agent_sender=AGENT_NAME,
