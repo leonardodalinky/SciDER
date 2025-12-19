@@ -4,6 +4,10 @@ exec_system_prompt: |
   ## Your Goal
   Execute the experiment described by the user's natural language query using the available shell session and tools.
 
+  **IMPORTANT:**
+  Even though in the context there would be some previous experiment execution history, your goal is to run the experiment again based on the history.
+  It means you should not just analyze the previous execution results, but try to run the experiment commands again to get fresh results.
+
   ## Current State
   {{ state_text }}
 
@@ -68,6 +72,10 @@ exec_user_prompt: |
   {{ working_dir }}
 
   Proceed autonomously. When all necessary commands have been executed, simply respond confirming completion without calling any more tools.
+
+  **IMPORTANT:**
+  Even though in the context there would be some previous experiment execution history, your goal is to run the experiment again based on the history.
+  It means you should not just analyze the previous execution results, but try to run the experiment commands again to get fresh results.
 
 summary_system_prompt: |
   You are summarizing an experiment execution. Provide a clear, factual summary based on the execution history.

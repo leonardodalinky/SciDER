@@ -2,20 +2,20 @@ import os
 import uuid
 from typing import Optional
 
-from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
 from openhands.sdk.context.condenser import LLMSummarizingCondenser
+from openhands.sdk.context.skills import Skill
 from pydantic import PrivateAttr
 
 from scievo.core.code_env import LocalEnv
-from scievo.core.plan import PlanState
 from scievo.core.types import HistoryState, ToolsetState
 
 
-class CodingAgentState(ToolsetState, PlanState, HistoryState):
+class CodingAgentState(ToolsetState, HistoryState):
     """State of the Coding Subagent V2.
 
-    This agent follows the plan-and-execute paradigm for coding tasks.
-    It integrates with OpenHands SDK for external code manipulation.
+    This agent delegates coding tasks to OpenHands SDK which has its own
+    internal planning mechanism. No external planning is needed.
 
     Note: No RBankState - memory extraction is not used in this agent.
     """
@@ -33,11 +33,8 @@ class CodingAgentState(ToolsetState, PlanState, HistoryState):
     # This maintains the conversation history with the external coding agent
     _openhands_conversation: Optional["Conversation"] = PrivateAttr(default=None)
 
-    # Whether the agent has finished all plans
-    talk_mode: bool = False
-
-    # Critic feedback from the last plan step
-    critic_feedback: str = ""
+    # Output summary (output)
+    output_summary: str | None = None
 
     def __init__(self, _openhands_conversation: Optional["Conversation"] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -65,6 +62,32 @@ class CodingAgentState(ToolsetState, PlanState, HistoryState):
                 Tool(name=GlobTool.name),
                 Tool(name=GrepTool.name),
             ]
+            agent_context = AgentContext(
+                skills=[
+                    Skill(
+                        name="Python Dependency Management by `uv` instead of `pip`",
+                        content="For Python projects: Always prioritize using 'uv' for managing dependencies and virtual environments. "
+                        "Avoid using 'pip' or other package managers that directly affect the native system environment. "
+                        "Use 'uv sync' to install dependencies from lock files, 'uv venv' to create isolated environments, "
+                        "and 'uv add' to add new packages. This approach ensures project isolation and reproducibility. "
+                        "This skill applies only to Python projects.",
+                    ),
+                    Skill(
+                        name="Avoid Long Time Operations",
+                        content="Avoid using tools or commands that may lead to long wait times or blocking operations, "
+                        "such as training the model directly within this environment. ",
+                    ),
+                    Skill(
+                        name="File Operations Should Use Absolute Paths as Much as Possible",
+                        content="When using the File Editor tool and other file-related tools, always refer to files using their absolute paths. "
+                        "This ensures that file operations are unambiguous and correctly targeted within the workspace. ",
+                    ),
+                ],
+                system_message_suffix="""\
+You are operating in CLI mode, so all file paths should be absolute paths as much as possible.
+Besides, try to avoid long time operations that may block the process, e.g., training the deep learning model directly.
+""",
+            )
             agent = Agent(
                 llm=llm,
                 tools=tools,
@@ -74,6 +97,7 @@ class CodingAgentState(ToolsetState, PlanState, HistoryState):
                     max_size=48,
                     keep_first=4,
                 ),
+                agent_context=agent_context,
             )
             _openhands_conversation = Conversation(
                 agent=agent, workspace=self.workspace.working_dir

@@ -27,6 +27,9 @@ class CodingAgentState(ToolsetState, PlanState, HistoryState):
     # Critic feedback from the last plan step
     critic_feedback: str = ""
 
+    # Output summary (output)
+    output_summary: str | None = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
