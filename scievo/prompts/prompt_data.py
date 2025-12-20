@@ -37,6 +37,8 @@ class DataPrompts:
     planner_system_prompt: Template
     replanner_user_prompt: Template
     replanner_user_response: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
 
 
 @dataclass
@@ -150,7 +152,8 @@ def init():
             ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
         ),
         experiment_coding_v2=parse_yaml_as_templates(
-            ExperimentCodingV2Prompts, os.path.join(DIR, "experiment_coding_prompt_v2.yaml")
+            ExperimentCodingV2Prompts,
+            os.path.join(DIR, "experiment_coding_prompt_v2.yaml"),
         ),
         experiment_claude_coding_v2=parse_yaml_as_templates(
             ExperimentClaudeCodingV2Prompts,
@@ -160,7 +163,8 @@ def init():
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
         ),
         experiment_summary=parse_yaml_as_templates(
-            ExperimentSummaryPrompts, os.path.join(DIR, "experiment_summary_prompt.yaml")
+            ExperimentSummaryPrompts,
+            os.path.join(DIR, "experiment_summary_prompt.yaml"),
         ),
         critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
         experiment_agent=parse_yaml_as_templates(

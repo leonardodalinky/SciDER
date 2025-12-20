@@ -33,8 +33,9 @@ BUILTIN_TOOLSETS = [
     # "todo",
     "state",
     "history",
+    "fs",
 ]
-ALLOWED_TOOLSETS = ["fs", "web"]
+ALLOWED_TOOLSETS = ["web"]
 
 
 def gateway_node(agent_state: DataAgentState) -> DataAgentState:
@@ -334,6 +335,55 @@ def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
     return agent_state
 
 
+def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
+    """Generate analysis summary and store it in agent state"""
+    logger.debug("generate_summary_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("generate_summary")
+
+    try:
+        # Construct a summary request message
+        summary_system_prompt = PROMPTS.data.summary_system_prompt
+        summary_user_prompt = PROMPTS.data.summary_user_prompt
+
+        agent_state.add_message(
+            Message(
+                role="user",
+                content=summary_user_prompt.render(),
+            ).with_log(cond=constant.LOG_SYSTEM_PROMPT)
+        )
+
+        # Call LLM to generate summary
+        summary_msg = ModelRegistry.completion(
+            LLM_NAME,
+            agent_state.patched_history,
+            system_prompt=summary_system_prompt.render(),
+            agent_sender=AGENT_NAME,
+        ).with_log()
+
+        agent_state.add_message(summary_msg)
+
+        # Extract summary content
+        if summary_msg.role != "assistant" or not summary_msg.content:
+            raise ValueError("Failed to get summary from LLM")
+
+        # Store summary in state
+        agent_state.output_summary = summary_msg.content
+        logger.info("Analysis summary generated successfully")
+
+    except Exception as e:
+        error_msg = f"Failed to generate analysis summary: {sprint_chained_exception(e)}"
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=error_msg,
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+        logger.error("generate_summary_node failed: {}", error_msg)
+
+    return agent_state
+
+
 critic_subgraph = critic_agent.build()
 critic_subgraph_compiled = critic_subgraph.compile()
 
@@ -351,7 +401,7 @@ def critic_node(agent_state: DataAgentState) -> DataAgentState:
         res = critic_subgraph_compiled.invoke(
             critic_agent.CriticAgentState(
                 input_msgs=agent_state.patched_history[-constant.CRITIC_CONTEXT_WINDOW :],
-                plan=current_plan,
+                plan=agent_state.remaining_plans[0],
                 is_data_agent=True,
                 # RBankState
                 sess_dir=agent_state.sess_dir,

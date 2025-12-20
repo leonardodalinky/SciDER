@@ -141,32 +141,17 @@ def run_exec_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentState
     logger.info(f"Running Exec Subagent (revision {agent_state.current_revision})")
     agent_state.current_phase = "exec"
 
-    # Get current and previous coding summaries
-    current_loop = agent_state.loop_results[-1] if agent_state.loop_results else {}
-    current_coding_summary = current_loop.get("coding_summary", "No coding summary available")
-
-    # Collect all previous coding summaries
-    previous_coding_summaries_text = ""
-    if len(agent_state.loop_results) > 1:
-        previous_coding_summaries_text = "\n\n## Previous Coding Summaries\n"
-        for i, loop in enumerate(agent_state.loop_results[:-1]):
-            prev_summary = loop.get("coding_summary", "")
-            if prev_summary:
-                previous_coding_summaries_text += f"\n### Revision {i}\n{prev_summary}\n"
-
-    # Build exec query with coding context
-    exec_query = f"""Run the modified code/experiments and verify the output.
-
-## Current Revision Coding Summary
-{current_coding_summary}
-{previous_coding_summaries_text}
-
-Please execute and verify based on the changes described above."""
+    # Collect all coding summaries from loop results
+    coding_summaries = [
+        loop.get("coding_summary", "")
+        for loop in agent_state.loop_results
+        if loop.get("coding_summary")
+    ]
 
     exec_state = ExecAgentState(
-        user_query=exec_query,
+        user_query="Run the modified code/experiments and verify the output.",
         workspace=agent_state.workspace,
-        history=agent_state.history.copy(),
+        coding_summaries=coding_summaries if coding_summaries else None,
         toolsets=["exec"],
     )
 

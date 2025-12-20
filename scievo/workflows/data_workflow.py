@@ -178,24 +178,17 @@ class DataWorkflow(BaseModel):
             return False
 
     def _extract_data_summary(self, result_state: DataAgentState) -> str:
-        """Extract data summary from DataAgent history."""
-        # Try to read saved data_analysis.md first
-        analysis_file = self.workspace_path / "data_analysis.md"
+        """Extract data summary from DataAgent state."""
+        # First try to read from output_summary field
+        if result_state.output_summary:
+            return result_state.output_summary
+
+        # Fallback: try to read saved analysis.md file
+        analysis_file = self.workspace_path / "analysis.md"
         if analysis_file.exists():
             return analysis_file.read_text()
 
-        # Fallback: extract from last assistant messages
-        summary_parts = []
-        for msg in reversed(result_state.patched_history):
-            if msg.role == "assistant" and msg.content:
-                summary_parts.insert(0, msg.content)
-                if len(summary_parts) >= 3:
-                    break
-
-        if summary_parts:
-            return "\n\n---\n\n".join(summary_parts)
-
-        return "Data analysis completed but no summary was generated."
+        raise RuntimeError("Data analysis completed but no summary was generated.")
 
     def _finalize(self, success: bool):
         """Finalize the workflow."""
@@ -281,21 +274,39 @@ def run_data_workflow(
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    if len(sys.argv) < 3:
-        print(
-            "Usage: python -m scievo.workflows.data_workflow <data_path> <workspace_path>"
-        )
-        sys.exit(1)
-
-    result = run_data_workflow(
-        data_path=sys.argv[1],
-        workspace_path=sys.argv[2],
+    parser = argparse.ArgumentParser(
+        description="Data Workflow - Run DataAgent for data analysis",
+        prog="python -m scievo.workflows.data_workflow",
+    )
+    parser.add_argument(
+        "data_path", help="Path to the data file or directory to analyze"
+    )
+    parser.add_argument("workspace_path", help="Workspace directory for the workflow")
+    parser.add_argument(
+        "--recursion-limit",
+        type=int,
+        default=100,
+        help="Recursion limit for DataAgent (default: 100)",
+    )
+    parser.add_argument(
+        "--session-name",
+        default=None,
+        help="Custom session name (otherwise uses timestamp)",
     )
 
-    print("\n" + "=" * 80)
+    args = parser.parse_args()
+
+    result = run_data_workflow(
+        data_path=args.data_path,
+        workspace_path=args.workspace_path,
+        recursion_limit=args.recursion_limit,
+        session_name=args.session_name,
+    )
+
+    print("\n" + get_separator())
     print("DATA WORKFLOW COMPLETE")
-    print("=" * 80)
+    print(get_separator())
     print(f"\nStatus: {result.final_status}")
     print(f"\nData Summary:\n{result.data_summary}")

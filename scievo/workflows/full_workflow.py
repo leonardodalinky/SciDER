@@ -68,7 +68,6 @@ class FullWorkflow(BaseModel):
     data_agent_recursion_limit: int = 100
     experiment_agent_recursion_limit: int = 100
     session_name: str | None = None  # Optional custom session name
-    brain_dir: Path | None = None  # Optional brain directory (uses BRAIN_DIR env if None)
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "data_analysis", "experiment", "complete", "failed"] = "init"
@@ -170,6 +169,7 @@ class FullWorkflow(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self.data_agent_history = self._data_workflow.data_agent_history
+                self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True
             else:
@@ -286,9 +286,6 @@ def run_full_workflow(
     user_query: str,
     repo_source: str | None = None,
     max_revisions: int = 5,
-    data_agent_recursion_limit: int = 100,
-    experiment_agent_recursion_limit: int = 100,
-    session_name: str | None = None,
     brain_dir: str | Path | None = None,
 ) -> FullWorkflow:
     """
@@ -303,7 +300,6 @@ def run_full_workflow(
         data_agent_recursion_limit: Recursion limit for DataAgent (default=100)
         experiment_agent_recursion_limit: Recursion limit for ExperimentAgent (default=100)
         session_name: Optional custom session name (otherwise uses timestamp)
-        brain_dir: Optional brain directory (uses BRAIN_DIR env if None)
 
     Returns:
         FullWorkflow: Completed workflow with results
@@ -333,29 +329,65 @@ def run_full_workflow(
         data_agent_recursion_limit=data_agent_recursion_limit,
         experiment_agent_recursion_limit=experiment_agent_recursion_limit,
         session_name=session_name,
-        brain_dir=Path(brain_dir) if brain_dir else None,
     )
     return workflow.run()
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    if len(sys.argv) < 4:
-        print(
-            "Usage: python -m scievo.workflows.full_workflow <data_path> <workspace_path> <user_query> [repo_source]"
-        )
-        sys.exit(1)
-
-    result = run_full_workflow(
-        data_path=sys.argv[1],
-        workspace_path=sys.argv[2],
-        user_query=sys.argv[3],
-        repo_source=sys.argv[4] if len(sys.argv) > 4 else None,
+    parser = argparse.ArgumentParser(
+        description="Full SciEvo Workflow - Run complete workflow (DataAgent -> ExperimentAgent)",
+        prog="python -m scievo.workflows.full_workflow",
+    )
+    parser.add_argument("data_path", help="Path to the data file or directory to analyze")
+    parser.add_argument("workspace_path", help="Workspace directory for the experiment")
+    parser.add_argument("user_query", help="User's experiment objective")
+    parser.add_argument(
+        "repo_source",
+        nargs="?",
+        default=None,
+        help="Optional repository source (local path or git URL)",
+    )
+    parser.add_argument(
+        "--max-revisions",
+        type=int,
+        default=5,
+        help="Maximum revision loops for ExperimentAgent (default: 5)",
+    )
+    parser.add_argument(
+        "--data-recursion-limit",
+        type=int,
+        default=100,
+        help="Recursion limit for DataAgent (default: 100)",
+    )
+    parser.add_argument(
+        "--experiment-recursion-limit",
+        type=int,
+        default=100,
+        help="Recursion limit for ExperimentAgent (default: 100)",
+    )
+    parser.add_argument(
+        "--session-name",
+        default=None,
+        help="Custom session name (otherwise uses timestamp)",
     )
 
-    print("\n" + "=" * 80)
+    args = parser.parse_args()
+
+    result = run_full_workflow(
+        data_path=args.data_path,
+        workspace_path=args.workspace_path,
+        user_query=args.user_query,
+        repo_source=args.repo_source,
+        max_revisions=args.max_revisions,
+        data_agent_recursion_limit=args.data_recursion_limit,
+        experiment_agent_recursion_limit=args.experiment_recursion_limit,
+        session_name=args.session_name,
+    )
+
+    print("\n" + get_separator())
     print("FULL WORKFLOW COMPLETE")
-    print("=" * 80)
+    print(get_separator())
     print(f"\nStatus: {result.final_status}")
     print(f"\nFinal Summary:\n{result.final_summary}")

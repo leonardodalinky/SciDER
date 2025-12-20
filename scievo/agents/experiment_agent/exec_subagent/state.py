@@ -18,6 +18,10 @@ class ExecAgentState(ExecState, ToolsetState, HistoryState):
     # Current working directory where experiments are executed (input)
     workspace: LocalEnv
 
+    # Coding summaries from previous revisions (input, optional)
+    # Used to provide context about code changes made in each revision
+    coding_summaries: list[str] | None = None
+
     # Raw summary of the experiment execution, try to use `execution_summary_dict` instead (output)
     execution_summary: str = ""
 

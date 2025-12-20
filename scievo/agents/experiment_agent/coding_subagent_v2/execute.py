@@ -51,11 +51,13 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
 # Workspace
 {workspace_dir}
 
-# Background information:
-{bg_info}
-
 # Task:
 {instruction}
+
+# Background information:
+```
+{bg_info}
+```
 """
 
         logger.info("Sending task to OpenHands sub-agent: {}", instruction[:100])
@@ -67,8 +69,15 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
         conversation.run()
 
         # Extract the last response from OpenHands
-        if conversation.state.events and (e := conversation.state.events[-1]).source == "agent":
-            last_response = "\n".join([c.text for c in e.llm_message.content])
+        if conversation.state.events:
+            for e in reversed(conversation.state.events):
+                if e.source == "agent":
+                    last_response = "\n".join([c.text for c in e.llm_message.content])
+                break
+            else:
+                last_response = (
+                    "Coding task completed (no detailed response available)."
+                )
         else:
             last_response = "Coding task completed (no detailed response available)."
 
@@ -130,6 +139,8 @@ def summary_node(agent_state: CodingAgentState) -> CodingAgentState:
     agent_state.output_summary = msg.content or ""
     agent_state.add_message(msg)
 
-    logger.info(f"Coding task summary generated: {len(agent_state.output_summary)} characters")
+    logger.info(
+        f"Coding task summary generated: {len(agent_state.output_summary)} characters"
+    )
 
     return agent_state

@@ -14,7 +14,7 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
     logger.trace("init_node of ExecAgent")
 
     # Add the initial user query message if history is empty
-    if not agent_state.history:
+    if not agent_state.history or len(agent_state.history) == 0:
         from scievo.core.types import Message
         from scievo.prompts import PROMPTS
 
@@ -23,9 +23,14 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
             content=PROMPTS.experiment_exec.exec_user_prompt.render(
                 user_query=agent_state.user_query,
                 working_dir=agent_state.workspace,
+                coding_summaries=agent_state.coding_summaries,
             ),
         )
         agent_state.add_message(user_msg)
+    else:
+        logger.warning(
+            "Agent history is not empty during init_node; skipping adding user query."
+        )
 
     return agent_state
 

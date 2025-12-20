@@ -31,8 +31,8 @@ class Brain:
 
                     logger.info("Brain directory: {}", brain_dir)
 
-                    cls._instance.brain_dir = Path(brain_dir)
-                    cls._instance.brain_dir.mkdir(parents=True, exist_ok=True)
+                    cls._instance._brain_dir = Path(brain_dir)
+                    cls._instance._brain_dir.mkdir(parents=True, exist_ok=True)
         return cls._instance
 
     @classmethod
@@ -41,7 +41,9 @@ class Brain:
         return cls()
 
     @classmethod
-    def new_session_named(cls, session_name: str, session_prefix: str = "ss_") -> BrainSession:
+    def new_session_named(
+        cls, session_name: str, session_prefix: str = "ss_"
+    ) -> BrainSession:
         """Create a new session directory with a named session."""
         session_dir = cls.instance().brain_dir / f"{session_prefix}{session_name}"
         logger.info("New session directory: {}", session_dir)
@@ -57,6 +59,11 @@ class Brain:
             f"{randbelow(1_000_000):06d}"
         )
         return cls.new_session_named(suffix, session_prefix=session_prefix)
+
+    @property
+    def brain_dir(self) -> Path:
+        """Property to access the brain directory path."""
+        return self._brain_dir
 
 
 class BrainSession:

@@ -31,7 +31,8 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.patched_history,
         system_prompt=(
             Message(
-                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=False)
+                role="system",
+                content=PROMPTS.data.planner_system_prompt.render(is_replanner=False),
             )
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
             .content
@@ -104,7 +105,8 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
         agent_state.patched_history,
         system_prompt=(
             Message(
-                role="system", content=PROMPTS.data.planner_system_prompt.render(is_replanner=True)
+                role="system",
+                content=PROMPTS.data.planner_system_prompt.render(is_replanner=True),
             )
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
             .content
@@ -151,6 +153,6 @@ def replanner_node(agent_state: DataAgentState) -> DataAgentState:
 
 def should_replan(agent_state: DataAgentState) -> str:
     if agent_state.talk_mode:
-        return "prepare_for_talk_mode"
+        return "finalize"
     else:
         return "gateway"

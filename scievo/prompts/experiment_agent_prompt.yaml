@@ -15,7 +15,9 @@ init_prompt: |
   # Experiment Setup
 
   ## Data Summary
+  ```markdown
   {{ data_summary }}
+  ```
 
   ## User Objective
   {{ user_query }}
@@ -34,7 +36,18 @@ coding_subagent_query_prompt: |
   ## Repository Source
   {{ repo_source }}
 
-  Please access the repository and modify the code accordingly. If the repo is not here, please clone it first.
+  ## Guidelines
+
+  - If the repo is not cloned yet, clone it first; if it is cloned, proceed with the coding task.
+  - Try to set up the execution environment if not already set up. For Python projects, always use `uv` to manage the virtual environment.
+  - Provide a summary of the high-level changes made to the repo and instructions on how to run the code for the next execution step.
+
+  ## Forbidden Actions
+
+  - DO NOT perform long execution or training in this step; focus on code changes only. Only run short tests if needed to verify code changes.
+  - DO NOT analyze previous execution results here; just focus on adapting the code to the data and implementing necessary changes.
+  - DO NOT make hyperparameter tuning or complex model architecture changes unless explicitly required by the user query.
+  - DO NOT delete files that would not directly affect the coding task, like the README or documentation files.
 
   {% if previous_coding_summaries %}
   ---
@@ -65,8 +78,6 @@ coding_subagent_query_prompt: |
 
   ## Accumulated Analysis
   {{ revision_analysis }}
-
-  **Please address the issues identified above in this revision.**
   {% endif %}
 
 analysis_prompt: |
