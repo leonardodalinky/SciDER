@@ -16,7 +16,7 @@ from scievo.tools import Tool, ToolRegistry
 
 from .state import SummaryAgentState
 
-LLM_NAME = "execute_summary"
+LLM_NAME = "experiment_summary"
 AGENT_NAME = "experiment_summary"
 
 BUILTIN_TOOLSETS = [

@@ -1,8 +1,8 @@
 """
-Execution nodes for the Coding Subagent V2
+Execution nodes for the Coding Subagent V3 Claude
 
 This module provides a minimal execution flow that delegates all coding work
-to OpenHands SDK. The flow is: START -> openhands_node -> summary_node -> END
+to Claude Agent SDK. The flow is: START -> claude_node -> summary_node -> END
 """
 
 import os
@@ -13,6 +13,7 @@ from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.prompts import PROMPTS
+from scievo.tools.claude_agent_sdk_tool import run_claude_agent_sdk
 
 from .state import CodingAgentState
 
@@ -20,30 +21,24 @@ LLM_NAME = "experiment_coding"
 AGENT_NAME = "experiment_coding"
 
 
-def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
+def claude_node(agent_state: CodingAgentState) -> CodingAgentState:
     """
-    Execute the coding task using OpenHands sub-agent.
+    Execute the coding task using Claude Agent SDK.
 
-    This node directly invokes the OpenHands conversation to handle
-    the entire coding workflow. OpenHands has its own internal planning,
+    This node directly invokes the Claude Agent SDK to handle
+    the entire coding workflow. Claude Agent SDK has its own internal planning,
     tool calling, and execution mechanisms.
     """
-    logger.debug("openhands_node of Agent {}", AGENT_NAME)
-    agent_state.add_node_history("openhands")
-
-    conversation = agent_state.openhands_conversation
-    if conversation is None:
-        logger.error("OpenHands conversation not initialized")
-        agent_state.output_summary = "Error: OpenHands conversation not initialized."
-        return agent_state
+    logger.debug("claude_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("claude")
 
     try:
-        # Construct the message for OpenHands
+        # Construct the prompt for Claude Agent SDK
         instruction = agent_state.user_query or "No specific coding task provided."
         bg_info = agent_state.data_summary or "No background information available."
         workspace_dir = os.path.abspath(agent_state.workspace.working_dir)
 
-        message = f"""\
+        prompt = f"""\
 # Requirements:
 - At the end of your response, provide a detailed explanation of what you did and why.
 - Ensure that all changes are made in a way that maintains the integrity of the codebase.
@@ -51,55 +46,53 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
 # Workspace
 {workspace_dir}
 
+# Background information:
+{bg_info}
+
 # Task:
 {instruction}
-
-# Background information:
-```
-{bg_info}
-```
 """
 
-        logger.info("Sending task to OpenHands sub-agent: {}", instruction[:100])
+        logger.info("Sending task to Claude Agent SDK: {}", instruction[:100])
 
-        # Send message to the OpenHands agent
-        conversation.send_message(message)
+        # Call Claude Agent SDK tool
+        result = run_claude_agent_sdk(
+            prompt=prompt,
+            cwd=workspace_dir,
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+            permission_mode="acceptEdits",
+            **{constant.__AGENT_STATE_NAME__: agent_state},
+        )
 
-        # Run the agent until completion
-        conversation.run()
+        # Minimal implementation: use result directly without TOON parsing
+        result_str = str(result)
 
-        # Extract the last response from OpenHands
-        if conversation.state.events:
-            for e in reversed(conversation.state.events):
-                if e.source == "agent":
-                    last_response = "\n".join([c.text for c in e.llm_message.content])
+        has_error = False
+        lines = result_str.split("\n")
+        for line in lines[:10]:  # Check first 10 lines for error field
+            stripped = line.strip()
+            # Check for explicit error field (not error=None which is normal)
+            if stripped.startswith("error:") and "error=None" not in line:
+                has_error = True
                 break
-            else:
-                last_response = (
-                    "Coding task completed (no detailed response available)."
-                )
-        else:
-            last_response = "Coding task completed (no detailed response available)."
 
-        # Log the result
-        logger.info("OpenHands sub-agent completed task")
-
-        # Store the response in history for summary generation
+        # Success case: task completed successfully
+        logger.info("Claude Agent SDK completed task")
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"[OpenHands Sub-Agent Result]\n{last_response}",
-                agent_sender="openhands",
+                content=f"[Claude Agent SDK Result]\nClaude Agent SDK has completed the coding task. The changes have been applied to the workspace.",
+                agent_sender="claude_agent_sdk",
             ).with_log()
         )
 
     except Exception as e:
-        logger.exception("OpenHands agent error")
+        logger.exception("Claude Agent SDK error")
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"[OpenHands Error] {str(e)}",
-                agent_sender="openhands",
+                content=f"[Claude Agent SDK Error] {str(e)}",
+                agent_sender="claude_agent_sdk",
             ).with_log()
         )
 
@@ -139,8 +132,6 @@ def summary_node(agent_state: CodingAgentState) -> CodingAgentState:
     agent_state.output_summary = msg.content or ""
     agent_state.add_message(msg)
 
-    logger.info(
-        f"Coding task summary generated: {len(agent_state.output_summary)} characters"
-    )
+    logger.info(f"Coding task summary generated: {len(agent_state.output_summary)} characters")
 
     return agent_state

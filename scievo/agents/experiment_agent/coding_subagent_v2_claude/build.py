@@ -8,7 +8,31 @@ from .state import CodingAgentState
 def prepare_for_completion(agent_state: CodingAgentState) -> CodingAgentState:
     """Prepare for final completion after all plans are done."""
     assert agent_state.talk_mode
-    agent_state.remaining_plans = ["Summarize the coding task results."]
+
+    # Generate a summary from the last assistant message or history
+    # This provides a summary for the experiment agent to use
+    if agent_state.patched_history:
+        # Try to extract summary from the last assistant message
+        last_assistant_msg = None
+        for msg in reversed(agent_state.patched_history):
+            if msg.role == "assistant" and msg.content:
+                last_assistant_msg = msg
+                break
+
+        if last_assistant_msg:
+            # Use the last assistant message content as summary
+            agent_state.output_summary = last_assistant_msg.content[:500]  # Limit to 500 chars
+            logger.info(
+                f"Coding task summary generated: {len(agent_state.output_summary)} characters"
+            )
+        else:
+            # Fallback: create a simple summary from history
+            agent_state.output_summary = (
+                f"Coding task completed. Total messages: {len(agent_state.patched_history)}"
+            )
+    else:
+        agent_state.output_summary = "Coding task completed (no history available)"
+
     return agent_state
 
 

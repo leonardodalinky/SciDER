@@ -4,6 +4,10 @@ exec_system_prompt: |
   ## Your Goal
   Execute the experiment described by the user's natural language query using the available shell session and tools.
 
+  **IMPORTANT:**
+  Even though in the context there would be some previous experiment execution history, your goal is to run the experiment again based on the history.
+  It means you should not just analyze the previous execution results, but try to run the experiment commands again to get fresh results.
+
   ## Current State
   {{ state_text }}
 
@@ -63,11 +67,30 @@ exec_user_prompt: |
   Execute the following experiment:
 
   {{ user_query }}
+  {% if coding_summaries %}
 
-  Use the `exec` toolset to run the necessary commands in the shell session initially located at:
-  {{ working_dir }}
+  ## Coding Summaries from Previous Revisions
+
+  The following summaries describe the code changes made in each revision:
+  {% for summary in coding_summaries %}
+  ====== Revision {{ loop.index }} ======
+  {{ summary }}
+  ====== End of Revision {{ loop.index }} ======
+  {% endfor %}
+
+  Please execute the running script and verify based on the changes described above.
+  {% endif %}
+
+  ## Simple Guidelines
+
+  * Use the `exec` toolset to run any necessary commands in the shell session
+  * The workspace is initially located at: {{ working_dir }}
 
   Proceed autonomously. When all necessary commands have been executed, simply respond confirming completion without calling any more tools.
+
+  **IMPORTANT:**
+  Even though in the context there would be some previous experiment execution history, your goal is to run the experiment again based on the history.
+  It means you should not just analyze the previous execution results, but try to run the experiment commands again to get fresh results.
 
 summary_system_prompt: |
   You are summarizing an experiment execution. Provide a clear, factual summary based on the execution history.
@@ -78,12 +101,15 @@ summary_user_prompt: |
   ```json
   {
     "status": "Success" or "Failed",
-    "commands_executed": ["command 1", "command 2", ...],
+    "commands_executed": ["command 1", "command 2", "brief summary of long command if necessary"...],
     "key_outputs": "Highlight any important output or results",
     "errors_issues": "Note any errors or issues encountered, or 'None' if successful"
   }
   ```
 
+  If the command in `commands_executed` is long, provide a brief summary of what it was intended to do instead of the full command.
+
+  Ensure the JSON is well-formed and valid.
   Return ONLY the JSON, no additional text.
 
 monitoring_system_prompt: |

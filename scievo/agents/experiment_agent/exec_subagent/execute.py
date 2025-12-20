@@ -18,8 +18,8 @@ from scievo.tools import Tool, ToolRegistry
 
 from .state import ExecAgentState
 
-LLM_NAME = "execute"
-LLM_MONITOR_NAME = "execute_monitor"
+LLM_NAME = "experiment_execute"
+LLM_MONITOR_NAME = "experiment_monitor"
 AGENT_NAME = "experiment_exec"
 
 BUILTIN_TOOLSETS = [

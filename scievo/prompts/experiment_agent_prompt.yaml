@@ -1,0 +1,153 @@
+# Prompts for Experiment Agent
+# This agent orchestrates the coding -> exec -> summary loop with revision capability.
+
+analysis_system_prompt: |
+  You are an expert experiment analyst. Your job is to analyze the results of coding and execution tasks, identify what went well and what failed, and provide actionable insights for improvement.
+
+  Be specific, concise, and focus on concrete problems and solutions.
+
+judge_system_prompt: |
+  You are a revision judge for scientific experiments. Your job is to determine whether an experiment has achieved its objectives or needs further revision.
+
+  Always respond with a valid JSON object containing your decision.
+
+init_prompt: |
+  # Experiment Setup
+
+  ## Data Summary
+  ```markdown
+  {{ data_summary }}
+  ```
+
+  ## User Objective
+  {{ user_query }}
+
+  ## Repository Source
+  {{ repo_source }}
+
+  Please modify the codebase to work with the described data structure. And finally give results based on the modified code.
+
+coding_subagent_query_prompt: |
+  # Coding Task
+
+  ## User Objective
+  {{ user_query }}
+
+  ## Repository Source
+  {{ repo_source }}
+
+  ## Guidelines
+
+  - If the repo is not cloned yet, clone it first; if it is cloned, proceed with the coding task.
+  - Try to set up the execution environment if not already set up. For Python projects, always use `uv` to manage the virtual environment.
+  - Provide a summary of the high-level changes made to the repo and instructions on how to run the code for the next execution step.
+
+  ## Forbidden Actions
+
+  - DO NOT perform long execution or training in this step; focus on code changes only. Only run short tests if needed to verify code changes.
+  - DO NOT analyze previous execution results here; just focus on adapting the code to the data and implementing necessary changes.
+  - DO NOT make hyperparameter tuning or complex model architecture changes unless explicitly required by the user query.
+  - DO NOT delete files that would not directly affect the coding task, like the README or documentation files.
+
+  {% if previous_coding_summaries %}
+  ---
+
+  ## Previous Revisions (Coding History)
+
+  **Learn from previous coding work:**
+
+  {% for summary_item in previous_coding_summaries %}
+  ### Revision {{ summary_item.revision }}
+  {{ summary_item.summary }}
+  {% endfor %}
+
+  {% endif %}
+  {% if current_revision > 0 %}
+  ---
+
+  ## Feedback for Current Revision
+
+  **Current Revision: {{ current_revision + 1 }}**
+
+  {% for feedback in revision_feedback_list %}
+  ### Revision {{ feedback.revision_number }}
+  {{ feedback.summary }}
+  {% endfor %}
+
+  ---
+
+  ## Accumulated Analysis
+  {{ revision_analysis }}
+  {% endif %}
+
+analysis_prompt: |
+  You are analyzing the results of Revision {{ revision_number }} of an experiment.
+
+  ## Coding Summary
+  {{ coding_summary }}
+
+  ## Execution Result
+  ```json
+  {{ exec_result }}
+  ```
+
+  ## Summary
+  {{ summary }}
+
+  ## Previous Analysis
+  {{ previous_analysis }}
+
+  ## Original Objective
+  {{ user_query }}
+
+  Please analyze this revision and provide insights:
+
+  1. **What went wrong?** - Identify any errors, failures, or issues encountered.
+  2. **What succeeded?** - Note any successful steps or partial achievements.
+  3. **Specific issues to fix** - List concrete problems that need to be addressed.
+  4. **Improvements for next revision** - Suggest actionable improvements.
+
+  Be specific and actionable. Focus on concrete problems and solutions.
+
+judge_prompt: |
+  Analyze the following experiment results and determine if revisions are needed.
+
+  ## Latest Summary
+  {{ latest_summary }}
+
+  ## Execution Result
+  ```json
+  {{ exec_result }}
+  ```
+
+  ## Accumulated Analysis
+  {{ revision_analysis }}
+
+  ## Original Objective
+  {{ user_query }}
+
+  Based on the above, determine:
+  1. Did the experiment achieve the objective?
+  2. If the experiment didn't give results, are there any errors or issues that need fixing? Otherwise than subtle improvements, you can consider it complete.
+  3. Is the code properly adapted to the data structure?
+
+  Respond with a JSON object:
+  ```json
+  {
+      "decision": "COMPLETE" or "CONTINUE",
+      "reason": "Brief explanation of your decision",
+      "issues_to_fix": ["list of specific issues if CONTINUE", "empty array if COMPLETE"]
+  }
+  ```
+
+revision_feedback_prompt: |
+  ## Revision Required (Attempt {{ attempt_number }})
+
+  **Reason:** {{ reason }}
+
+  **Issues to fix:**
+  {% for issue in issues_to_fix %}
+  - {{ issue }}
+  {% endfor %}
+
+  Please address these issues in the next revision. Focus on the specific problems identified above.

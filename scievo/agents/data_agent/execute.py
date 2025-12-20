@@ -33,8 +33,9 @@ BUILTIN_TOOLSETS = [
     # "todo",
     "state",
     "history",
+    "fs",
 ]
-ALLOWED_TOOLSETS = ["fs", "web"]
+ALLOWED_TOOLSETS = ["web"]
 
 
 def gateway_node(agent_state: DataAgentState) -> DataAgentState:
@@ -54,11 +55,16 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
 
     if (
         constant.REASONING_BANK_ENABLED
+        and len(agent_state.node_history) > 0
         and agent_state.node_history[-1] != "mem_extraction"
         and agent_state.round > 0
         and agent_state.round % constant.MEM_EXTRACTION_ROUND_FREQ == 0
     ):
         return "mem_extraction"
+
+    if len(agent_state.patched_history) == 0:
+        logger.warning("patched_history is empty, returning llm_chat")
+        return "llm_chat"
 
     last_msg = agent_state.patched_history[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
@@ -135,9 +141,20 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     for toolset in BUILTIN_TOOLSETS:
         tools.update(ToolRegistry.get_toolset(toolset))
 
+    # Ensure there's at least one non-system message for Anthropic API
+    history = agent_state.patched_history
+    if len(history) == 0 or all(msg.role == "system" for msg in history):
+        # Add a dummy user message if history is empty or only contains system messages
+        logger.warning(
+            "patched_history is empty or only contains system messages, adding dummy user message"
+        )
+        history = [
+            Message(role="user", content="Please continue with the task.", agent_sender=AGENT_NAME)
+        ]
+
     msg = ModelRegistry.completion(
         LLM_NAME,
-        agent_state.patched_history,
+        history,
         system_prompt=(
             Message(role="system", content=system_prompt)
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
@@ -303,7 +320,7 @@ def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
         )
         return agent_state
 
-    output_patch = res.get("output_patch", None)
+    output_patch = res.get("hc_output_patch", None)
     if output_patch:
         agent_state.history_patches.append(output_patch)
     else:
@@ -314,6 +331,55 @@ def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+
+    return agent_state
+
+
+def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
+    """Generate analysis summary and store it in agent state"""
+    logger.debug("generate_summary_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("generate_summary")
+
+    try:
+        # Construct a summary request message
+        summary_system_prompt = PROMPTS.data.summary_system_prompt
+        summary_user_prompt = PROMPTS.data.summary_user_prompt
+
+        agent_state.add_message(
+            Message(
+                role="user",
+                content=summary_user_prompt.render(),
+            ).with_log(cond=constant.LOG_SYSTEM_PROMPT)
+        )
+
+        # Call LLM to generate summary
+        summary_msg = ModelRegistry.completion(
+            LLM_NAME,
+            agent_state.patched_history,
+            system_prompt=summary_system_prompt.render(),
+            agent_sender=AGENT_NAME,
+        ).with_log()
+
+        agent_state.add_message(summary_msg)
+
+        # Extract summary content
+        if summary_msg.role != "assistant" or not summary_msg.content:
+            raise ValueError("Failed to get summary from LLM")
+
+        # Store summary in state
+        agent_state.output_summary = summary_msg.content
+        logger.info("Analysis summary generated successfully")
+
+    except Exception as e:
+        error_msg = f"Failed to generate analysis summary: {sprint_chained_exception(e)}"
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=error_msg,
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+        logger.error("generate_summary_node failed: {}", error_msg)
 
     return agent_state
 
@@ -329,6 +395,9 @@ def critic_node(agent_state: DataAgentState) -> DataAgentState:
         return agent_state
 
     try:
+        current_plan = (
+            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else "N/A"
+        )
         res = critic_subgraph_compiled.invoke(
             critic_agent.CriticAgentState(
                 input_msgs=agent_state.patched_history[-constant.CRITIC_CONTEXT_WINDOW :],
