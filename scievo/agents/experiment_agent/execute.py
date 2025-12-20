@@ -70,7 +70,9 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     revision_feedback_list = []
     if agent_state.revision_summaries:
         for i, summary in enumerate(agent_state.revision_summaries):
-            revision_feedback_list.append({"revision_number": i + 1, "summary": summary})
+            revision_feedback_list.append(
+                {"revision_number": i + 1, "summary": summary}
+            )
 
     # Collect all previous coding summaries
     previous_coding_summaries = []
@@ -136,32 +138,17 @@ def run_exec_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentState
     logger.info(f"Running Exec Subagent (revision {agent_state.current_revision})")
     agent_state.current_phase = "exec"
 
-    # Get current and previous coding summaries
-    current_loop = agent_state.loop_results[-1] if agent_state.loop_results else {}
-    current_coding_summary = current_loop.get("coding_summary", "No coding summary available")
-
-    # Collect all previous coding summaries
-    previous_coding_summaries_text = ""
-    if len(agent_state.loop_results) > 1:
-        previous_coding_summaries_text = "\n\n## Previous Coding Summaries\n"
-        for i, loop in enumerate(agent_state.loop_results[:-1]):
-            prev_summary = loop.get("coding_summary", "")
-            if prev_summary:
-                previous_coding_summaries_text += f"\n### Revision {i}\n{prev_summary}\n"
-
-    # Build exec query with coding context
-    exec_query = f"""Run the modified code/experiments and verify the output.
-
-## Current Revision Coding Summary
-{current_coding_summary}
-{previous_coding_summaries_text}
-
-Please execute and verify based on the changes described above."""
+    # Collect all coding summaries from loop results
+    coding_summaries = [
+        loop.get("coding_summary", "")
+        for loop in agent_state.loop_results
+        if loop.get("coding_summary")
+    ]
 
     exec_state = ExecAgentState(
-        user_query=exec_query,
+        user_query="Run the modified code/experiments and verify the output.",
         workspace=agent_state.workspace,
-        history=agent_state.history.copy(),
+        coding_summaries=coding_summaries if coding_summaries else None,
         toolsets=["exec"],
     )
 
@@ -177,7 +164,9 @@ Please execute and verify based on the changes described above."""
         agent_state.loop_results
         and agent_state.loop_results[-1].get("revision") == agent_state.current_revision
     ):
-        agent_state.loop_results[-1]["exec_result"] = result_state["execution_summary_dict"]
+        agent_state.loop_results[-1]["exec_result"] = result_state[
+            "execution_summary_dict"
+        ]
 
     return agent_state
 
@@ -229,7 +218,9 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Use LLM to analyze the loop
     analysis_prompt = PROMPTS.experiment_agent.analysis_prompt.render(
         revision_number=agent_state.current_revision + 1,
-        coding_summary=current_loop.get("coding_summary", "No coding summary available"),
+        coding_summary=current_loop.get(
+            "coding_summary", "No coding summary available"
+        ),
         exec_result=json.dumps(current_loop.get("exec_result", {}), indent=2),
         summary=current_loop.get("summary", "No summary available"),
         previous_analysis=agent_state.revision_analysis or "No previous analysis.",
@@ -253,9 +244,7 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Accumulate analysis
     analysis_text = response.content
     if agent_state.revision_analysis:
-        agent_state.revision_analysis += (
-            f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
-        )
+        agent_state.revision_analysis += f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
     else:
         agent_state.revision_analysis = (
             f"## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
@@ -265,7 +254,9 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     try:
         import os
 
-        analysis_dir = os.path.join(agent_state.workspace.working_dir, "experiment_analyses")
+        analysis_dir = os.path.join(
+            agent_state.workspace.working_dir, "experiment_analyses"
+        )
         os.makedirs(analysis_dir, exist_ok=True)
 
         analysis_file = os.path.join(
@@ -308,7 +299,11 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         if agent_state.revision_summaries
         else "No summary available"
     )
-    exec_result = agent_state.all_execution_results[-1] if agent_state.all_execution_results else {}
+    exec_result = (
+        agent_state.all_execution_results[-1]
+        if agent_state.all_execution_results
+        else {}
+    )
 
     # Use LLM to judge whether revision is needed (with accumulated analysis)
     judge_prompt = PROMPTS.experiment_agent.judge_prompt.render(

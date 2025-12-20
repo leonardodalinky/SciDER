@@ -67,9 +67,24 @@ exec_user_prompt: |
   Execute the following experiment:
 
   {{ user_query }}
+  {% if coding_summaries %}
 
-  Use the `exec` toolset to run the necessary commands in the shell session initially located at:
-  {{ working_dir }}
+  ## Coding Summaries from Previous Revisions
+
+  The following summaries describe the code changes made in each revision:
+  {% for summary in coding_summaries %}
+  ====== Revision {{ loop.index }} ======
+  {{ summary }}
+  ====== End of Revision {{ loop.index }} ======
+  {% endfor %}
+
+  Please execute the running script and verify based on the changes described above.
+  {% endif %}
+
+  ## Simple Guidelines
+
+  * Use the `exec` toolset to run any necessary commands in the shell session
+  * The workspace is initially located at: {{ working_dir }}
 
   Proceed autonomously. When all necessary commands have been executed, simply respond confirming completion without calling any more tools.
 
@@ -86,12 +101,15 @@ summary_user_prompt: |
   ```json
   {
     "status": "Success" or "Failed",
-    "commands_executed": ["command 1", "command 2", ...],
+    "commands_executed": ["command 1", "command 2", "brief summary of long command if necessary"...],
     "key_outputs": "Highlight any important output or results",
     "errors_issues": "Note any errors or issues encountered, or 'None' if successful"
   }
   ```
 
+  If the command in `commands_executed` is long, provide a brief summary of what it was intended to do instead of the full command.
+
+  Ensure the JSON is well-formed and valid.
   Return ONLY the JSON, no additional text.
 
 monitoring_system_prompt: |

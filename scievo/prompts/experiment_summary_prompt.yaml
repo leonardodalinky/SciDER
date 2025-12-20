@@ -69,7 +69,8 @@ summary_prompt: |
   Describe the training process, including status, steps executed, and key observations.
 
   ## Evaluation Results
-  Summarize the evaluation results and any output files generated.
+  - Summarize the evaluation results and any output files generated.
+  - Make sure to include key metrics and their raw values.
 
   ## Files Analyzed
   List of files that were read to generate this summary.

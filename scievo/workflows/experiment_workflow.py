@@ -197,26 +197,29 @@ class ExperimentWorkflow(BaseModel):
 
     def _compose_summary(self, exp_state: ExperimentAgentState) -> str:
         """Compose the final summary."""
-        return f"""# Experiment Workflow Summary
+        DATA_SUMMARY_LIMITS = 2000
+        return f"""\
+=== Experiment Workflow Summary ===
 
-## Data Analysis (Input)
+====== Data Analysis (Input) ======
 
-{self.data_summary[:500]}{'...' if len(self.data_summary) > 500 else ''}
-
----
-
-## Experiment Results
-
-{exp_state.final_summary}
+{self.data_summary[:DATA_SUMMARY_LIMITS]}{'...' if len(self.data_summary) > DATA_SUMMARY_LIMITS else ''}
 
 ---
 
-## Workflow Metadata
+====== Workflow Metadata ======
 
 - **Workspace**: {self.workspace_path}
 - **Repo Source**: {self.repo_source or 'Not specified'}
 - **Final Status**: {self.final_status}
 - **Total Revisions**: {exp_state.current_revision}
+
+---
+
+====== Experiment Results ======
+
+{exp_state.final_summary}
+
 """
 
     def _finalize(self, success: bool):
