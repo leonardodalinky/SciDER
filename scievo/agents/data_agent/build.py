@@ -12,6 +12,12 @@ mem_consolidation_subgraph = mem_consolidation.build()
 mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
 
 
+def finialize_node(agent_state: DataAgentState) -> DataAgentState:
+    """A finalization node to do any final processing before ending the graph."""
+    # Here we can add any final steps needed before ending the graph.
+    return agent_state
+
+
 def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
     assert agent_state.talk_mode
     agent_state.remaining_plans = ["Response to users' query."]
@@ -52,6 +58,8 @@ def build():
     g.add_node("history_compression", execute.history_compression_node)
     # g.add_node("critic", execute.critic_node) # not used for now
     g.add_node("critic_before_replan", execute.critic_node)
+    g.add_node("finalize", finialize_node)
+    g.add_node("generate_summary", execute.generate_summary_node)
     g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
     # edges from gateway to nodes
@@ -83,8 +91,11 @@ def build():
         plan.should_replan,
         [
             "gateway",
-            "prepare_for_talk_mode",
+            "finalize",
         ],
     )
+    # edges from nodes to end
+    g.add_edge("finalize", "generate_summary")
+    g.add_edge("generate_summary", "prepare_for_talk_mode")
     g.add_edge("prepare_for_talk_mode", END)
     return g

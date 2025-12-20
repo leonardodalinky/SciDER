@@ -85,7 +85,7 @@ user_prompt: |
   - {{ dir }}
   {%- endif %}
 
-  After you have understood the files, switch to `fs` toolset and save all your findings to a markdown file `./data_analysis.md` using `save_file` tool.
+  Focus on analyzing the data and provide comprehensive insights about its structure, content, and relationships.
 
 planner_system_prompt: |
   {%- if not is_replanner %}
@@ -205,3 +205,18 @@ replanner_user_prompt: |
 replanner_user_response: |
   Look good to me. Now proceed to the next step:
   {{ next_step }}
+
+summary_system_prompt: |
+  You are an expert at summarizing data analysis. Provide a comprehensive and well-structured summary of the data analysis work that has been completed.
+  Note that the summary should be in clear markdown format.
+
+summary_user_prompt: |
+  Based on the analysis conversation above, please provide a detailed and comprehensive summary that includes:
+
+  1. **Overview**: Brief summary of what was analyzed and the key objectives
+  2. **Data Characteristics**: Summary of the data structure, formats, and key properties identified
+  3. **Key Findings**: Main discoveries and insights about the data
+  4. **Data Quality**: Any issues or patterns noted in the data quality
+  5. **Recommendations**: Any suggested next steps or recommendations based on the analysis
+
+  Format the summary in clear sections with headers. Be thorough but concise.

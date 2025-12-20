@@ -304,22 +304,45 @@ def run_experiment_workflow(
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    if len(sys.argv) < 3:
-        print(
-            "Usage: python -m scievo.workflows.experiment_workflow <workspace_path> <user_query> [data_analysis_path]"
-        )
-        sys.exit(1)
-
-    result = run_experiment_workflow(
-        workspace_path=sys.argv[1],
-        user_query=sys.argv[2],
-        data_analysis_path=sys.argv[3] if len(sys.argv) > 3 else None,
+    parser = argparse.ArgumentParser(
+        description="Experiment Workflow - Run ExperimentAgent for code generation and execution",
+        prog="python -m scievo.workflows.experiment_workflow",
+    )
+    parser.add_argument("workspace_path", help="Workspace directory for the workflow")
+    parser.add_argument("user_query", help="User's experiment objective")
+    parser.add_argument(
+        "data_analysis_path",
+        nargs="?",
+        default=None,
+        help="Path to existing data_analysis.md file (optional)",
+    )
+    parser.add_argument(
+        "--recursion-limit",
+        type=int,
+        default=100,
+        help="Recursion limit for ExperimentAgent (default: 100)",
+    )
+    parser.add_argument(
+        "--max-revisions",
+        type=int,
+        default=5,
+        help="Maximum revision loops (default: 5)",
     )
 
-    print("\n" + "=" * 80)
+    args = parser.parse_args()
+
+    result = run_experiment_workflow(
+        workspace_path=args.workspace_path,
+        user_query=args.user_query,
+        data_analysis_path=args.data_analysis_path,
+        recursion_limit=args.recursion_limit,
+        max_revisions=args.max_revisions,
+    )
+
+    print("\n" + get_separator())
     print("EXPERIMENT WORKFLOW COMPLETE")
-    print("=" * 80)
+    print(get_separator())
     print(f"\nStatus: {result.final_status}")
     print(f"\nFinal Summary:\n{result.final_summary}")

@@ -36,6 +36,8 @@ class DataPrompts:
     planner_system_prompt: Template
     replanner_user_prompt: Template
     replanner_user_response: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
 
 
 @dataclass
@@ -132,23 +134,35 @@ def init():
     global PROMPTS
 
     PROMPTS = Prompts(
-        dummy=parse_yaml_as_templates(DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")),
-        data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
-        rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
-        history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
+        dummy=parse_yaml_as_templates(
+            DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")
+        ),
+        data=parse_yaml_as_templates(
+            DataPrompts, os.path.join(DIR, "data_prompt.yaml")
+        ),
+        rbank=parse_yaml_as_templates(
+            RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")
+        ),
+        history=parse_yaml_as_templates(
+            HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")
+        ),
         experiment_coding=parse_yaml_as_templates(
             ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
         ),
         experiment_coding_v2=parse_yaml_as_templates(
-            ExperimentCodingV2Prompts, os.path.join(DIR, "experiment_coding_prompt_v2.yaml")
+            ExperimentCodingV2Prompts,
+            os.path.join(DIR, "experiment_coding_prompt_v2.yaml"),
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
         ),
         experiment_summary=parse_yaml_as_templates(
-            ExperimentSummaryPrompts, os.path.join(DIR, "experiment_summary_prompt.yaml")
+            ExperimentSummaryPrompts,
+            os.path.join(DIR, "experiment_summary_prompt.yaml"),
         ),
-        critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
+        critic=parse_yaml_as_templates(
+            CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")
+        ),
         experiment_agent=parse_yaml_as_templates(
             ExperimentAgentPrompts, os.path.join(DIR, "experiment_agent_prompt.yaml")
         ),
