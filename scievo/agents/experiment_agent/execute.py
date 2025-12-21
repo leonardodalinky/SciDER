@@ -15,8 +15,8 @@ from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
 
-from .coding_subagent_v2_claude import build as coding_build_claude
-from .coding_subagent_v2_claude.state import CodingAgentState as ClaudeCodingAgentState
+from .coding_subagent_v3_claude import build as coding_build_claude
+from .coding_subagent_v3_claude.state import CodingAgentState as ClaudeCodingAgentState
 
 # from .coding_subagent_v2 import build as coding_build
 # from .coding_subagent_v2.state import CodingAgentState
