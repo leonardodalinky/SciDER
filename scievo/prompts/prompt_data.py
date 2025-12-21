@@ -23,6 +23,7 @@ class Prompts:
     experiment_coding_v2: "ExperimentCodingV2Prompts"
     experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
     experiment_agent: "ExperimentAgentPrompts"
+    paper_subagent: "PaperSubagentPrompts"
 
 
 @dataclass
@@ -126,6 +127,12 @@ class ExperimentClaudeCodingV2Prompts:
     user_prompt: Template
 
 
+@dataclass
+class PaperSubagentPrompts:
+    summary_system_prompt: Template
+    summary_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -169,6 +176,9 @@ def init():
         critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
         experiment_agent=parse_yaml_as_templates(
             ExperimentAgentPrompts, os.path.join(DIR, "experiment_agent_prompt.yaml")
+        ),
+        paper_subagent=parse_yaml_as_templates(
+            PaperSubagentPrompts, os.path.join(DIR, "paper_subagent_prompt.yaml")
         ),
     )
 

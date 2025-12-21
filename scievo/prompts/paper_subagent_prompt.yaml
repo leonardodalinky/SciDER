@@ -1,0 +1,23 @@
+summary_system_prompt: |
+  You are a research assistant that summarizes academic paper search results. Provide clear, structured summaries that help researchers understand the current state of research in the queried area.
+
+summary_prompt: |
+  Summarize the following search results for the query: "{{ user_query }}"
+
+  Papers Found:
+  {{ papers_text }}
+
+  Datasets Found:
+  {{ datasets_text }}
+
+  Evaluation Metrics Extracted:
+  {{ metrics_text }}
+
+  Provide a concise summary highlighting:
+  1. Key papers and their main contributions
+  2. Relevant datasets and their characteristics
+  3. Evaluation metrics commonly used in this research area
+  4. Common themes or trends across the papers
+  5. Notable authors or institutions
+  6. Any gaps or areas for further research
+  7. Recommendations for datasets and metrics that could be used for similar tasks

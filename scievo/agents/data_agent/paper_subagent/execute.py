@@ -11,6 +11,7 @@ from loguru import logger
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import unwrap_dict_from_toon
+from scievo.prompts.prompt_data import PROMPTS
 from scievo.tools.arxiv_tool import search_papers
 from scievo.tools.dataset_search_tool import search_datasets
 from scievo.tools.metric_search_tool import extract_metrics_from_papers
@@ -255,37 +256,26 @@ def summary_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
     else:
         metrics_text = "No metrics extracted."
 
+    # Render summary prompt from template
+    summary_prompt_content = PROMPTS.paper_subagent.summary_prompt.render(
+        user_query=agent_state.user_query,
+        papers_text=papers_text,
+        datasets_text=datasets_text,
+        metrics_text=metrics_text,
+    )
     summary_prompt = Message(
         role="user",
-        content=f"""Summarize the following search results for the query: "{agent_state.user_query}"
-
-Papers Found:
-{papers_text}
-
-Datasets Found:
-{datasets_text}
-
-Evaluation Metrics Extracted:
-{metrics_text}
-
-Provide a concise summary highlighting:
-1. Key papers and their main contributions
-2. Relevant datasets and their characteristics
-3. Evaluation metrics commonly used in this research area
-4. Common themes or trends across the papers
-5. Notable authors or institutions
-6. Any gaps or areas for further research
-7. Recommendations for datasets and metrics that could be used for similar tasks
-""",
+        content=summary_prompt_content,
         agent_sender=AGENT_NAME,
     )
     agent_state.add_message(summary_prompt)
 
     # Get summary from LLM
+    system_prompt = PROMPTS.paper_subagent.summary_system_prompt.render()
     msg = ModelRegistry.completion(
         LLM_NAME,
         agent_state.patched_history,
-        system_prompt="You are a research assistant that summarizes academic paper search results. Provide clear, structured summaries that help researchers understand the current state of research in the queried area.",
+        system_prompt=system_prompt,
         agent_sender=AGENT_NAME,
         tools=None,  # No tools needed for summary
     ).with_log()
