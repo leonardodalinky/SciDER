@@ -68,6 +68,7 @@ class FullWorkflow(BaseModel):
     data_agent_recursion_limit: int = 100
     experiment_agent_recursion_limit: int = 100
     session_name: str | None = None  # Optional custom session name
+    data_desc: str | None = None  # Optional additional description of the data
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal[
@@ -159,6 +160,7 @@ class FullWorkflow(BaseModel):
             data_path=self.data_path,
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
+            data_desc=self.data_desc,
             # Pass Brain-managed directories
             sess_dir=self.sess_dir,
             long_term_mem_dir=self.long_term_mem_dir,
@@ -295,6 +297,7 @@ def run_full_workflow(
     data_agent_recursion_limit: int = 100,
     experiment_agent_recursion_limit: int = 100,
     session_name: str | None = None,
+    data_desc: str | None = None,
 ) -> FullWorkflow:
     """
     Convenience function to run the full SciEvo workflow.
@@ -308,6 +311,7 @@ def run_full_workflow(
         data_agent_recursion_limit: Recursion limit for DataAgent (default=100)
         experiment_agent_recursion_limit: Recursion limit for ExperimentAgent (default=100)
         session_name: Optional custom session name (otherwise uses timestamp)
+        data_desc: Optional additional description of the data
 
     Returns:
         FullWorkflow: Completed workflow with results
@@ -337,6 +341,7 @@ def run_full_workflow(
         data_agent_recursion_limit=data_agent_recursion_limit,
         experiment_agent_recursion_limit=experiment_agent_recursion_limit,
         session_name=session_name,
+        data_desc=data_desc,
     )
     return workflow.run()
 
@@ -382,6 +387,11 @@ if __name__ == "__main__":
         default=None,
         help="Custom session name (otherwise uses timestamp)",
     )
+    parser.add_argument(
+        "--data-desc",
+        default=None,
+        help="Optional additional description of the data",
+    )
 
     args = parser.parse_args()
 
@@ -394,6 +404,7 @@ if __name__ == "__main__":
         data_agent_recursion_limit=args.data_recursion_limit,
         experiment_agent_recursion_limit=args.experiment_recursion_limit,
         session_name=args.session_name,
+        data_desc=args.data_desc,
     )
 
     print("\n" + get_separator())

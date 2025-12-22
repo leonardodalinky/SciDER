@@ -65,10 +65,10 @@ exec_system_prompt: |
 
 exec_user_prompt: |
   Execute the following experiment:
-
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% if coding_summaries %}
-
   ## Coding Summaries from Previous Revisions
 
   The following summaries describe the code changes made in each revision:

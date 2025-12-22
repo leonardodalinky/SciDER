@@ -48,7 +48,9 @@ user_prompt: |
   {% endif %}
   Here are the trajectory of the {% if is_data_agent %}data{% elif is_exp_agent %}experiment{% endif %} agent:
 
-  {{ trajectory_text }}
+  {%- for line in trajectory_text.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   {% if is_data_agent %}
   Now try to criticize the data agent's process or findings.

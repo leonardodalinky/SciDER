@@ -84,7 +84,14 @@ user_prompt: |
   Directory:
   - {{ dir }}
   {%- endif %}
-
+  {% if data_desc %}
+  ## Additional Data Description
+  {%- for line in data_desc.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
+  {%- endif %}
+  ---
+  Your task is to analyze the data provided.
   Focus on analyzing the data and provide comprehensive insights about its structure, content, and relationships.
 
 planner_system_prompt: |
@@ -175,8 +182,9 @@ replanner_user_prompt: |
   Now you can access the history of the conversation.
   {% if user_query %}
   ## Original User Query
-
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% endif %}
   ## Original Plan
   {% for step in plan %}

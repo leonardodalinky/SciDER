@@ -28,7 +28,10 @@ register_toolset_desc("fs", "File system toolset.")
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Filesystem path to inspect"}
+                    "path": {
+                        "type": "string",
+                        "description": "Filesystem path to inspect",
+                    }
                 },
                 "required": ["path"],
             },
@@ -250,8 +253,14 @@ def read_file(path: str, max_char: int = 32000) -> str:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to the file to write"},
-                    "content": {"type": "string", "description": "Content to write to the file"},
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to write",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file",
+                    },
                 },
                 "required": ["path", "content"],
             },
@@ -259,6 +268,9 @@ def read_file(path: str, max_char: int = 32000) -> str:
     },
 )
 def save_file(path: str, content: str) -> str:
+    dir_path = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(dir_path):
+        return f"Error: Directory '{dir_path}' does not exist. Please create it first using the 'create_dir' tool."
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -277,7 +289,10 @@ def save_file(path: str, content: str) -> str:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Directory path to create"},
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to create",
+                    },
                 },
                 "required": ["path"],
             },

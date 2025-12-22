@@ -1,0 +1,22 @@
+{
+    "sync-rsync.local": "/home/link/github/SciEvo",
+    "sync-rsync.remote": "klin07@astral-8xA30-jump:~/rsync/SciEvo",
+    "sync-rsync.onSave": false,
+    "sync-rsync.onSaveIndividual": true,
+    "sync-rsync.delete": false,
+    "sync-rsync.exclude": [
+        ".vscode/",
+        "**/__pycache__/",
+        "**/*.pyc",
+        ".git/",
+        ".ipynb_checkpoints/",
+        "**/.venv/",
+        "**/.DS_Store",
+        "**/.pytest_cache/",
+        // tmp files
+        "**/tmp_*",
+        // project specific
+        "sth_large/"
+    ],
+    "sync-rsync.useWSL": true
+}

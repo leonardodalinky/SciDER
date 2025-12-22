@@ -69,12 +69,14 @@ user_prompt: |
   You are given a summary from the data agent about the structure and understanding of the data. Your task is to adapt the codebase to the data and implement the necessary changes to handle the data.
 
   ## Data Summary
-
-  {{ data_summary }}
+  {%- for line in data_summary.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% if user_query %}
   ## User Query
-
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% endif %}
   Be specific in your instructions to the code subagent. Include:
   - Context / background information about the data, the task and the codebase itself
@@ -152,8 +154,9 @@ replanner_user_prompt: |
   Now you can access the history of the conversation.
   {% if user_query %}
   ## Original User Query
-
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% endif %}
 
   ## Original Plan

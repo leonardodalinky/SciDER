@@ -56,6 +56,7 @@ class DataWorkflow(BaseModel):
     data_path: Path
     workspace_path: Path
     recursion_limit: int = 100
+    data_desc: str | None = None  # Optional additional description of the data
 
     # Memory directories (optional - if None, will create new Brain session)
     sess_dir: Path | None = None
@@ -144,7 +145,10 @@ class DataWorkflow(BaseModel):
         self.current_phase = "data_analysis"
 
         # Construct query for data analysis
-        data_query = PROMPTS.data.user_prompt.render(dir=str(self.data_path))
+        data_query = PROMPTS.data.user_prompt.render(
+            dir=str(self.data_path),
+            data_desc=self.data_desc,
+        )
 
         # Prepare state
         data_state = DataAgentState(
@@ -153,6 +157,7 @@ class DataWorkflow(BaseModel):
             long_term_mem_dir=Path(self.long_term_mem_dir),
             project_mem_dir=Path(self.project_mem_dir),
             user_query=data_query,
+            data_desc=self.data_desc,
             talk_mode=False,
         )
 
@@ -222,6 +227,7 @@ def run_data_workflow(
     sess_dir: str | Path | None = None,
     long_term_mem_dir: str | Path | None = None,
     project_mem_dir: str | Path | None = None,
+    data_desc: str | None = None,
 ) -> DataWorkflow:
     """
     Convenience function to run the data analysis workflow.
@@ -234,6 +240,7 @@ def run_data_workflow(
         sess_dir: Optional session directory (if None, creates new Brain session)
         long_term_mem_dir: Optional long-term memory directory
         project_mem_dir: Optional project memory directory
+        data_desc: Optional additional description of the data
 
     Returns:
         DataWorkflow: Completed workflow with results
@@ -269,6 +276,7 @@ def run_data_workflow(
         long_term_mem_dir=Path(long_term_mem_dir) if long_term_mem_dir else None,
         project_mem_dir=Path(project_mem_dir) if project_mem_dir else None,
         session_name=session_name,
+        data_desc=data_desc,
     )
     return workflow.run()
 
