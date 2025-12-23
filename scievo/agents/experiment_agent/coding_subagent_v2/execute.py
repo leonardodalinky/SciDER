@@ -41,12 +41,16 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
         # Construct the message for OpenHands
         instruction = agent_state.user_query or "No specific coding task provided."
         bg_info = agent_state.data_summary or "No background information available."
+        # prefix with `> ` for markdown blockquote
+        instruction = "\n".join([f"> {line}" for line in instruction.splitlines()])
+        bg_info = "\n".join([f"> {line}" for line in bg_info.splitlines()])
         workspace_dir = os.path.abspath(agent_state.workspace.working_dir)
 
         message = f"""\
 # Requirements:
 - At the end of your response, provide a detailed explanation of what you did and why.
 - Ensure that all changes are made in a way that maintains the integrity of the codebase.
+- Avoid long-running executions of training or data processing; focus on code changes. If needed for code testing, design some simple test code instead.
 
 # Workspace
 {workspace_dir}
@@ -73,11 +77,9 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
             for e in reversed(conversation.state.events):
                 if e.source == "agent":
                     last_response = "\n".join([c.text for c in e.llm_message.content])
-                break
+                    break
             else:
-                last_response = (
-                    "Coding task completed (no detailed response available)."
-                )
+                last_response = "Coding task completed (no detailed response available)."
         else:
             last_response = "Coding task completed (no detailed response available)."
 
@@ -139,8 +141,6 @@ def summary_node(agent_state: CodingAgentState) -> CodingAgentState:
     agent_state.output_summary = msg.content or ""
     agent_state.add_message(msg)
 
-    logger.info(
-        f"Coding task summary generated: {len(agent_state.output_summary)} characters"
-    )
+    logger.info(f"Coding task summary generated: {len(agent_state.output_summary)} characters")
 
     return agent_state

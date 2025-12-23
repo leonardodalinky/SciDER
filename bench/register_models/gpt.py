@@ -7,9 +7,9 @@ from pydantic import BaseModel
 
 from scievo.core.llms import ModelRegistry
 
-LOW_COST_MODEL = "gpt-4o-mini"
-MEDIUM_COST_MODEL = "gpt-4o"
-HIGH_COST_MODEL = "o1"
+LOW_COST_MODEL = "gpt-5-nano"
+MEDIUM_COST_MODEL = "gpt-5-mini"
+HIGH_COST_MODEL = "gpt-5.2"
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -33,8 +33,6 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -44,8 +42,6 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -98,8 +94,6 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -109,8 +103,6 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
         reasoning={
             "effort": "minimal",
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -142,8 +134,6 @@ def register_gpt_medium_high_models(reasoning: str = "medium"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -153,8 +143,6 @@ def register_gpt_medium_high_models(reasoning: str = "medium"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -206,8 +194,6 @@ def register_gpt_medium_high_models(reasoning: str = "medium"):
         reasoning={
             "effort": reasoning,
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -217,8 +203,6 @@ def register_gpt_medium_high_models(reasoning: str = "medium"):
         reasoning={
             "effort": "minimal",
         },
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(

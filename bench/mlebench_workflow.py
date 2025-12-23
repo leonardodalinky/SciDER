@@ -10,7 +10,11 @@ MLE-Bench provides:
 This wrapper register models, reads these files, builds user_query, and invokes FullWorkflow.
 """
 
+import sys
 from pathlib import Path
+
+# Add parent directory to path to find scievo and bench modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
 
