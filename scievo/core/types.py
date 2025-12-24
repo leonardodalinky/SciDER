@@ -192,16 +192,21 @@ class Message(LLMessage):
         if cond is not None and not cond:
             return self
 
+        from rich.markup import escape
+
+        text = self.to_plain_text(verbose_tool=True)
+        text = escape(text)
+
         if self.agent_sender:
             text = f"""
 --- Message from `{self.role}` of Agent `{self.agent_sender}`  ---
-{self.to_plain_text(verbose_tool=True)}
+{text}
 --- Message End ---
 """
         else:
             text = f"""
 --- Message from `{self.role}`  ---
-{self.to_plain_text(verbose_tool=True)}
+{text}
 --- Message End ---
 """
         console.print(text, style=styles.get(self.role, Style()))

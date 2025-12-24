@@ -84,7 +84,14 @@ user_prompt: |
   Directory:
   - {{ dir }}
   {%- endif %}
-
+  {% if data_desc %}
+  ## Additional Data Description
+  {%- for line in data_desc.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
+  {%- endif %}
+  ---
+  Your task is to analyze the data provided.
   Focus on analyzing the data and provide comprehensive insights about its structure, content, and relationships.
 
 planner_system_prompt: |
@@ -120,7 +127,10 @@ planner_system_prompt: |
   - **Content summary**: Provide brief statistics (counts, unique values, common patterns)
   - **Special values**: Identify special markers (NaN, NULL, empty strings, sentinel values)
 
-  Important: Only read a small sample of data (e.g., first 10-50 rows) to avoid overwhelming the context. Do not load entire large datasets into memory. Also, avoid reading binary data files using text tools.
+  ## Must read only a small sample of data
+
+  IMPORTANT: Only read a small sample of data (e.g., first 10-50 rows) to avoid overwhelming the context. Do not load entire large datasets into memory. Also, avoid reading binary data files using text tools.
+  IMPORTANT: Do not attempt to read a large file entirely! Maybe just read the first few lines or bytes.
 
   ## Data Relationships
 
@@ -175,8 +185,9 @@ replanner_user_prompt: |
   Now you can access the history of the conversation.
   {% if user_query %}
   ## Original User Query
-
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   {% endif %}
   ## Original Plan
   {% for step in plan %}

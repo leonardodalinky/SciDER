@@ -15,12 +15,14 @@ init_prompt: |
   # Experiment Setup
 
   ## Data Summary
-  ```markdown
-  {{ data_summary }}
-  ```
+  {%- for line in data_summary.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   ## User Objective
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   ## Repository Source
   {{ repo_source }}
@@ -31,7 +33,9 @@ coding_subagent_query_prompt: |
   # Coding Task
 
   ## User Objective
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   ## Repository Source
   {{ repo_source }}
@@ -98,7 +102,9 @@ analysis_prompt: |
   {{ previous_analysis }}
 
   ## Original Objective
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   Please analyze this revision and provide insights:
 
@@ -124,7 +130,9 @@ judge_prompt: |
   {{ revision_analysis }}
 
   ## Original Objective
-  {{ user_query }}
+  {%- for line in user_query.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
 
   Based on the above, determine:
   1. Did the experiment achieve the objective?

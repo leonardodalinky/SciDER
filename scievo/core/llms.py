@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from threading import RLock
+from time import sleep
 from typing import Callable
 
 import litellm
 from functional import seq
+from litellm import RateLimitError
 from litellm.types.utils import Usage
 from loguru import logger
 
@@ -69,7 +71,28 @@ class ModelRegistry:
         return self.models[name]
 
     @classmethod
-    def completion(
+    def completion(cls, *args, **kwargs) -> Message:
+        # completion with retry for RateLimitError
+        max_retries = 3
+        retry_delay = 60  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                return cls._completion(*args, **kwargs)
+            except RateLimitError as e:
+                if attempt == max_retries - 1:
+                    # Last attempt failed, re-raise
+                    logger.error(f"RateLimitError after {max_retries} attempts: {str(e)}")
+                    raise
+                # Wait and retry
+                logger.warning(
+                    f"RateLimitError on attempt {attempt + 1}/{max_retries}. "
+                    f"Waiting {retry_delay}s before retry... Error: {str(e)}"
+                )
+                sleep(retry_delay)
+
+    @classmethod
+    def _completion(
         cls,
         name: str,
         history: list[Message],

@@ -30,7 +30,9 @@ class HistoryCompressionState(BaseModel):
     hc_output_patch: HistoryState.HistoryPatch | None = None
 
 
-def validate_compression_input(state: HistoryCompressionState) -> HistoryCompressionState:
+def validate_compression_input(
+    state: HistoryCompressionState,
+) -> HistoryCompressionState:
     """Validate the input parameters for compression."""
     logger.debug("validate_compression_input")
 
@@ -50,14 +52,30 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
     logger.debug("compress_history_node")
 
     try:
-
-        # Get messages to compress
-        # messages = state.input_history_state.get_history_range(state.start_idx, state.end_idx)
+        match (
+            last_kept_msg := state.hc_input_history_state.patched_history[
+                state.hc_keep_first_n_messages - 1
+            ]
+        ).role:
+            case "user":
+                keep_first_n_messages = state.hc_keep_first_n_messages
+            case "assistant":
+                if last_kept_msg.tool_calls and len(last_kept_msg.tool_calls) > 0:
+                    # if the last kept message has tool calls, backtrack one more message
+                    keep_first_n_messages = state.hc_keep_first_n_messages - 1
+                else:
+                    keep_first_n_messages = state.hc_keep_first_n_messages
+            case "tool":
+                # find the last assistant message before this
+                for i in range(state.hc_keep_first_n_messages - 2, -1, -1):
+                    if state.hc_input_history_state.patched_history[i].role == "assistant":
+                        keep_first_n_messages = i + 1
+                        keep_first_n_messages -= (
+                            1  # also drop the assistant msg that called the tool
+                        )
 
         # Skip the first n messages as specified
-        history_to_process = state.hc_input_history_state.patched_history[
-            state.hc_keep_first_n_messages :
-        ]
+        history_to_process = state.hc_input_history_state.patched_history[keep_first_n_messages:]
 
         messages_to_compress: list[Message] = []
         n_tokens = 0
@@ -71,18 +89,31 @@ def compress_history_node(state: HistoryCompressionState) -> HistoryCompressionS
             n_tokens += msg.n_tokens
 
         # if last msg has tool call, add those tool msgs too
-        if messages_to_compress[-1].tool_calls and len(messages_to_compress[-1].tool_calls) > 0:
-            start_index_in_full_history = state.hc_keep_first_n_messages + len(messages_to_compress)
-            for msg in state.hc_input_history_state.patched_history[start_index_in_full_history:]:
-                if msg.role != "tool":
-                    break
-                messages_to_compress.append(msg)
-                n_tokens += msg.n_tokens
+        match (last_msg := messages_to_compress[-1]).role:
+            case "user":
+                pass
+            case "assistant":
+                if last_msg.tool_calls and len(last_msg.tool_calls) > 0:
+                    messages_to_compress.extend(
+                        history_to_process[
+                            len(messages_to_compress) : len(messages_to_compress)
+                            + len(last_msg.tool_calls)
+                        ]
+                    )
+            case "tool":
+                # include all the following tool messages
+                for msg in history_to_process[len(messages_to_compress) :]:
+                    if msg.role == "tool":
+                        messages_to_compress.append(msg)
+                    else:
+                        break
+            case _:
+                pass
 
         assert len(messages_to_compress) > 0
 
-        start_idx = state.hc_keep_first_n_messages
-        end_idx = state.hc_keep_first_n_messages + len(messages_to_compress)
+        start_idx = keep_first_n_messages
+        end_idx = keep_first_n_messages + len(messages_to_compress)
 
         # Format messages for LLM
         input_msgs_texts = []

@@ -208,6 +208,7 @@ __marimo__/
 
 # temporary files
 tmp_*
+rsync_tmp_*
 .aider*
 data_analysis.md
 
