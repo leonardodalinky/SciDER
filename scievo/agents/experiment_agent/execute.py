@@ -33,9 +33,6 @@ match CODING_AGENT_VERSION:
     case "v2":
         from .coding_subagent_v2 import build as coding_build
         from .coding_subagent_v2.state import CodingAgentState
-    case "v2-claude":
-        from .coding_subagent_v2_claude import build as coding_build
-        from .coding_subagent_v2_claude.state import CodingAgentState
     case "v3":
         from .coding_subagent_v3_claude import build as coding_build
         from .coding_subagent_v3_claude.state import CodingAgentState
