@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional
 
+from loguru import logger
+
 from ..core.types import Message
 from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
@@ -45,8 +47,10 @@ class MetricExtractor:
         Returns:
             List of Metric objects
         """
+        # If no papers, use fallback to suggest common metrics based on task query
         if not papers:
-            return []
+            logger.info("No papers provided, using fallback to suggest common metrics")
+            return self._get_common_metrics(task_query)
 
         # Prepare paper summaries for LLM
         papers_text = "\n\n".join(
