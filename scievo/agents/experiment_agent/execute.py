@@ -15,8 +15,11 @@ from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
 
-from .coding_subagent_v2 import build as coding_build
-from .coding_subagent_v2.state import CodingAgentState
+from .coding_subagent_v3_claude import build as coding_build_claude
+from .coding_subagent_v3_claude.state import CodingAgentState as ClaudeCodingAgentState
+
+# from .coding_subagent_v2 import build as coding_build
+# from .coding_subagent_v2.state import CodingAgentState
 from .exec_subagent import build as exec_build
 from .exec_subagent.state import ExecAgentState
 from .state import ExperimentAgentState
@@ -27,7 +30,8 @@ AGENT_NAME = "experiment_agent"
 LLM_NAME = "experiment_agent"
 
 # Compile sub-agent graphs as global variables
-coding_graph = coding_build().compile()
+# coding_graph = coding_build().compile()
+coding_graph_claude = coding_build_claude().compile()
 exec_graph = exec_build().compile()
 summary_graph = summary_build().compile()
 
@@ -70,9 +74,7 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     revision_feedback_list = []
     if agent_state.revision_summaries:
         for i, summary in enumerate(agent_state.revision_summaries):
-            revision_feedback_list.append(
-                {"revision_number": i + 1, "summary": summary}
-            )
+            revision_feedback_list.append({"revision_number": i + 1, "summary": summary})
 
     # Collect all previous coding summaries
     previous_coding_summaries = []
@@ -98,20 +100,21 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         current_revision=agent_state.current_revision,
     )
 
-    coding_state = CodingAgentState(
+    coding_state = ClaudeCodingAgentState(
         data_summary=agent_state.data_summary,  # Keep data_summary separate
         user_query=coding_query,
         workspace=agent_state.workspace,
     )
 
     # Invoke coding subagent (stateless call)
-    result_state = coding_graph.invoke(coding_state)
+    result_state = coding_graph_claude.invoke(coding_state)
 
     # Extract only needed data from result - don't store full state (graph.invoke returns dict)
     agent_state.history = result_state["history"]  # Merge back history
 
     # Store coding summary for this loop (for later analysis)
-    coding_summary = result_state["output_summary"] or "No summary available"
+    # Use .get() for safe access in case output_summary is not set
+    coding_summary = result_state.get("output_summary") or "No summary available"
 
     if (
         not agent_state.loop_results
@@ -164,9 +167,7 @@ def run_exec_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentState
         agent_state.loop_results
         and agent_state.loop_results[-1].get("revision") == agent_state.current_revision
     ):
-        agent_state.loop_results[-1]["exec_result"] = result_state[
-            "execution_summary_dict"
-        ]
+        agent_state.loop_results[-1]["exec_result"] = result_state["execution_summary_dict"]
 
     return agent_state
 
@@ -218,9 +219,7 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Use LLM to analyze the loop
     analysis_prompt = PROMPTS.experiment_agent.analysis_prompt.render(
         revision_number=agent_state.current_revision + 1,
-        coding_summary=current_loop.get(
-            "coding_summary", "No coding summary available"
-        ),
+        coding_summary=current_loop.get("coding_summary", "No coding summary available"),
         exec_result=json.dumps(current_loop.get("exec_result", {}), indent=2),
         summary=current_loop.get("summary", "No summary available"),
         previous_analysis=agent_state.revision_analysis or "No previous analysis.",
@@ -244,7 +243,9 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Accumulate analysis
     analysis_text = response.content
     if agent_state.revision_analysis:
-        agent_state.revision_analysis += f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+        agent_state.revision_analysis += (
+            f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+        )
     else:
         agent_state.revision_analysis = (
             f"## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
@@ -254,9 +255,7 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     try:
         import os
 
-        analysis_dir = os.path.join(
-            agent_state.workspace.working_dir, "experiment_analyses"
-        )
+        analysis_dir = os.path.join(agent_state.workspace.working_dir, "experiment_analyses")
         os.makedirs(analysis_dir, exist_ok=True)
 
         analysis_file = os.path.join(
@@ -299,11 +298,7 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         if agent_state.revision_summaries
         else "No summary available"
     )
-    exec_result = (
-        agent_state.all_execution_results[-1]
-        if agent_state.all_execution_results
-        else {}
-    )
+    exec_result = agent_state.all_execution_results[-1] if agent_state.all_execution_results else {}
 
     # Use LLM to judge whether revision is needed (with accumulated analysis)
     judge_prompt = PROMPTS.experiment_agent.judge_prompt.render(

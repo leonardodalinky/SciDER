@@ -21,7 +21,9 @@ class Prompts:
     experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
     experiment_coding_v2: "ExperimentCodingV2Prompts"
+    experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
     experiment_agent: "ExperimentAgentPrompts"
+    paper_subagent: "PaperSubagentPrompts"
 
 
 @dataclass
@@ -116,6 +118,21 @@ class ExperimentAgentPrompts:
     revision_feedback_prompt: Template
 
 
+@dataclass
+class ExperimentClaudeCodingV2Prompts:
+    system_prompt: Template
+    planner_system_prompt: Template
+    replanner_user_prompt: Template
+    replanner_user_response: Template
+    user_prompt: Template
+
+
+@dataclass
+class PaperSubagentPrompts:
+    summary_system_prompt: Template
+    summary_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -134,24 +151,20 @@ def init():
     global PROMPTS
 
     PROMPTS = Prompts(
-        dummy=parse_yaml_as_templates(
-            DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")
-        ),
-        data=parse_yaml_as_templates(
-            DataPrompts, os.path.join(DIR, "data_prompt.yaml")
-        ),
-        rbank=parse_yaml_as_templates(
-            RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")
-        ),
-        history=parse_yaml_as_templates(
-            HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")
-        ),
+        dummy=parse_yaml_as_templates(DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")),
+        data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
+        rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
+        history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
         experiment_coding=parse_yaml_as_templates(
             ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
         ),
         experiment_coding_v2=parse_yaml_as_templates(
             ExperimentCodingV2Prompts,
             os.path.join(DIR, "experiment_coding_prompt_v2.yaml"),
+        ),
+        experiment_claude_coding_v2=parse_yaml_as_templates(
+            ExperimentClaudeCodingV2Prompts,
+            os.path.join(DIR, "experiment_claude_coding_prompt_v2.yaml"),
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
@@ -160,11 +173,12 @@ def init():
             ExperimentSummaryPrompts,
             os.path.join(DIR, "experiment_summary_prompt.yaml"),
         ),
-        critic=parse_yaml_as_templates(
-            CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")
-        ),
+        critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
         experiment_agent=parse_yaml_as_templates(
             ExperimentAgentPrompts, os.path.join(DIR, "experiment_agent_prompt.yaml")
+        ),
+        paper_subagent=parse_yaml_as_templates(
+            PaperSubagentPrompts, os.path.join(DIR, "paper_subagent_prompt.yaml")
         ),
     )
 

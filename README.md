@@ -16,6 +16,25 @@ After install uv's dependencies, install `aider`:
 uv tool install --force --python python3.12 aider-chat@latest
 ```
 
+Optional: install Claude Code (for `claude_code` toolset):
+
+- Ensure the `claude` CLI is installed and authenticated on your machine.
+- If your `claude` command needs extra flags, set `CLAUDE_CODE_CMD`, e.g.:
+
+```shell
+export CLAUDE_CODE_CMD="claude"
+```
+
+Optional: install Claude Agent SDK (for `claude_agent_sdk` toolset):
+
+- Docs: `https://platform.claude.com/docs/en/agent-sdk/overview`
+- Install:
+
+```shell
+pip install claude-agent-sdk
+export ANTHROPIC_API_KEY="..."
+```
+
 ## Development Guide
 
 First, install `pre-commit`:

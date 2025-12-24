@@ -196,16 +196,15 @@ def planner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 def replanner_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     logger.trace("replanner_node of Agent {}", AGENT_NAME)
 
-    if agent_state.remaining_plans and len(agent_state.remaining_plans) > 0:
-        completed_step = agent_state.remaining_plans.pop(0)
-        agent_state.past_plans.append(completed_step)
-        logger.debug(f"Replanner: moved step to past_plans: {completed_step[:80]}...")
+    # DON'T pop here - the step should already be moved to past_plans by gateway_conditional
+    # We just need to check if we should continue or finish
 
     system_prompt = PROMPTS.experiment_coding.replanner_system_prompt.render()
     replanner_user_prompt = PROMPTS.experiment_coding.replanner_user_prompt.render(
         user_query=agent_state.user_query,
         plan=agent_state.plans.steps if agent_state.plans else [],
         past_steps=agent_state.past_plans or [],
+        remaining_steps=agent_state.remaining_plans or [],  # ADD THIS LINE
     )
 
     messages = [

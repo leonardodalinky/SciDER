@@ -49,18 +49,22 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
     # compress history if needed
     if (
         constant.HISTORY_AUTO_COMPRESSION
-        and agent_state.total_patched_tokens
-        > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
     ):
         return "history_compression"
 
     if (
         constant.REASONING_BANK_ENABLED
+        and len(agent_state.node_history) > 0
         and agent_state.node_history[-1] != "mem_extraction"
         and agent_state.round > 0
         and agent_state.round % constant.MEM_EXTRACTION_ROUND_FREQ == 0
     ):
         return "mem_extraction"
+
+    if len(agent_state.patched_history) == 0:
+        logger.warning("patched_history is empty, returning llm_chat")
+        return "llm_chat"
 
     last_msg = agent_state.patched_history[-1]
     if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
@@ -123,14 +127,10 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     # update system prompt
     system_prompt = PROMPTS.data.system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
-        toolsets_desc=ToolRegistry.get_toolsets_desc(
-            BUILTIN_TOOLSETS + ALLOWED_TOOLSETS
-        ),
+        toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         memory_text=wrap_text_with_block(memory_text, "markdown"),
         current_plan=(
-            agent_state.remaining_plans[0]
-            if len(agent_state.remaining_plans) > 0
-            else None
+            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
         ),
     )
 
@@ -141,9 +141,20 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     for toolset in BUILTIN_TOOLSETS:
         tools.update(ToolRegistry.get_toolset(toolset))
 
+    # Ensure there's at least one non-system message for Anthropic API
+    history = agent_state.patched_history
+    if len(history) == 0 or all(msg.role == "system" for msg in history):
+        # Add a dummy user message if history is empty or only contains system messages
+        logger.warning(
+            "patched_history is empty or only contains system messages, adding dummy user message"
+        )
+        history = [
+            Message(role="user", content="Please continue with the task.", agent_sender=AGENT_NAME)
+        ]
+
     msg = ModelRegistry.completion(
         LLM_NAME,
-        agent_state.patched_history,
+        history,
         system_prompt=(
             Message(role="system", content=system_prompt)
             .with_log(cond=constant.LOG_SYSTEM_PROMPT)
@@ -264,9 +275,7 @@ mem_extraction_subgraph_compiled = mem_extraction_subgraph.compile()
 def mem_extraction_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
     logger.debug("mem_extraction_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("mem_extraction")
-    context_window = agent_state.patched_history[
-        -constant.MEM_EXTRACTION_CONTEXT_WINDOW :
-    ]
+    context_window = agent_state.patched_history[-constant.MEM_EXTRACTION_CONTEXT_WINDOW :]
     logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
     try:
         _ = mem_extraction_subgraph_compiled.invoke(
@@ -362,9 +371,7 @@ def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
         logger.info("Analysis summary generated successfully")
 
     except Exception as e:
-        error_msg = (
-            f"Failed to generate analysis summary: {sprint_chained_exception(e)}"
-        )
+        error_msg = f"Failed to generate analysis summary: {sprint_chained_exception(e)}"
         agent_state.add_message(
             Message(
                 role="assistant",
@@ -388,11 +395,12 @@ def critic_node(agent_state: DataAgentState) -> DataAgentState:
         return agent_state
 
     try:
+        current_plan = (
+            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else "N/A"
+        )
         res = critic_subgraph_compiled.invoke(
             critic_agent.CriticAgentState(
-                input_msgs=agent_state.patched_history[
-                    -constant.CRITIC_CONTEXT_WINDOW :
-                ],
+                input_msgs=agent_state.patched_history[-constant.CRITIC_CONTEXT_WINDOW :],
                 plan=agent_state.remaining_plans[0],
                 is_data_agent=True,
                 # RBankState

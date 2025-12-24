@@ -26,7 +26,7 @@ BUILTIN_TOOLSETS = [
     "state",
     "history",
 ]
-ALLOWED_TOOLSETS = ["shell", "fs", "cursor", "environment"]
+ALLOWED_TOOLSETS = ["shell", "fs", "cursor", "environment", "claude_code", "claude_agent_sdk"]
 
 
 def gateway_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
@@ -280,6 +280,12 @@ def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     }
 
     # update system prompt
+    total_steps = len(agent_state.plans.steps) if agent_state.plans else 0
+    current_step_number = len(agent_state.past_plans) + 1 if agent_state.past_plans else 1
+    remaining_steps_count = (
+        len(agent_state.remaining_plans) - 1 if len(agent_state.remaining_plans) > 0 else 0
+    )
+
     system_prompt = PROMPTS.experiment_coding.experiment_chat_system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
@@ -288,6 +294,9 @@ def llm_chat_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         current_plan=(
             agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
         ),
+        current_step_number=current_step_number,
+        total_steps=total_steps,
+        remaining_steps_count=remaining_steps_count,
     )
 
     # construct tools
