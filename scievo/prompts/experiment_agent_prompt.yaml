@@ -48,7 +48,7 @@ coding_subagent_query_prompt: |
 
   ## Forbidden Actions
 
-  - DO NOT perform long execution or training in this step; focus on code changes only. Only run short tests if needed to verify code changes.
+  - DO NOT perform long execution or training in this step; focus on code changes only. Only run short tests if needed to verify code changes. Long executions should be done by the other agent after coding.
   - DO NOT analyze previous execution results here; just focus on adapting the code to the data and implementing necessary changes.
   - DO NOT make hyperparameter tuning or complex model architecture changes unless explicitly required by the user query.
   - DO NOT delete files that would not directly affect the coding task, like the README or documentation files.
@@ -137,7 +137,8 @@ judge_prompt: |
   Based on the above, determine:
   1. Did the experiment achieve the objective?
   2. If the experiment didn't give results, are there any errors or issues that need fixing? Otherwise than subtle improvements, you can consider it complete.
-  3. Is the code properly adapted to the data structure?
+  3. Are there any obviouly odd results that indicate the experiment is not complete or well-designed?
+  4. Is the code properly adapted to the data structure?
 
   Respond with a JSON object:
   ```json

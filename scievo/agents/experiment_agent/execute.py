@@ -70,9 +70,7 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     revision_feedback_list = []
     if agent_state.revision_summaries:
         for i, summary in enumerate(agent_state.revision_summaries):
-            revision_feedback_list.append(
-                {"revision_number": i + 1, "summary": summary}
-            )
+            revision_feedback_list.append({"revision_number": i + 1, "summary": summary})
 
     # Collect all previous coding summaries
     previous_coding_summaries = []
@@ -164,9 +162,7 @@ def run_exec_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentState
         agent_state.loop_results
         and agent_state.loop_results[-1].get("revision") == agent_state.current_revision
     ):
-        agent_state.loop_results[-1]["exec_result"] = result_state[
-            "execution_summary_dict"
-        ]
+        agent_state.loop_results[-1]["exec_result"] = result_state["execution_summary_dict"]
 
     return agent_state
 
@@ -217,10 +213,8 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 
     # Use LLM to analyze the loop
     analysis_prompt = PROMPTS.experiment_agent.analysis_prompt.render(
-        revision_number=agent_state.current_revision + 1,
-        coding_summary=current_loop.get(
-            "coding_summary", "No coding summary available"
-        ),
+        revision_number=agent_state.current_revision,
+        coding_summary=current_loop.get("coding_summary", "No coding summary available"),
         exec_result=json.dumps(current_loop.get("exec_result", {}), indent=2),
         summary=current_loop.get("summary", "No summary available"),
         previous_analysis=agent_state.revision_analysis or "No previous analysis.",
@@ -244,19 +238,19 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     # Accumulate analysis
     analysis_text = response.content
     if agent_state.revision_analysis:
-        agent_state.revision_analysis += f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+        agent_state.revision_analysis += (
+            f"\n\n---\n\n## Revision {agent_state.current_revision} Analysis\n{analysis_text}"
+        )
     else:
         agent_state.revision_analysis = (
-            f"## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+            f"## Revision {agent_state.current_revision} Analysis\n{analysis_text}"
         )
 
     # Save analysis result to file
     try:
         import os
 
-        analysis_dir = os.path.join(
-            agent_state.workspace.working_dir, "experiment_analyses"
-        )
+        analysis_dir = os.path.join(agent_state.workspace.working_dir, "experiment_analyses")
         os.makedirs(analysis_dir, exist_ok=True)
 
         analysis_file = os.path.join(
@@ -264,14 +258,14 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         )
 
         with open(analysis_file, "w", encoding="utf-8") as f:
-            f.write(f"# Revision {agent_state.current_revision + 1} Analysis\n\n")
+            f.write(f"# Revision {agent_state.current_revision} Analysis\n\n")
             f.write(analysis_text)
 
         logger.info(f"Analysis saved to {analysis_file}")
     except Exception as e:
         logger.warning(f"Failed to save analysis to file: {e}")
 
-    logger.debug(f"Analysis for revision {agent_state.current_revision + 1} completed")
+    logger.debug(f"Analysis for revision {agent_state.current_revision} completed")
 
     return agent_state
 
@@ -299,11 +293,7 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         if agent_state.revision_summaries
         else "No summary available"
     )
-    exec_result = (
-        agent_state.all_execution_results[-1]
-        if agent_state.all_execution_results
-        else {}
-    )
+    exec_result = agent_state.all_execution_results[-1] if agent_state.all_execution_results else {}
 
     # Use LLM to judge whether revision is needed (with accumulated analysis)
     judge_prompt = PROMPTS.experiment_agent.judge_prompt.render(

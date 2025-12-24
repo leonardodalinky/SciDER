@@ -23,14 +23,17 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
             content=PROMPTS.experiment_exec.exec_user_prompt.render(
                 user_query=agent_state.user_query,
                 working_dir=agent_state.workspace,
+                current_coding_summary=(
+                    agent_state.coding_summaries[-1]
+                    if len(agent_state.coding_summaries) > 0
+                    else None
+                ),
                 coding_summaries=agent_state.coding_summaries,
             ),
         )
         agent_state.add_message(user_msg)
     else:
-        logger.warning(
-            "Agent history is not empty during init_node; skipping adding user query."
-        )
+        logger.warning("Agent history is not empty during init_node; skipping adding user query.")
 
     return agent_state
 
