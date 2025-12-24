@@ -74,6 +74,12 @@ class FullWorkflow(BaseModel):
     data_summary: str = ""
     data_agent_history: list = []
 
+    # Paper subagent results (from DataWorkflow)
+    papers: list[dict] = []
+    datasets: list[dict] = []
+    metrics: list[dict] = []
+    paper_search_summary: str | None = None
+
     # Brain-managed directories (initialized in _setup_brain)
     sess_dir: Path | None = None
     long_term_mem_dir: Path | None = None
@@ -156,6 +162,7 @@ class FullWorkflow(BaseModel):
         self._data_workflow = DataWorkflow(
             data_path=self.data_path,
             workspace_path=self.workspace_path,
+            user_query=self.user_query,  # Pass user_query for paper subagent
             recursion_limit=self.data_agent_recursion_limit,
             # Pass Brain-managed directories
             sess_dir=self.sess_dir,
@@ -169,6 +176,11 @@ class FullWorkflow(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self.data_agent_history = self._data_workflow.data_agent_history
+                # Extract paper subagent results
+                self.papers = self._data_workflow.papers
+                self.datasets = self._data_workflow.datasets
+                self.metrics = self._data_workflow.metrics
+                self.paper_search_summary = self._data_workflow.paper_search_summary
                 self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True
@@ -286,6 +298,9 @@ def run_full_workflow(
     user_query: str,
     repo_source: str | None = None,
     max_revisions: int = 5,
+    data_agent_recursion_limit: int = 100,
+    experiment_agent_recursion_limit: int = 100,
+    session_name: str | None = None,
     brain_dir: str | Path | None = None,
 ) -> FullWorkflow:
     """
