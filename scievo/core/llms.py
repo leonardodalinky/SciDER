@@ -15,6 +15,12 @@ from .constant import __AGENT_STATE_NAME__
 from .types import Message
 
 
+class ZeroChoiceError(Exception):
+    """Raised when LLM completion returns zero choices."""
+
+    pass
+
+
 def function_to_json_schema(func_or_name: Callable | str) -> dict:
     if isinstance(func_or_name, str):
         tool = ToolRegistry.instance().tools[func_or_name]
@@ -74,12 +80,12 @@ class ModelRegistry:
     def completion(cls, *args, **kwargs) -> Message:
         # completion with retry for RateLimitError
         max_retries = 3
-        retry_delay = 60  # seconds
 
         for attempt in range(max_retries):
             try:
                 return cls._completion(*args, **kwargs)
             except RateLimitError as e:
+                RateLimitDelay = 30  # seconds
                 if attempt == max_retries - 1:
                     # Last attempt failed, re-raise
                     logger.error(f"RateLimitError after {max_retries} attempts: {str(e)}")
@@ -87,9 +93,16 @@ class ModelRegistry:
                 # Wait and retry
                 logger.warning(
                     f"RateLimitError on attempt {attempt + 1}/{max_retries}. "
-                    f"Waiting {retry_delay}s before retry... Error: {str(e)}"
+                    f"Waiting {RateLimitDelay}s before retry... Error: {str(e)}"
                 )
-                sleep(retry_delay)
+                sleep(RateLimitDelay)
+            except ZeroChoiceError as e:
+                if attempt == max_retries - 1:
+                    raise
+                logger.warning(
+                    f"Encountered ZeroChoiceError in LLM completion. Retrying {attempt + 1}/{max_retries}..."
+                )
+                sleep(5)  # brief wait before retry
 
     @classmethod
     def _completion(
@@ -219,6 +232,8 @@ class ModelRegistry:
             )
 
             response = ll_completion(**params)
+            if response.choices is None or len(response.choices) == 0:
+                raise ZeroChoiceError("No choices returned from completion API")
             msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
             usage: Usage = response.usage  # type: ignore
             msg.llm_sender = name
