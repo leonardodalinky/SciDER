@@ -13,9 +13,12 @@ from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
 from scievo.agents import data_agent
+from scievo.agents.data_agent.paper_subagent import build as paper_subagent_build
+from scievo.agents.data_agent.paper_subagent.state import PaperSearchAgentState
 from scievo.agents.data_agent.state import DataAgentState
 from scievo.core.brain import Brain
 from scievo.core.code_env import LocalEnv
+from scievo.core.llms import ModelRegistry
 from scievo.prompts import PROMPTS
 
 
@@ -38,15 +41,17 @@ def get_separator(margin: int = 4, char: str = "=") -> str:
 
 class DataWorkflow(BaseModel):
     """
-    Data Workflow - runs only the DataAgent for data analysis.
+    Data Workflow - runs DataAgent for data analysis and Paper Subagent for research.
 
     This workflow executes:
     1. DataAgent - Analyzes input data, produces data_analysis.md
+    2. Paper Subagent - Searches for relevant papers, datasets, and metrics
 
     Usage:
         workflow = DataWorkflow(
             data_path="data/data.csv",
             workspace_path="workspace",
+            user_query="iris classification task",
         )
         workflow.run()
         print(workflow.data_summary)
@@ -55,7 +60,9 @@ class DataWorkflow(BaseModel):
     # ==================== INPUT ====================
     data_path: Path
     workspace_path: Path
+    user_query: str | None = None  # User query for paper subagent search
     recursion_limit: int = 100
+    data_desc: str | None = None  # Optional additional description of the data
 
     # Memory directories (optional - if None, will create new Brain session)
     sess_dir: Path | None = None
@@ -64,7 +71,7 @@ class DataWorkflow(BaseModel):
     session_name: str | None = None  # Only used if sess_dir is None
 
     # ==================== INTERNAL STATE ====================
-    current_phase: Literal["init", "data_analysis", "complete", "failed"] = "init"
+    current_phase: Literal["init", "data_analysis", "paper_search", "complete", "failed"] = "init"
 
     # ==================== OUTPUT ====================
     final_status: Literal["success", "failed"] | None = None
@@ -72,13 +79,63 @@ class DataWorkflow(BaseModel):
     data_agent_history: list = []
     error_message: str | None = None
 
+    # Paper subagent results
+    papers: list[dict] = []
+    datasets: list[dict] = []
+    metrics: list[dict] = []
+    paper_search_summary: str | None = None
+
     # Internal: compiled graph (lazy loaded)
     _data_agent_graph: object = PrivateAttr(default=None)
+    _paper_subagent_graph: object = PrivateAttr(default=None)
 
     def _ensure_graph(self):
-        """Lazily compile agent graph."""
+        """Lazily compile agent graphs."""
         if self._data_agent_graph is None:
             self._data_agent_graph = data_agent.build().compile()
+        if self._paper_subagent_graph is None:
+            self._paper_subagent_graph = paper_subagent_build().compile()
+
+    def _ensure_paper_subagent_models(self):
+        """Ensure paper_search and metric_search models are registered.
+
+        If not registered, fallback to "data" model configuration.
+        """
+        try:
+            ModelRegistry.instance().get_model_params("paper_search")
+        except ValueError:
+            # Fallback to "data" model
+            try:
+                data_params = ModelRegistry.instance().get_model_params("data")
+                ModelRegistry.register(
+                    name="paper_search",
+                    model=data_params["model"],
+                    api_key=data_params.get("api_key"),
+                    base_url=data_params.get("base_url"),
+                )
+                logger.debug("Registered paper_search model using data model configuration")
+            except ValueError:
+                logger.warning(
+                    "Neither paper_search nor data model is registered. Paper subagent may fail."
+                )
+
+        try:
+            ModelRegistry.instance().get_model_params("metric_search")
+        except ValueError:
+            # Fallback to "data" model
+            try:
+                data_params = ModelRegistry.instance().get_model_params("data")
+                ModelRegistry.register(
+                    name="metric_search",
+                    model=data_params["model"],
+                    api_key=data_params.get("api_key"),
+                    base_url=data_params.get("base_url"),
+                )
+                logger.debug("Registered metric_search model using data model configuration")
+            except ValueError:
+                logger.warning(
+                    "Neither metric_search nor data model is registered. Metric extraction may fail."
+                )
 
     def _setup_directories(self):
         """Setup workspace and memory directories.
@@ -129,6 +186,11 @@ class DataWorkflow(BaseModel):
 
         success = self._run_data_agent()
 
+        # Run paper subagent if user_query is provided
+        if success and self.user_query:
+            logger.info("Running Paper Subagent for research search")
+            self._run_paper_subagent()
+
         self._finalize(success)
 
         return self
@@ -144,7 +206,10 @@ class DataWorkflow(BaseModel):
         self.current_phase = "data_analysis"
 
         # Construct query for data analysis
-        data_query = PROMPTS.data.user_prompt.render(dir=str(self.data_path))
+        data_query = PROMPTS.data.user_prompt.render(
+            dir=str(self.data_path),
+            data_desc=self.data_desc,
+        )
 
         # Prepare state
         data_state = DataAgentState(
@@ -153,6 +218,7 @@ class DataWorkflow(BaseModel):
             long_term_mem_dir=Path(self.long_term_mem_dir),
             project_mem_dir=Path(self.project_mem_dir),
             user_query=data_query,
+            data_desc=self.data_desc,
             talk_mode=False,
         )
 
@@ -190,6 +256,75 @@ class DataWorkflow(BaseModel):
 
         raise RuntimeError("Data analysis completed but no summary was generated.")
 
+    def _run_paper_subagent(self) -> bool:
+        """
+        Run Paper Subagent to search for relevant papers, datasets, and metrics.
+
+        Returns:
+            True if successful, False if failed
+        """
+        logger.info("Running Paper Subagent for research search")
+        self.current_phase = "paper_search"
+
+        # Ensure required models are registered (fallback to "data" model if not registered)
+        self._ensure_paper_subagent_models()
+
+        try:
+            # Prepare paper subagent state
+            paper_state = PaperSearchAgentState(
+                user_query=self.user_query,
+            )
+
+            # Invoke paper subagent graph
+            result = self._paper_subagent_graph.invoke(paper_state)
+            result_state = PaperSearchAgentState(**result)
+
+            # Extract results
+            self.papers = result_state.papers
+            self.datasets = result_state.datasets
+            self.metrics = result_state.metrics
+            self.paper_search_summary = result_state.output_summary
+
+            # Integrate paper search results into data_summary
+            self._integrate_paper_results()
+
+            logger.info("Paper Subagent completed successfully")
+            logger.debug(
+                f"Found {len(self.papers)} papers, {len(self.datasets)} datasets, {len(self.metrics)} metrics"
+            )
+            return True
+
+        except Exception as e:
+            logger.exception("Paper Subagent failed")
+            # Don't fail the entire workflow if paper search fails
+            logger.warning(f"Paper search failed but continuing: {e}")
+            return False
+
+    def _integrate_paper_results(self):
+        """Integrate paper search results into data_summary."""
+        if not self.paper_search_summary:
+            return
+
+        # Append paper search summary to data_summary
+        paper_section = f"""
+
+---
+
+## Research Context
+
+### Paper Search Summary
+
+{self.paper_search_summary}
+
+### Key Findings
+
+- **Papers Found**: {len(self.papers)}
+- **Datasets Found**: {len(self.datasets)}
+- **Metrics Extracted**: {len(self.metrics)}
+
+"""
+        self.data_summary += paper_section
+
     def _finalize(self, success: bool):
         """Finalize the workflow."""
         logger.info("Finalizing data workflow")
@@ -217,11 +352,13 @@ class DataWorkflow(BaseModel):
 def run_data_workflow(
     data_path: str | Path,
     workspace_path: str | Path,
+    user_query: str | None = None,
     recursion_limit: int = 100,
     session_name: str | None = None,
     sess_dir: str | Path | None = None,
     long_term_mem_dir: str | Path | None = None,
     project_mem_dir: str | Path | None = None,
+    data_desc: str | None = None,
 ) -> DataWorkflow:
     """
     Convenience function to run the data analysis workflow.
@@ -229,11 +366,13 @@ def run_data_workflow(
     Args:
         data_path: Path to the data file or directory to analyze
         workspace_path: Workspace directory for the analysis
+        user_query: Optional user query for paper subagent search
         recursion_limit: Recursion limit for DataAgent (default=100)
         session_name: Optional custom session name (only used if sess_dir is None)
         sess_dir: Optional session directory (if None, creates new Brain session)
         long_term_mem_dir: Optional long-term memory directory
         project_mem_dir: Optional project memory directory
+        data_desc: Optional additional description of the data
 
     Returns:
         DataWorkflow: Completed workflow with results
@@ -264,11 +403,13 @@ def run_data_workflow(
     workflow = DataWorkflow(
         data_path=Path(data_path),
         workspace_path=Path(workspace_path),
+        user_query=user_query,
         recursion_limit=recursion_limit,
         sess_dir=Path(sess_dir) if sess_dir else None,
         long_term_mem_dir=Path(long_term_mem_dir) if long_term_mem_dir else None,
         project_mem_dir=Path(project_mem_dir) if project_mem_dir else None,
         session_name=session_name,
+        data_desc=data_desc,
     )
     return workflow.run()
 
@@ -280,9 +421,7 @@ if __name__ == "__main__":
         description="Data Workflow - Run DataAgent for data analysis",
         prog="python -m scievo.workflows.data_workflow",
     )
-    parser.add_argument(
-        "data_path", help="Path to the data file or directory to analyze"
-    )
+    parser.add_argument("data_path", help="Path to the data file or directory to analyze")
     parser.add_argument("workspace_path", help="Workspace directory for the workflow")
     parser.add_argument(
         "--recursion-limit",

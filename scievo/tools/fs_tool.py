@@ -17,6 +17,9 @@ from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("fs", "File system toolset.")
 
+# Configuration
+FILE_CHUNK_SIZE = 32000  # Maximum bytes to read in a single call
+
 
 @register_tool(
     "fs",
@@ -28,7 +31,10 @@ register_toolset_desc("fs", "File system toolset.")
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Filesystem path to inspect"}
+                    "path": {
+                        "type": "string",
+                        "description": "Filesystem path to inspect",
+                    }
                 },
                 "required": ["path"],
             },
@@ -213,15 +219,20 @@ def read_head(paths: list[str], n: int = 10) -> str:
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read the entire file content. Truncate to max_char (default 32000) if longer.",
+            "description": "Read file content with pagination support (UTF-8 encoding). Returns content and metadata. Each call is limited to returning at most max_char bytes (capped at 32000). Use offset to read subsequent pages.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Path to the file"},
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of bytes to skip from the start (for pagination)",
+                        "default": 0,
+                    },
                     "max_char": {
                         "type": "integer",
-                        "description": "Maximum number of characters to return",
-                        "default": 32000,
+                        "description": "Maximum number of characters to read (will be capped at 32000)",
+                        "default": 8000,
                     },
                 },
                 "required": ["path"],
@@ -229,13 +240,57 @@ def read_head(paths: list[str], n: int = 10) -> str:
         },
     },
 )
-def read_file(path: str, max_char: int = 32000) -> str:
+def read_file(path: str, offset: int = 0, max_char: int = 8000) -> str:
+    """
+    Read file content with pagination support (UTF-8 encoding).
+
+    Returns a formatted string containing:
+    - File content (up to max_char bytes from offset, capped at 32000)
+    - Total file size
+    - Current offset position
+    - Whether more content is available
+
+    Non-UTF-8 characters are replaced using the 'replace' error handler.
+    For files larger than max_char, use the offset parameter to read subsequent pages.
+    """
+    # Cap max_char at 32000 bytes
+    max_char = min(max_char, 32000)
+
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            text = f.read()
-        if max_char is not None and max_char >= 0 and len(text) > max_char:
-            text = text[:max_char]
-        return text
+        # Get file size without reading entire file
+        file_size = os.path.getsize(path)
+
+        # Validate and normalize offset
+        if offset is None or offset < 0:
+            offset = 0
+        elif offset > file_size:
+            offset = file_size
+
+        # Read only the needed chunk from disk with UTF-8 encoding
+        with open(path, "rb") as f:
+            f.seek(offset)
+            content = f.read(max_char)
+
+        next_offset = offset + max_char
+        has_more = next_offset < file_size
+
+        # Format pagination metadata
+        result_parts = [
+            f"[File: {path}]",
+            f"[Total size: {file_size} bytes]",
+            f"[Current offset: {offset} bytes]",
+            f"[Max chunk size: {max_char} bytes]",
+            f"[Actual chunk size: {len(content)} bytes]",
+            f"[Has more content: {has_more}]",
+        ]
+
+        if has_more:
+            result_parts.append(f"[Next offset: {next_offset} bytes]")
+
+        result_parts.append("---")
+        result_parts.append(content.decode("utf-8", errors="replace"))
+
+        return "\n".join(result_parts)
     except Exception as e:
         return f"Error reading file '{path}': {e}"
 
@@ -250,8 +305,14 @@ def read_file(path: str, max_char: int = 32000) -> str:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to the file to write"},
-                    "content": {"type": "string", "description": "Content to write to the file"},
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to write",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file",
+                    },
                 },
                 "required": ["path", "content"],
             },
@@ -259,6 +320,9 @@ def read_file(path: str, max_char: int = 32000) -> str:
     },
 )
 def save_file(path: str, content: str) -> str:
+    dir_path = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(dir_path):
+        return f"Error: Directory '{dir_path}' does not exist. Please create it first using the 'create_dir' tool."
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -277,7 +341,10 @@ def save_file(path: str, content: str) -> str:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Directory path to create"},
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to create",
+                    },
                 },
                 "required": ["path"],
             },

@@ -10,6 +10,9 @@ class DataAgentState(ToolsetState, PlanState, HistoryState, RBankState):
     # Local environment for the agent
     workspace: LocalEnv
 
+    # Optional additional description of the data (input)
+    data_desc: str | None = None
+
     # talking mode
     talk_mode: bool = False
 
