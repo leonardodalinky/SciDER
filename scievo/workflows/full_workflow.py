@@ -71,11 +71,15 @@ class FullWorkflow(BaseModel):
     data_desc: str | None = None  # Optional additional description of the data
 
     # ==================== INTERNAL STATE ====================
-    current_phase: Literal[
-        "init", "data_analysis", "experiment", "complete", "failed"
-    ] = "init"
+    current_phase: Literal["init", "data_analysis", "experiment", "complete", "failed"] = "init"
     data_summary: str = ""
     data_agent_history: list = []
+
+    # Paper subagent results (from DataWorkflow)
+    papers: list[dict] = []
+    datasets: list[dict] = []
+    metrics: list[dict] = []
+    paper_search_summary: str | None = None
 
     # Brain-managed directories (initialized in _setup_brain)
     sess_dir: Path | None = None
@@ -159,6 +163,7 @@ class FullWorkflow(BaseModel):
         self._data_workflow = DataWorkflow(
             data_path=self.data_path,
             workspace_path=self.workspace_path,
+            user_query=self.user_query,  # Pass user_query for paper subagent
             recursion_limit=self.data_agent_recursion_limit,
             data_desc=self.data_desc,
             # Pass Brain-managed directories
@@ -173,6 +178,11 @@ class FullWorkflow(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self.data_agent_history = self._data_workflow.data_agent_history
+                # Extract paper subagent results
+                self.papers = self._data_workflow.papers
+                self.datasets = self._data_workflow.datasets
+                self.metrics = self._data_workflow.metrics
+                self.paper_search_summary = self._data_workflow.paper_search_summary
                 self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True
@@ -232,14 +242,10 @@ class FullWorkflow(BaseModel):
     def _compose_summary(self) -> str:
         """Compose the final summary."""
         exp_summary = (
-            self._experiment_workflow.final_summary
-            if self._experiment_workflow
-            else "N/A"
+            self._experiment_workflow.final_summary if self._experiment_workflow else "N/A"
         )
         current_revision = (
-            self._experiment_workflow.current_revision
-            if self._experiment_workflow
-            else 0
+            self._experiment_workflow.current_revision if self._experiment_workflow else 0
         )
 
         return f"""# Full SciEvo Workflow Summary
@@ -353,9 +359,7 @@ if __name__ == "__main__":
         description="Full SciEvo Workflow - Run complete workflow (DataAgent -> ExperimentAgent)",
         prog="python -m scievo.workflows.full_workflow",
     )
-    parser.add_argument(
-        "data_path", help="Path to the data file or directory to analyze"
-    )
+    parser.add_argument("data_path", help="Path to the data file or directory to analyze")
     parser.add_argument("workspace_path", help="Workspace directory for the experiment")
     parser.add_argument("user_query", help="User's experiment objective")
     parser.add_argument(
