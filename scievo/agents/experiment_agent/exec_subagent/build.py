@@ -25,7 +25,8 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
                 working_dir=agent_state.workspace,
                 current_coding_summary=(
                     agent_state.coding_summaries[-1]
-                    if len(agent_state.coding_summaries) > 0
+                    if agent_state.coding_summaries is not None
+                    and len(agent_state.coding_summaries) > 0
                     else None
                 ),
                 coding_summaries=agent_state.coding_summaries,

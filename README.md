@@ -11,11 +11,6 @@ uv sync --extra mac
 uv sync --extra cu128
 ```
 
-After install uv's dependencies, install `aider`:
-```shell
-uv tool install --force --python python3.12 aider-chat@latest
-```
-
 Optional: install Claude Code (for `claude_code` toolset):
 
 - Ensure the `claude` CLI is installed and authenticated on your machine.

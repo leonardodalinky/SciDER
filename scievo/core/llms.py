@@ -85,7 +85,7 @@ class ModelRegistry:
             try:
                 return cls._completion(*args, **kwargs)
             except RateLimitError as e:
-                RateLimitDelay = 30  # seconds
+                rate_limit_delay = 65  # seconds
                 if attempt == max_retries - 1:
                     # Last attempt failed, re-raise
                     logger.error(f"RateLimitError after {max_retries} attempts: {str(e)}")
@@ -93,14 +93,14 @@ class ModelRegistry:
                 # Wait and retry
                 logger.warning(
                     f"RateLimitError on attempt {attempt + 1}/{max_retries}. "
-                    f"Waiting {RateLimitDelay}s before retry... Error: {str(e)}"
+                    f"Waiting {rate_limit_delay}s before retry... Error: {str(e)}"
                 )
-                sleep(RateLimitDelay)
+                sleep(rate_limit_delay)
             except ZeroChoiceError as e:
                 if attempt == max_retries - 1:
                     raise
                 logger.warning(
-                    f"Encountered ZeroChoiceError in LLM completion. Retrying {attempt + 1}/{max_retries}..."
+                    f"Encountered ZeroChoiceError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries}..."
                 )
                 sleep(5)  # brief wait before retry
 
@@ -183,6 +183,11 @@ class ModelRegistry:
                 msg_content = None
             else:
                 msg_content = msg_content[0][0].text
+
+            # check if both content and tool_calls are empty
+            if msg_content is None and len(tool_calls) == 0:
+                raise ZeroChoiceError("No content or tool calls returned from response API")
+
             ## usage
             usage = response.usage  # type: ignore
             ## reasoning content

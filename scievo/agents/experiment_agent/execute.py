@@ -28,14 +28,14 @@ LLM_NAME = "experiment_agent"
 load_dotenv()
 CODING_AGENT_VERSION = os.getenv("CODING_AGENT_VERSION", "v2")  # default to v2
 match CODING_AGENT_VERSION:
-    case "v1":
-        raise RuntimeError("Coding Agent v1 is deprecated and no longer supported.")
     case "v2":
         from .coding_subagent_v2 import build as coding_build
         from .coding_subagent_v2.state import CodingAgentState
     case "v3":
         from .coding_subagent_v3_claude import build as coding_build
         from .coding_subagent_v3_claude.state import CodingAgentState
+    case _:
+        raise ValueError(f"Unsupported CODING_AGENT_VERSION: {CODING_AGENT_VERSION}")
 
 # Compile sub-agent graphs as global variables
 coding_graph = coding_build().compile()

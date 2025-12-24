@@ -5,6 +5,7 @@ import time
 import pexpect
 from loguru import logger
 
+from .manager import CommandContextManager, SessionManager
 from .session_base import CommandContextBase, CommandState, SessionBase
 
 _PROMPT = r"AISHELL(\w)> "  # \w shows current working directory
@@ -15,10 +16,16 @@ CONT_PROMPT = "AISHELL_CONT> "  # unique PS2
 class LocalShellContext(CommandContextBase):
     """Context object for managing non-blocking command execution in local PTY sessions."""
 
-    def __init__(self, session: "LocalShellSession", command: str, timeout: float | None = None):
-        super().__init__(session, command, timeout)
-        # Store session with correct type for accessing PTY-specific attributes
-        self.session: "LocalShellSession" = session  # type: ignore
+    @property
+    def session(self) -> "LocalShellSession":
+        """Get the session instance associated with this context."""
+        s = SessionManager().get_session(self.session_id)
+        if s is None:
+            raise ValueError(f"Session with ID {self.session_id} not found")
+        # check type
+        if not isinstance(s, LocalShellSession):
+            raise TypeError(f"Session with ID {self.session_id} is not a LocalShellSession")
+        return s
 
     def _send_command(self):
         """Send the command to the PTY process."""
@@ -141,6 +148,9 @@ class LocalShellSession(SessionBase):
         self.process.sendline(f"export PS2='{CONT_PROMPT}'")
         self.process.expect(PROMPT, timeout=5)
 
+        # Register this session with SessionManager and store the session ID
+        self.session_id = SessionManager().register_session(self)
+
     def send_control(self, key: str):
         """
         Send Ctrl+<key> to the shell session.
@@ -170,6 +180,8 @@ class LocalShellSession(SessionBase):
     def terminate_session(self):
         if self.process.isalive():
             self.process.terminate(force=True)
+        # Unregister from SessionManager
+        SessionManager().unregister_session(self.session_id)
 
     def exec(self, command: str, timeout: float | None = None) -> LocalShellContext:
         """
@@ -192,7 +204,9 @@ class LocalShellSession(SessionBase):
         """
         if self.is_running_command():
             raise RuntimeError("A command is already running in this session")
-        ctx = LocalShellContext(self, command, timeout)
+        ctx = LocalShellContext(self.session_id, command, timeout)
+        # Register context with CommandContextManager and store the context ID
+        context_id = CommandContextManager().register_context(ctx)
         with self._context_lock:
-            self.current_context = ctx
+            self.current_context_id = context_id
         return ctx.start()

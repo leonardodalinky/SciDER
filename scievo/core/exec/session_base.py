@@ -1,6 +1,5 @@
 import io
 import threading
-import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -9,6 +8,8 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from typing import Any
+
+from .manager import CommandContextManager, SessionManager
 
 
 class CommandState(Enum):
@@ -23,8 +24,8 @@ class CommandState(Enum):
 class CommandContextBase(ABC):
     """Base class for managing non-blocking command execution."""
 
-    def __init__(self, session: "SessionBase", command: str, timeout: float | None = None):
-        self.session = session
+    def __init__(self, session_id: str, command: str, timeout: float | None = None):
+        self.session_id = session_id
         self.command = command
         self.timeout = timeout
         self.state = CommandState.RUNNING
@@ -34,6 +35,17 @@ class CommandContextBase(ABC):
         self._lock = threading.Lock()
         self._monitor_thread: threading.Thread | None = None
         self._stop_monitoring = threading.Event()
+
+        # Context ID will be assigned when registered with CommandContextManager
+        self.context_id: str | None = None
+
+    @property
+    def session(self) -> "SessionBase":
+        """Get the session instance associated with this context."""
+        s = SessionManager().get_session(self.session_id)
+        if s is None:
+            raise ValueError(f"Session with ID {self.session_id} not found")
+        return s
 
     @abstractmethod
     def _monitor_completion(self):
@@ -130,8 +142,11 @@ class SessionBase(ABC):
         self.history_buffer = io.StringIO()
 
         # Track current command context
-        self.current_context: CommandContextBase | None = None
-        self._context_lock = threading.Lock()
+        self.current_context_id: str | None = None
+        self._context_lock = threading.RLock()
+
+        # Session ID will be assigned when registered with SessionManager
+        self.session_id: str | None = None
 
     @abstractmethod
     def terminate_session(self):
@@ -195,7 +210,9 @@ class SessionBase(ABC):
             True if a command is running, False otherwise.
         """
         with self._context_lock:
-            return self.current_context is not None and self.current_context.is_running()
+            return (
+                self.get_current_context() is not None and self.get_current_context().is_running()
+            )
 
     def get_current_context(self) -> CommandContextBase | None:
         """
@@ -205,4 +222,8 @@ class SessionBase(ABC):
             The current CommandContextBase or None if no command is running.
         """
         with self._context_lock:
-            return self.current_context
+            return (
+                CommandContextManager().get_context(self.current_context_id)
+                if self.current_context_id
+                else None
+            )
