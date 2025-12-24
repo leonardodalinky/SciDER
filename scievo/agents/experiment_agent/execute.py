@@ -3,9 +3,10 @@ Execution nodes for the Experiment Agent.
 """
 
 import json
-import re
+import os
 from typing import Literal
 
+from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
@@ -15,11 +16,6 @@ from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response
 from scievo.prompts import PROMPTS
 
-from .coding_subagent_v3_claude import build as coding_build_claude
-from .coding_subagent_v3_claude.state import CodingAgentState as ClaudeCodingAgentState
-
-# from .coding_subagent_v2 import build as coding_build
-# from .coding_subagent_v2.state import CodingAgentState
 from .exec_subagent import build as exec_build
 from .exec_subagent.state import ExecAgentState
 from .state import ExperimentAgentState
@@ -29,9 +25,20 @@ from .summary_subagent.state import SummaryAgentState
 AGENT_NAME = "experiment_agent"
 LLM_NAME = "experiment_agent"
 
+load_dotenv()
+CODING_AGENT_VERSION = os.getenv("CODING_AGENT_VERSION", "v2")  # default to v2
+match CODING_AGENT_VERSION:
+    case "v1":
+        raise RuntimeError("Coding Agent v1 is deprecated and no longer supported.")
+    case "v2":
+        from .coding_subagent_v2 import build as coding_build
+        from .coding_subagent_v2.state import CodingAgentState
+    case "v3":
+        from .coding_subagent_v3_claude import build as coding_build
+        from .coding_subagent_v3_claude.state import CodingAgentState
+
 # Compile sub-agent graphs as global variables
-# coding_graph = coding_build().compile()
-coding_graph_claude = coding_build_claude().compile()
+coding_graph = coding_build().compile()
 exec_graph = exec_build().compile()
 summary_graph = summary_build().compile()
 
@@ -100,14 +107,14 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         current_revision=agent_state.current_revision,
     )
 
-    coding_state = ClaudeCodingAgentState(
+    coding_state = CodingAgentState(
         data_summary=agent_state.data_summary,  # Keep data_summary separate
         user_query=coding_query,
         workspace=agent_state.workspace,
     )
 
     # Invoke coding subagent (stateless call)
-    result_state = coding_graph_claude.invoke(coding_state)
+    result_state = coding_graph.invoke(coding_state)
 
     # Extract only needed data from result - don't store full state (graph.invoke returns dict)
     agent_state.history = result_state["history"]  # Merge back history
@@ -218,7 +225,7 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 
     # Use LLM to analyze the loop
     analysis_prompt = PROMPTS.experiment_agent.analysis_prompt.render(
-        revision_number=agent_state.current_revision + 1,
+        revision_number=agent_state.current_revision,
         coding_summary=current_loop.get("coding_summary", "No coding summary available"),
         exec_result=json.dumps(current_loop.get("exec_result", {}), indent=2),
         summary=current_loop.get("summary", "No summary available"),
@@ -244,11 +251,11 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     analysis_text = response.content
     if agent_state.revision_analysis:
         agent_state.revision_analysis += (
-            f"\n\n---\n\n## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+            f"\n\n---\n\n## Revision {agent_state.current_revision} Analysis\n{analysis_text}"
         )
     else:
         agent_state.revision_analysis = (
-            f"## Revision {agent_state.current_revision + 1} Analysis\n{analysis_text}"
+            f"## Revision {agent_state.current_revision} Analysis\n{analysis_text}"
         )
 
     # Save analysis result to file
@@ -263,14 +270,14 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
         )
 
         with open(analysis_file, "w", encoding="utf-8") as f:
-            f.write(f"# Revision {agent_state.current_revision + 1} Analysis\n\n")
+            f.write(f"# Revision {agent_state.current_revision} Analysis\n\n")
             f.write(analysis_text)
 
         logger.info(f"Analysis saved to {analysis_file}")
     except Exception as e:
         logger.warning(f"Failed to save analysis to file: {e}")
 
-    logger.debug(f"Analysis for revision {agent_state.current_revision + 1} completed")
+    logger.debug(f"Analysis for revision {agent_state.current_revision} completed")
 
     return agent_state
 

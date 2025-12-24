@@ -85,9 +85,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     # Update system prompt
     system_prompt = PROMPTS.experiment_exec.exec_system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
-        toolsets_desc=ToolRegistry.get_toolsets_desc(
-            BUILTIN_TOOLSETS + ALLOWED_TOOLSETS
-        ),
+        toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
     )
 
     # Construct tools
@@ -122,9 +120,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.monitoring_attempts += 1
 
     if agent_state.monitoring_attempts <= len(MONITORING_INTERVALS):
-        total_monitoring_seconds = sum(
-            MONITORING_INTERVALS[: agent_state.monitoring_attempts]
-        )
+        total_monitoring_seconds = sum(MONITORING_INTERVALS[: agent_state.monitoring_attempts])
     else:
         total_monitoring_seconds = (
             sum(MONITORING_INTERVALS)
@@ -198,14 +194,10 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     class MonitorDecisionModel(BaseModel):
         action: str
 
-    r = parse_json_from_llm_response(
-        msg, MonitorDecisionModel
-    )  # just to validate JSON format
+    r = parse_json_from_llm_response(msg, MonitorDecisionModel)  # just to validate JSON format
 
     if "wait" in r.action.lower():
-        logger.debug(
-            "Monitoring decision: continue waiting for the command to complete."
-        )
+        logger.debug("Monitoring decision: continue waiting for the command to complete.")
         agent_state.is_monitor_mode = True
     elif "ctrlc" in r.action.lower():
         logger.debug("Monitoring decision: interrupting the running command.")
@@ -373,9 +365,10 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
             # if this is a long-running exec_command, check for monitoring flag
             flag_text = "Try to check the execution status later."
             if tool_name == "exec_command" and flag_text in tool_response["content"]:
-                logger.debug(
-                    "The executed command is still running, entering monitor mode."
-                )
+                logger.debug("The executed command is still running, entering monitor mode.")
+                assert (
+                    agent_state.session.get_current_context() is not None
+                ), "Expected a current context when entering monitor mode"
                 # The command is still running, go into monitor mode in the next step
                 agent_state.is_monitor_mode = True
 

@@ -27,21 +27,31 @@ FILE_CHUNK_SIZE = 32000  # Maximum bytes to read in a single call
         "type": "function",
         "function": {
             "name": "list_files",
-            "description": "Produce an 'ls -l' style listing (non-recursive) for the given path.",
+            "description": "Produce an 'ls -l' style listing (non-recursive) for the given path with pagination support.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "Filesystem path to inspect",
-                    }
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of entries to skip from the start (for pagination)",
+                        "default": 0,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of entries to return (default at 50, capped at 100)",
+                        "default": 50,
+                    },
                 },
                 "required": ["path"],
             },
         },
     },
 )
-def list_files(path: str) -> str:
+def list_files(path: str, offset: int = 0, limit: int = 50) -> str:
     def _resolve_owner(uid: int) -> str:
         if pwd is None:
             return str(uid)
@@ -131,16 +141,53 @@ def list_files(path: str) -> str:
     if not records and show_total:
         return "total 0"
 
-    link_width = max((len(str(r["nlink"])) for r in records), default=1)
-    owner_width = max((len(r["owner"]) for r in records), default=1)
-    group_width = max((len(r["group"]) for r in records), default=1)
-    size_width = max((len(str(r["size"])) for r in records), default=1)
+    # Validate and normalize pagination parameters
+    total_entries = len(records)
+    if offset is None or offset < 0:
+        offset = 0
+    elif offset > total_entries:
+        offset = total_entries
 
+    if limit is None or limit <= 0:
+        limit = 50
+
+    # Cap limit at 100 entries
+    limit = min(limit, 100)
+
+    # Extract paginated records
+    paginated_records = records[offset : offset + limit]
+    next_offset = offset + len(paginated_records)
+    has_more = next_offset < total_entries
+
+    # Calculate column widths only for displayed records
+    if paginated_records:
+        link_width = max((len(str(r["nlink"])) for r in paginated_records), default=1)
+        owner_width = max((len(r["owner"]) for r in paginated_records), default=1)
+        group_width = max((len(r["group"]) for r in paginated_records), default=1)
+        size_width = max((len(str(r["size"])) for r in paginated_records), default=1)
+    else:
+        link_width = owner_width = group_width = size_width = 1
+
+    # Format output with pagination metadata
     lines: list[str] = []
-    if records and show_total:
+
+    # Add pagination header
+    lines.append(f"[Path: {path}]")
+    lines.append(f"[Total entries: {total_entries}]")
+    lines.append(f"[Current offset: {offset}]")
+    lines.append(f"[Limit: {limit}]")
+    lines.append(f"[Returned entries: {len(paginated_records)}]")
+    lines.append(f"[Has more: {has_more}]")
+    if has_more:
+        lines.append(f"[Next offset: {next_offset}]")
+    lines.append("---")
+
+    # Add total blocks line
+    if paginated_records and show_total:
         lines.append(f"total {total_blocks}")
 
-    for r in records:
+    # Add file entries
+    for r in paginated_records:
         lines.append(
             f"{r['mode']} "
             f"{r['nlink']:>{link_width}} "
@@ -219,7 +266,7 @@ def read_head(paths: list[str], n: int = 10) -> str:
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read file content with pagination support (UTF-8 encoding). Returns content and metadata. Each call is limited to returning at most max_char bytes (capped at 32000). Use offset to read subsequent pages.",
+            "description": "Read file content with pagination support (UTF-8 encoding). Returns content and metadata. Each call is limited to returning at most `max_char` bytes. Use offset to read subsequent pages.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -231,7 +278,7 @@ def read_head(paths: list[str], n: int = 10) -> str:
                     },
                     "max_char": {
                         "type": "integer",
-                        "description": "Maximum number of characters to read (will be capped at 32000)",
+                        "description": "Maximum number of characters to read (default at 8000, capped at 32000)",
                         "default": 8000,
                     },
                 },

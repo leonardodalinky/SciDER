@@ -60,7 +60,11 @@ class ExperimentAgentState(ToolsetState, HistoryState):
     all_execution_results: list[dict] = []
 
     # Detailed results from each loop iteration (for analysis)
-    # Each entry: {"revision": int, "coding_history": [...], "exec_result": {...}, "summary": str}
+    # Each entry contains:
+    # {
+    #   "coding_summary": str,
+    #   "revision": dict,
+    # }
     loop_results: list[dict] = []
 
     # Accumulated analysis of problems and improvements needed

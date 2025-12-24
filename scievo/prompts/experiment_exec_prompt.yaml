@@ -23,6 +23,8 @@ exec_system_prompt: |
 
   ### Core Tools for Experiment Execution
 
+  In each response, you are only allowed to issue one tool call.
+
   You have access to the **exec** toolset which provides:
   - `exec_command`: Execute a command in the shell session and wait for it to complete
     - For short-running commands, this will return the final output immediately
@@ -64,27 +66,40 @@ exec_system_prompt: |
   - When execution is complete, respond without calling any tools to trigger the summary phase
 
 exec_user_prompt: |
-  Execute the following experiment:
+  {% if current_coding_summary %}
+  Execute the following experiment using FULL dataset if applicable and based on the most recent coding summary. You'd better follow the instructions of the next steps provided:
+
+  ## Latest Coding Summary
+  {%- for line in current_coding_summary.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
+  {% else %}
+  Execute the following experiment using FULL dataset if applicable and based on the objective:
+
   {%- for line in user_query.splitlines() %}
   > {{ line }}
   {%- endfor %}
+  {% endif %}
+
   {% if coding_summaries %}
   ## Coding Summaries from Previous Revisions
 
   The following summaries describe the code changes made in each revision:
   {% for summary in coding_summaries %}
   ====== Revision {{ loop.index }} ======
-  {{ summary }}
+  {%- for line in summary.splitlines() %}
+  > {{ line }}
+  {%- endfor %}
   ====== End of Revision {{ loop.index }} ======
   {% endfor %}
-
-  Please execute the running script and verify based on the changes described above.
   {% endif %}
 
   ## Simple Guidelines
 
-  * Use the `exec` toolset to run any necessary commands in the shell session
-  * The workspace is initially located at: {{ working_dir }}
+  - Use the `exec` toolset to run any necessary commands in the shell session
+  - The workspace is initially located at: {{ working_dir }}
+  - Run the code based on the objective and the coding summaries provided, especially the code sample from the latest coding summary
+  - IMPORTANT: Avoid file changing commands like "git diff" or applying patch. If the code really needs to be changed, it should have been done in the coding phase. And you should just return with feedback that the code needs further revision.
 
   Proceed autonomously. When all necessary commands have been executed, simply respond confirming completion without calling any more tools.
 

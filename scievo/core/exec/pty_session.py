@@ -77,7 +77,8 @@ class LocalShellContext(CommandContextBase):
                     # Record end buffer position
                     self.end_buffer_position = self.session.get_history_position()
                     logger.debug(f"Command completed with state: {self.state}")
-                break
+
+                break  # Exit monitoring loop
 
             except pexpect.TIMEOUT:
                 # No prompt yet, keep waiting
