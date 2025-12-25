@@ -1,16 +1,18 @@
 """
-Toolset for extracting evaluation metrics from academic papers.
+Toolset for extracting evaluation metrics from academic papers using RAG.
 """
 
 import json
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 from loguru import logger
 
 from ..core.types import Message
 from ..core.utils import wrap_dict_to_toon
+from ..rbank.utils import cosine_similarity
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("metric_search", "Extract evaluation metrics from academic papers.")
@@ -25,19 +27,99 @@ class Metric:
     paper_url: Optional[str] = None
     value: Optional[str] = None  # Reported value if mentioned
     formula: Optional[str] = None  # Formula if available
+    similarity_score: Optional[float] = None  # RAG relevance score (0-1)
 
 
-class MetricExtractor:
-    """Extract metrics from paper content using LLM."""
+class RAGMetricExtractor:
+    """Extract metrics using RAG (Retrieval-Augmented Generation)."""
 
-    def __init__(self, llm_name: str = "metric_search"):
+    def __init__(self, llm_name: str = "metric_search", embedding_llm: Optional[str] = None):
         self.llm_name = llm_name
+        self.embedding_llm = embedding_llm or llm_name
+        self.embeddings_cache: Dict[str, np.ndarray] = {}  # Cache paper embeddings
+
+    def _get_paper_embedding(self, paper: dict) -> np.ndarray:
+        """Get or compute embedding for a paper."""
+        paper_id = paper.get("url", paper.get("title", ""))
+
+        if paper_id in self.embeddings_cache:
+            return self.embeddings_cache[paper_id]
+
+        # Create text for embedding (title + summary)
+        text = f"{paper.get('title', '')}\n{paper.get('summary', '')[:1000]}"
+
+        try:
+            # Lazy import to avoid circular dependency
+            from ..core.llms import ModelRegistry
+
+            embeddings = ModelRegistry.embedding(self.embedding_llm, [text])
+            if embeddings and len(embeddings) > 0:
+                embedding = np.array(embeddings[0], dtype=np.float32)
+                self.embeddings_cache[paper_id] = embedding
+                return embedding
+        except Exception as e:
+            logger.warning(f"Failed to get embedding for paper: {e}")
+
+        return np.array([])
+
+    def _get_query_embedding(self, query: str) -> np.ndarray:
+        """Get embedding for the task query."""
+        try:
+            # Lazy import to avoid circular dependency
+            from ..core.llms import ModelRegistry
+
+            embeddings = ModelRegistry.embedding(self.embedding_llm, [query])
+            if embeddings and len(embeddings) > 0:
+                return np.array(embeddings[0], dtype=np.float32)
+        except Exception as e:
+            logger.warning(f"Failed to get query embedding: {e}")
+
+        return np.array([])
+
+    def _retrieve_relevant_papers(
+        self, papers: List[dict], task_query: str, top_k: int = 5
+    ) -> List[Tuple[dict, float]]:
+        """Retrieve top-k most relevant papers using vector similarity."""
+        if not papers:
+            return []
+
+        # Get query embedding
+        query_emb = self._get_query_embedding(task_query)
+        if len(query_emb) == 0:
+            logger.warning("Failed to get query embedding, returning all papers")
+            return [(p, 1.0) for p in papers[:top_k]]
+
+        # Compute similarities (cosine_similarity handles normalization internally)
+        paper_scores = []
+        for paper in papers:
+            paper_emb = self._get_paper_embedding(paper)
+            if len(paper_emb) == 0:
+                continue
+
+            # Compute cosine similarity (function handles normalization)
+            similarity = cosine_similarity(query_emb, paper_emb)
+            paper_scores.append((paper, similarity))
+
+        # Sort by similarity (descending)
+        paper_scores.sort(key=lambda x: x[1], reverse=True)
+
+        # Return top-k
+        retrieved = paper_scores[:top_k]
+        logger.info(
+            f"Retrieved {len(retrieved)} papers with similarity scores: "
+            f"{[f'{s:.3f}' for _, s in retrieved]}"
+        )
+
+        return retrieved
 
     def extract_from_papers(
         self, papers: List[dict], task_query: str, max_results: int = 20
     ) -> List[Metric]:
         """
-        Extract evaluation metrics from a list of papers.
+        Extract evaluation metrics using RAG approach.
+
+        1. Retrieve most relevant papers using vector similarity
+        2. Use retrieved papers as context for LLM extraction
 
         Args:
             papers: List of paper dictionaries with 'title', 'summary', 'url' fields
@@ -52,13 +134,23 @@ class MetricExtractor:
             logger.info("No papers provided, using fallback to suggest common metrics")
             return self._get_common_metrics(task_query)
 
-        # Prepare paper summaries for LLM
+        # Step 1: Retrieve relevant papers using RAG
+        retrieved_papers = self._retrieve_relevant_papers(
+            papers, task_query, top_k=min(10, len(papers))
+        )
+
+        if not retrieved_papers:
+            logger.warning("No papers retrieved, using fallback")
+            return self._get_common_metrics(task_query)
+
+        # Step 2: Prepare context from retrieved papers (use full summary, not truncated)
         papers_text = "\n\n".join(
             [
-                f"Paper {i+1}: {p.get('title', 'N/A')}\n"
-                f"Summary: {p.get('summary', 'N/A')[:500]}\n"
+                f"Paper {i+1} (Relevance: {score:.3f}):\n"
+                f"Title: {p.get('title', 'N/A')}\n"
+                f"Summary: {p.get('summary', 'N/A')[:800]}\n"  # Use more characters (800 vs 500)
                 f"URL: {p.get('url', 'N/A')}"
-                for i, p in enumerate(papers[:10])  # Limit to first 10 papers
+                for i, (p, score) in enumerate(retrieved_papers)
             ]
         )
 
@@ -77,7 +169,8 @@ Return a JSON array of metrics. Focus on metrics that are relevant to the task q
 
         user_prompt = f"""Extract evaluation metrics from the following papers that are relevant to the task: "{task_query}"
 
-Papers:
+The papers are ranked by relevance to your query (higher score = more relevant):
+
 {papers_text}
 
 Extract all relevant evaluation metrics mentioned in these papers. Return a JSON array with the following structure:
@@ -93,7 +186,8 @@ Extract all relevant evaluation metrics mentioned in these papers. Return a JSON
   }}
 ]
 
-Focus on metrics that are commonly used in the research area and relevant to the task query."""
+Focus on metrics that are commonly used in the research area and relevant to the task query.
+Pay special attention to metrics from papers with higher relevance scores."""
 
         try:
             # Lazy import to avoid circular dependency
@@ -128,9 +222,12 @@ Focus on metrics that are commonly used in the research area and relevant to the
                     else:
                         metrics_data = []
 
-            # Convert to Metric objects
+            # Convert to Metric objects with similarity scores
             metrics = []
             seen_metrics = set()  # Deduplicate by name
+
+            # Create a mapping from paper title to similarity score
+            paper_scores_map = {p.get("title", ""): score for p, score in retrieved_papers}
 
             for item in metrics_data[:max_results]:
                 if not isinstance(item, dict):
@@ -142,17 +239,25 @@ Focus on metrics that are commonly used in the research area and relevant to the
 
                 seen_metrics.add(metric_name)
 
+                paper_title = item.get("paper_title", "")
+                similarity_score = paper_scores_map.get(paper_title, None)
+
                 metric = Metric(
                     name=item.get("name", "Unknown"),
                     description=item.get("description", ""),
                     domain=item.get("domain", "general"),
-                    paper_title=item.get("paper_title", ""),
+                    paper_title=paper_title,
                     paper_url=item.get("paper_url"),
                     value=item.get("value"),
                     formula=item.get("formula"),
+                    similarity_score=similarity_score,
                 )
                 metrics.append(metric)
 
+            # Sort by similarity score (if available)
+            metrics.sort(key=lambda m: m.similarity_score or 0.0, reverse=True)
+
+            logger.info(f"Extracted {len(metrics)} metrics using RAG approach")
             return metrics
 
         except Exception as e:
@@ -249,7 +354,7 @@ Focus on metrics that are commonly used in the research area and relevant to the
         "type": "function",
         "function": {
             "name": "extract_metrics_from_papers",
-            "description": "Extract evaluation metrics from a list of academic papers",
+            "description": "Extract evaluation metrics from academic papers using RAG (Retrieval-Augmented Generation)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -282,7 +387,10 @@ Focus on metrics that are commonly used in the research area and relevant to the
 )
 def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results: int = 20) -> str:
     """
-    Extract evaluation metrics from academic papers.
+    Extract evaluation metrics from academic papers using RAG.
+
+    This function uses vector embeddings to retrieve the most relevant papers,
+    then uses LLM to extract metrics from the retrieved context.
 
     Args:
         papers: List of paper dictionaries with 'title', 'summary', 'url' fields
@@ -293,7 +401,7 @@ def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results
         str: TOON-formatted string containing the extracted metrics
     """
     try:
-        extractor = MetricExtractor()
+        extractor = RAGMetricExtractor()
         metrics = extractor.extract_from_papers(papers, task_query, max_results)
 
         # Convert Metric objects to dictionaries
@@ -306,10 +414,12 @@ def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results
                 "paper_url": metric.paper_url,
                 "value": metric.value,
                 "formula": metric.formula,
+                "similarity_score": metric.similarity_score,  # Include relevance score
             }
             for metric in metrics
         ]
 
         return wrap_dict_to_toon(result)
     except Exception as e:
+        logger.error(f"Error extracting metrics with RAG: {e}")
         return wrap_dict_to_toon({"error": f"Error extracting metrics: {e}"})

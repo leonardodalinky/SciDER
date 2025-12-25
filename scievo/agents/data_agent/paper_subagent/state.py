@@ -10,6 +10,9 @@ class PaperSearchAgentState(ToolsetState, HistoryState):
 
     # Input
     user_query: str  # User's original search query
+    data_summary: str | None = (
+        None  # Data analysis summary from data agent (for dataset similarity search)
+    )
     current_query: str | None = None  # Current optimized query (for iteration)
     max_search_iterations: int = 3  # Maximum number of search iterations
 

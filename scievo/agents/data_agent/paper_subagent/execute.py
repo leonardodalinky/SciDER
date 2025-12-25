@@ -225,10 +225,13 @@ def dataset_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
         # Call the search_datasets tool directly
         # Use current_query if available, otherwise use user_query
         query_to_use = agent_state.current_query or agent_state.user_query
+
+        # Pass data_summary if available to search for similar datasets
         result = search_datasets(
             query=query_to_use,
             sources=["paperswithcode", "huggingface"],  # Default sources
             max_results=10,
+            data_summary=agent_state.data_summary,  # Pass data analysis summary
         )
 
         # Parse the result (tool returns TOON format)
