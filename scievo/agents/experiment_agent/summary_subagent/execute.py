@@ -7,6 +7,7 @@ import json
 
 from loguru import logger
 
+from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
@@ -36,6 +37,14 @@ def gateway_node(agent_state: SummaryAgentState) -> SummaryAgentState:
 
 def gateway_conditional(agent_state: SummaryAgentState) -> str:
     """Determine the next node based on the last message"""
+    # compress history if needed
+    if (
+        constant.HISTORY_AUTO_COMPRESSION
+        and "history_compression" not in agent_state.node_history[-2:]
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+    ):
+        return "history_compression"
+
     last_msg = agent_state.patched_history[-1]
 
     # If the last message contains tool calls, execute them
@@ -237,3 +246,8 @@ def finalize_node(agent_state: SummaryAgentState) -> SummaryAgentState:
             logger.error(f"Failed to save summary to {agent_state.output_path}: {e}")
 
     return agent_state
+
+
+def history_compression_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
+    return history_compression.invoke_history_compression(agent_state)

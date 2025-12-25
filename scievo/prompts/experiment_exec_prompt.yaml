@@ -34,6 +34,8 @@ exec_system_prompt: |
     - Continue checking until the command completes
   - `exec_ctrlc`: Send Ctrl-C to interrupt the current command if needed
 
+  For file operations, you can use the **fs** toolset if activated.
+
   ### Execution Strategy
 
   1. **Parse the User Query**: Understand what experiment needs to be run from the natural language description

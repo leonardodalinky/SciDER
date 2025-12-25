@@ -35,7 +35,7 @@ class LocalShellContext(CommandContextBase):
         """Cancel the command by sending Ctrl-C."""
         self.session.ctrlc(n=3)
 
-    def get_input_output(self) -> str:
+    def get_input_output(self, max_length: int | None = None) -> str:
         """Get the input and output of the command. Used for AI conversation context."""
         raw_content = self.session.get_history(self.start_buffer_position)
         # regex find last match by PRMOPT
@@ -50,6 +50,12 @@ class LocalShellContext(CommandContextBase):
         if self.end_buffer_position is not None:
             res = res[: self.end_buffer_position - self.start_buffer_position]
         res = res.removesuffix(prompt_start)
+
+        if max_length is not None:
+            from scievo.core.utils import smart_truncate
+
+            res = smart_truncate(res, max_length=max_length)
+
         return res
 
     def _monitor_completion(self):

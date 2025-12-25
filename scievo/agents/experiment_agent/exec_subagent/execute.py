@@ -9,6 +9,7 @@ import time
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
@@ -25,13 +26,13 @@ AGENT_NAME = "experiment_exec"
 BUILTIN_TOOLSETS = [
     "state",
     "exec",  # The exec toolset is built-in for this agent
+    "fs",
 ]
 ALLOWED_TOOLSETS = [
     "history",
-    "fs",
 ]  # Can be extended if needed
 
-MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120]  # in seconds
+MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120, 120, 180]  # in seconds
 
 
 def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
@@ -42,6 +43,14 @@ def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
 
 def gateway_conditional(agent_state: ExecAgentState) -> str:
     """Determine the next node based on the last message"""
+    # compress history if needed
+    if (
+        constant.HISTORY_AUTO_COMPRESSION
+        and "history_compression" not in agent_state.node_history[-2:]
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+    ):
+        return "history_compression"
+
     # Check if there's a command currently running in the session
     if agent_state.is_monitor_mode:
         # A command is running -> go to monitoring node
@@ -138,7 +147,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
         return agent_state
 
     # Get current output from the running command
-    current_output = ctx.get_input_output()
+    current_output = ctx.get_input_output(max_length=32000)
 
     if not agent_state.session.is_running_command():
         # Command has completed while we were waiting
@@ -388,3 +397,8 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.monitoring_attempts = 0
 
     return agent_state
+
+
+def history_compression_node(agent_state: ExecAgentState) -> ExecAgentState:
+    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
+    return history_compression.invoke_history_compression(agent_state)

@@ -104,7 +104,7 @@ class CommandContextBase(ABC):
             return self.error
 
     @abstractmethod
-    def get_input_output(self) -> str:
+    def get_input_output(self, max_length: int | None = None) -> str:
         """Get the input and output of the command. Used for AI conversation context."""
         pass
 

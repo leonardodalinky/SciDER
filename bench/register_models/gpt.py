@@ -97,7 +97,7 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
     )
 
     ModelRegistry.register(
-        name="experiment_execute_monitor",
+        name="experiment_monitor",
         model=LOW_COST_MODEL,
         api_key=OPENAI_KEY,
         reasoning={
@@ -197,7 +197,7 @@ def register_gpt_medium_high_models(reasoning: str = "low"):
     )
 
     ModelRegistry.register(
-        name="experiment_execute_monitor",
+        name="experiment_monitor",
         model=MEDIUM_COST_MODEL,
         api_key=OPENAI_KEY,
         reasoning={

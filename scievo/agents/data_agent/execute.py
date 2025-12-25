@@ -49,6 +49,7 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
     # compress history if needed
     if (
         constant.HISTORY_AUTO_COMPRESSION
+        and "history_compression" not in agent_state.node_history[-2:]
         and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
     ):
         return "history_compression"
@@ -149,7 +150,11 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
             "patched_history is empty or only contains system messages, adding dummy user message"
         )
         history = [
-            Message(role="user", content="Please continue with the task.", agent_sender=AGENT_NAME)
+            Message(
+                role="user",
+                content="Please continue with the task.",
+                agent_sender=AGENT_NAME,
+            )
         ]
 
     msg = ModelRegistry.completion(
@@ -297,42 +302,9 @@ def mem_extraction_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
     return agent_state
 
 
-history_compress_subgraph = history_compression.build()
-history_compress_subgraph_compiled = history_compress_subgraph.compile()
-
-
-def history_compression_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
+def history_compression_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("history_compression_node of Agent {}", AGENT_NAME)
-    agent_state.add_node_history("history_compression")
-    try:
-        res = history_compress_subgraph_compiled.invoke(
-            history_compression.HistoryCompressionState(
-                hc_input_history_state=agent_state,
-            )
-        )
-    except Exception as e:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"history_compression_error: {sprint_chained_exception(e)}",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
-        return agent_state
-
-    output_patch = res.get("hc_output_patch", None)
-    if output_patch:
-        agent_state.history_patches.append(output_patch)
-    else:
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content="history_compression_error: No output patch",
-                agent_sender=AGENT_NAME,
-            ).with_log()
-        )
-
-    return agent_state
+    return history_compression.invoke_history_compression(agent_state)
 
 
 def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
