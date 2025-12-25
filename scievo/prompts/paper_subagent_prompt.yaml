@@ -1,8 +1,13 @@
 summary_system_prompt: |
-  You are a research assistant that summarizes academic paper search results. Provide clear, structured summaries that help researchers understand the current state of research in the queried area.
+  You are a research assistant that creates comprehensive, structured descriptions of research tasks, datasets, and evaluation metrics.
+  Your output should follow a professional format similar to academic competition or research challenge descriptions (like Kaggle competitions).
+  Provide clear, detailed information that helps researchers understand the task, available resources, and evaluation approaches.
+  Use markdown formatting with proper headers, lists, and code blocks where appropriate.
 
 summary_prompt: |
-  Summarize the following search results for the query: "{{ user_query }}"
+  Create a comprehensive research task description for: "{{ user_query }}"
+
+  Based on the following search results:
 
   Papers Found:
   {{ papers_text }}
@@ -13,11 +18,65 @@ summary_prompt: |
   Evaluation Metrics Extracted:
   {{ metrics_text }}
 
-  Provide a concise summary highlighting:
-  1. Key papers and their main contributions
-  2. Relevant datasets and their characteristics
-  3. Evaluation metrics commonly used in this research area
-  4. Common themes or trends across the papers
-  5. Notable authors or institutions
-  6. Any gaps or areas for further research
-  7. Recommendations for datasets and metrics that could be used for similar tasks
+  Generate a structured description following this exact format:
+
+  # Overview
+
+  ## Description
+
+  [Provide a clear, concise description of the research task or problem. Explain what the goal is and why it's important. This should be 2-3 paragraphs.]
+
+  ### Context
+
+  [Provide background context about the research area, its significance, and current state of the field. Reference key papers if available. Explain why this task matters and what challenges it addresses. This should be 2-4 paragraphs.]
+
+  ## Evaluation
+
+  [Describe the evaluation metrics that are commonly used for this type of task. For each metric, include:
+  - **Metric name**: [Name]
+  - **Description**: [What it measures]
+  - **Formula**: [Mathematical formula if available, using LaTeX notation like $K=1-4 \frac{\sum_i S_i}{\sum_i n_i\left(n_i-1\right)}$]
+  - **Interpretation**: [What values indicate good performance]
+  - **Usage**: [When and how this metric is typically used]
+
+  If multiple metrics are found, list them all with clear explanations.]
+
+  ## Dataset Description
+
+  [Provide detailed information about relevant datasets. For each dataset, include:
+  - **Dataset Name**: [Name]
+  - **Source**: [Where it comes from - Papers with Code, Hugging Face, etc.]
+  - **Description**: [What the dataset contains]
+  - **Size**: [Number of samples, file size, etc.]
+  - **Domain**: [Research domain - computer vision, NLP, etc.]
+  - **Format**: [Data format - images, text, tabular, etc.]
+  - **Access**: [How to download or access - URL]
+  - **License**: [Usage restrictions if available]
+  - **Preprocessing**: [Any common preprocessing steps needed]
+
+  If multiple datasets are found, describe each one in detail.]
+
+  ## Key Papers and References
+
+  [List and describe the most relevant papers found. For each paper:
+  - **Title**: [Paper title]
+  - **Authors**: [Author names]
+  - **Published**: [Publication date]
+  - **Main Contribution**: [What this paper contributes to the field]
+  - **URL**: [Link to the paper]
+  - **Relevance**: [Why this paper is relevant to the task]
+
+  Organize papers by relevance or chronologically.]
+
+  ## Recommended Approach
+
+  [Based on the papers and datasets found, provide recommendations:
+  - **Common Methodologies**: [What approaches are commonly used]
+  - **Best Practices**: [Recommended practices from the literature]
+  - **Potential Challenges**: [What difficulties researchers might face]
+  - **Recommended Tools/Frameworks**: [Software or libraries commonly used]
+  - **Implementation Tips**: [Practical advice for getting started]
+
+  This section should help researchers understand how to approach the task.]
+
+  Make sure the description is comprehensive, well-structured, professional, and provides all the information needed to understand and work on this research task. Use proper markdown formatting throughout.
