@@ -100,9 +100,9 @@ class ModelRegistry:
                 if attempt == max_retries - 1:
                     raise
                 logger.warning(
-                    f"Encountered ZeroChoiceError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries}..."
+                    f"Encountered ZeroChoiceError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries} after 45 seconds..."
                 )
-                sleep(5)  # brief wait before retry
+                sleep(45)  # brief wait before retry
 
     @classmethod
     def _completion(

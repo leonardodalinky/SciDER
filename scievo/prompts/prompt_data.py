@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Type, TypeVar
 
 import yaml
@@ -8,6 +9,7 @@ from jinja2 import Template
 T = TypeVar("T")
 
 PROMPTS: "Prompts" = None  # type: ignore
+SKILLS: "Skills" = None  # type: ignore
 
 
 @dataclass
@@ -133,7 +135,7 @@ class PaperSubagentPrompts:
     summary_prompt: Template
 
 
-def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
+def parse_yaml_as_templates(model_type: Type[T], path: str | Path) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
 
@@ -145,41 +147,51 @@ def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     return model_type(**data2)
 
 
+@dataclass
+class Skills:
+    uv_skill: str
+
+
 def init():
-    DIR = os.path.dirname(__file__)
+    DIR = Path(__file__).parent
 
     global PROMPTS
+    global SKILLS
 
     PROMPTS = Prompts(
-        dummy=parse_yaml_as_templates(DummyPrompts, os.path.join(DIR, "dummy_prompt.yaml")),
-        data=parse_yaml_as_templates(DataPrompts, os.path.join(DIR, "data_prompt.yaml")),
-        rbank=parse_yaml_as_templates(RBankPrompts, os.path.join(DIR, "rbank_prompt.yaml")),
-        history=parse_yaml_as_templates(HistoryPrompts, os.path.join(DIR, "history_prompt.yaml")),
+        dummy=parse_yaml_as_templates(DummyPrompts, DIR / "dummy_prompt.yaml"),
+        data=parse_yaml_as_templates(DataPrompts, DIR / "data_prompt.yaml"),
+        rbank=parse_yaml_as_templates(RBankPrompts, DIR / "rbank_prompt.yaml"),
+        history=parse_yaml_as_templates(HistoryPrompts, DIR / "history_prompt.yaml"),
         experiment_coding=parse_yaml_as_templates(
-            ExperimentPrompts, os.path.join(DIR, "experiment_coding_prompt.yaml")
+            ExperimentPrompts, DIR / "experiment_coding_prompt.yaml"
         ),
         experiment_coding_v2=parse_yaml_as_templates(
             ExperimentCodingV2Prompts,
-            os.path.join(DIR, "experiment_coding_prompt_v2.yaml"),
+            DIR / "experiment_coding_prompt_v2.yaml",
         ),
         experiment_claude_coding_v2=parse_yaml_as_templates(
             ExperimentClaudeCodingV2Prompts,
-            os.path.join(DIR, "experiment_claude_coding_prompt_v2.yaml"),
+            DIR / "experiment_claude_coding_prompt_v2.yaml",
         ),
         experiment_exec=parse_yaml_as_templates(
-            ExperimentExecPrompts, os.path.join(DIR, "experiment_exec_prompt.yaml")
+            ExperimentExecPrompts, DIR / "experiment_exec_prompt.yaml"
         ),
         experiment_summary=parse_yaml_as_templates(
             ExperimentSummaryPrompts,
-            os.path.join(DIR, "experiment_summary_prompt.yaml"),
+            DIR / "experiment_summary_prompt.yaml",
         ),
-        critic=parse_yaml_as_templates(CriticPrompts, os.path.join(DIR, "critic_prompt.yaml")),
+        critic=parse_yaml_as_templates(CriticPrompts, DIR / "critic_prompt.yaml"),
         experiment_agent=parse_yaml_as_templates(
-            ExperimentAgentPrompts, os.path.join(DIR, "experiment_agent_prompt.yaml")
+            ExperimentAgentPrompts, DIR / "experiment_agent_prompt.yaml"
         ),
         paper_subagent=parse_yaml_as_templates(
-            PaperSubagentPrompts, os.path.join(DIR, "paper_subagent_prompt.yaml")
+            PaperSubagentPrompts, DIR / "paper_subagent_prompt.yaml"
         ),
+    )
+
+    SKILLS = Skills(
+        uv_skill=(DIR / "skills" / "uv.md").read_text(),
     )
 
 

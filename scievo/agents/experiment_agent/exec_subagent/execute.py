@@ -5,6 +5,7 @@ Experiment Execution Agent - handles running experiments in local shell sessions
 import inspect
 import json
 import time
+from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
@@ -14,7 +15,7 @@ from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response, wrap_dict_to_toon
-from scievo.prompts import PROMPTS
+from scievo.prompts import PROMPTS, SKILLS
 from scievo.tools import Tool, ToolRegistry
 
 from .state import ExecAgentState
@@ -33,6 +34,9 @@ ALLOWED_TOOLSETS = [
 ]  # Can be extended if needed
 
 MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120, 120, 180]  # in seconds
+
+# load uv skill md
+UV_SKILL = Path(__file__).parent.parent.parent.parent / "tools" / "skills" / "uv_venv_management.md"
 
 
 def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
@@ -87,7 +91,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": agent_state.workspace,
+        "workspace": agent_state.workspace.working_dir,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
@@ -95,6 +99,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     system_prompt = PROMPTS.experiment_exec.exec_system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
+        uv_skill=SKILLS.uv_skill,
     )
 
     # Construct tools
@@ -211,7 +216,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     elif "ctrlc" in r.action.lower():
         logger.debug("Monitoring decision: interrupting the running command.")
         ctx.cancel()
-        agent_state.is_monitor_mode = False
+        logger.debug("Monitoring is interrupted. Command is cancelled.")
         monitoring_ctrlc_user_msg = Message(
             role="user",
             content=PROMPTS.experiment_exec.monitoring_ctrlc_user_prompt.render(
@@ -222,6 +227,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
             agent_sender=AGENT_NAME,
         )
         agent_state.add_message(monitoring_ctrlc_user_msg)
+        agent_state.is_monitor_mode = False
     else:
         logger.warning(
             f"Unknown monitoring action '{r.action}' received. Continuing to wait by default."

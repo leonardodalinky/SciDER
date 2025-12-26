@@ -80,8 +80,6 @@ def register_gemini_low_medium_models(reasoning: str = "low"):
         model=MEDIUM_COST_MODEL,
         api_key=GEMINI_KEY,
         reasoning_effort=reasoning,
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -120,7 +118,7 @@ def register_gemini_medium_high_models(reasoning: str = "low"):
 
     ModelRegistry.register(
         name="critic",
-        model=MEDIUM_COST_MODEL,
+        model=HIGH_COST_MODEL,
         api_key=GEMINI_KEY,
         reasoning_effort=reasoning,
         temperature=0.3,
@@ -164,8 +162,6 @@ def register_gemini_medium_high_models(reasoning: str = "low"):
         model=HIGH_COST_MODEL,
         api_key=GEMINI_KEY,
         reasoning_effort=reasoning,
-        temperature=0.3,
-        top_p=0.9,
     )
 
     ModelRegistry.register(
@@ -178,7 +174,7 @@ def register_gemini_medium_high_models(reasoning: str = "low"):
 
     ModelRegistry.register(
         name="experiment_summary",
-        model=MEDIUM_COST_MODEL,
+        model=HIGH_COST_MODEL,
         api_key=GEMINI_KEY,
         reasoning_effort="low",
     )

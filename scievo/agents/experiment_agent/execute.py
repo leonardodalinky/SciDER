@@ -101,8 +101,9 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     coding_query = PROMPTS.experiment_agent.coding_subagent_query_prompt.render(
         user_query=agent_state.user_query,
         repo_source=agent_state.repo_source or "Not specified",
-        revision_feedback_list=revision_feedback_list,
-        previous_coding_summaries=previous_coding_summaries,
+        # TODO: limit to last revision and coding summary for now
+        revision_feedback_list=revision_feedback_list[-1:],
+        previous_coding_summaries=previous_coding_summaries[-1:],
         revision_analysis=revision_analysis_text,
         current_revision=agent_state.current_revision,
     )

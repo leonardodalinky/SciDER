@@ -80,28 +80,27 @@ class CommandContextBase(ABC):
 
     def is_running(self) -> bool:
         """Check if command is still running."""
-        with self._lock:
-            return self.state == CommandState.RUNNING
+        return self.state == CommandState.RUNNING
 
     def is_completed(self) -> bool:
         """Check if command completed successfully."""
-        with self._lock:
-            return self.state == CommandState.COMPLETED
+        return self.state == CommandState.COMPLETED
 
     def has_error(self) -> bool:
         """Check if command encountered an error."""
-        with self._lock:
-            return self.state in (CommandState.ERROR, CommandState.TIMEOUT)
+        return self.state in (CommandState.ERROR, CommandState.TIMEOUT)
 
     def get_state(self) -> CommandState:
         """Get current state of the command."""
-        with self._lock:
-            return self.state
+        return self.state
 
     def get_error(self) -> str | None:
         """Get error message if any."""
-        with self._lock:
-            return self.error
+        return self.error
+
+    def send_input(self, input_data: str):
+        """Send input to the running command."""
+        raise NotImplementedError("send_input method not implemented")
 
     @abstractmethod
     def get_input_output(self, max_length: int | None = None) -> str:
@@ -127,11 +126,18 @@ class CommandContextBase(ABC):
         """Cancel the running command."""
         if self.is_running():
             logger.info(f"Cancelling command: {self.command}")
-            self._stop_monitoring.set()
-            self._cancel_command()
             with self._lock:
+                self._stop_monitoring.set()
                 self.state = CommandState.ERROR
                 self.error = "Command cancelled by user"
+            self._cancel_command()
+            if self._monitor_thread:
+                # wait for monitor thread to exit
+                self._monitor_thread.join(timeout=5)
+                if not self.wait(timeout=5):
+                    logger.warning(
+                        "Monitor thread did not exit after cancellation. Shutting down anyway."
+                    )
 
 
 class SessionBase(ABC):

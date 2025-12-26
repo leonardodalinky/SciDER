@@ -9,6 +9,7 @@ from pydantic import PrivateAttr
 
 from scievo.core.code_env import LocalEnv
 from scievo.core.types import HistoryState, ToolsetState
+from scievo.prompts import SKILLS
 
 
 class CodingAgentState(ToolsetState, HistoryState):
@@ -82,10 +83,23 @@ class CodingAgentState(ToolsetState, HistoryState):
                         content="When using the File Editor tool and other file-related tools, always refer to files using their absolute paths. "
                         "This ensures that file operations are unambiguous and correctly targeted within the workspace. ",
                     ),
+                    Skill(
+                        name="UV - Python Package Manager Skill",
+                        content=SKILLS.uv_skill,
+                    ),
                 ],
                 system_message_suffix="""\
+<CLI_MODE>
 You are operating in CLI mode, so all file paths should be absolute paths as much as possible.
 Besides, try to avoid long time operations that may block the process, e.g., training the deep learning model directly.
+</CLI_MODE>
+
+<SHORT_RUNNING>
+- DO NOT train the full model. Just train a demo if needed for testing code changes.
+- DO NOT run large data processing tasks. Just simulate with small data if needed for testing code
+- The full experiments will be run later by the user after getting the code changes.
+- IMPORTANT: If a command takes longer than 10 minutes (a.k.a. 600 seconds), you should leave it to the user to run later.
+</SHORT_RUNNING>
 """,
             )
             agent = Agent(
