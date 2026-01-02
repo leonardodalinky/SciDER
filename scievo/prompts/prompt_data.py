@@ -24,6 +24,7 @@ class Prompts:
     experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
     experiment_agent: "ExperimentAgentPrompts"
     paper_subagent: "PaperSubagentPrompts"
+    ideation: "IdeationPrompts"
 
 
 @dataclass
@@ -133,6 +134,12 @@ class PaperSubagentPrompts:
     summary_prompt: Template
 
 
+@dataclass
+class IdeationPrompts:
+    system_prompt: Template
+    user_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -179,6 +186,9 @@ def init():
         ),
         paper_subagent=parse_yaml_as_templates(
             PaperSubagentPrompts, os.path.join(DIR, "paper_subagent_prompt.yaml")
+        ),
+        ideation=parse_yaml_as_templates(
+            IdeationPrompts, os.path.join(DIR, "ideation_prompt.yaml")
         ),
     )
 

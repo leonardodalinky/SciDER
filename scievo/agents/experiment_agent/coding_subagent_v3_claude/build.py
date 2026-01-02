@@ -2,12 +2,12 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
 from . import execute
-from .state import CodingAgentState
+from .state import ClaudeCodingAgentState
 
 
 @logger.catch
 def build():
-    """Build the coding agent graph.
+    """Build the Claude coding agent graph.
 
     This is a minimal graph that delegates all coding work to Claude Agent SDK.
     Flow: START -> claude_node -> summary_node -> END
@@ -15,7 +15,7 @@ def build():
     Claude Agent SDK has its own internal planning and execution, so no external
     LLM chat loop or tool calling is needed.
     """
-    g = StateGraph(CodingAgentState)
+    g = StateGraph(ClaudeCodingAgentState)
 
     # Nodes - minimal: just OpenHands execution and summary
     g.add_node("claude", execute.claude_node)

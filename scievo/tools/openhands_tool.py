@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+# Setup openhands paths first (must be before any openhands imports)
+from scievo.core import openhands_import  # noqa: F401
+
 from .registry import register_tool, register_toolset_desc
 
 if TYPE_CHECKING:
