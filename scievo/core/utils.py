@@ -21,52 +21,97 @@ def wrap_dict_to_toon(d: dict) -> str:
     return wrap_text_with_block(s, "toon")
 
 
+def _normalize_toon_content(toon_content: str) -> str:
+    """
+    Normalize TOON content to fix common format issues.
+
+    Fixes:
+    1. Illegal key syntax like `authors[6]: value1,value2,...` -> `authors: [value1, value2, ...]`
+    2. Handles comma-separated values in indexed keys
+    3. Preserves proper TOON format for other lines
+    """
+    # Check if normalization is needed
+    if not re.search(r"\w+\[\d+\]\s*:", toon_content):
+        # No illegal syntax found, return as-is
+        return toon_content
+
+    lines = []
+
+    for line in toon_content.splitlines():
+        # Match illegal indexed key syntax: key[number]: value
+        # Example: authors[6]: Fengyu She,Nan Wang,Hongfei Wu,...
+        indexed_key_match = re.match(r"^(\w+)\[(\d+)\]\s*:\s*(.+)$", line)
+        if indexed_key_match:
+            key, index, value = indexed_key_match.groups()
+
+            # Split comma-separated values
+            # Handle both quoted and unquoted values
+            values = []
+            for v in value.split(","):
+                v = v.strip()
+                # Remove quotes if present
+                if (v.startswith('"') and v.endswith('"')) or (
+                    v.startswith("'") and v.endswith("'")
+                ):
+                    v = v[1:-1]
+                if v:  # Only add non-empty values
+                    values.append(v)
+
+            # Convert to proper TOON list format
+            if values:
+                # Use YAML-style list format for better compatibility
+                formatted_values = ", ".join(f'"{v}"' for v in values)
+                lines.append(f"{key}: [{formatted_values}]")
+            else:
+                lines.append(f"{key}: []")
+        else:
+            # Regular line - preserve as-is
+            lines.append(line)
+
+    return "\n".join(lines)
+
+
 def unwrap_dict_from_toon(toon_str: str) -> dict:
     """Parse a toon-formatted string back to a dictionary."""
-    from loguru import logger
-
-    # Handle case where input is already a dict (shouldn't happen, but be defensive)
     if isinstance(toon_str, dict):
         return toon_str
 
-    # Extract toon content from code block if present
-    toon_match = re.search(
-        r"(?:```\s*)?(?:toon\s*)?(.*)(?:```)?", toon_str, flags=re.DOTALL | re.IGNORECASE
+    if not isinstance(toon_str, str):
+        raise TypeError(f"Expected str or dict, got {type(toon_str)}")
+    match = re.search(
+        r"```toon\s*\n(.*?)\n```",
+        toon_str,
+        flags=re.DOTALL | re.IGNORECASE,
     )
-    if not toon_match:
-        # If no code block found, try treating the whole string as toon content
-        toon_content = toon_str.strip()
+
+    if match:
+        toon_content = match.group(1).strip()
     else:
-        toon_content = toon_match.group(1).strip()
+        toon_content = toon_str.strip()
 
-    # Log the toon content for debugging (first 500 chars)
-    logger.debug("Attempting to decode TOON content (preview): {}", toon_content[:500])
+    if ":" not in toon_content:
+        raise ValueError(
+            "Invalid TOON content: no ':' found. " "Likely code block extraction failed."
+        )
 
-    # Try toon.decode() - this is the standard method
+    # Normalize TOON content to fix common format issues
+    # (e.g., illegal indexed key syntax like authors[6]: value)
+    toon_content = _normalize_toon_content(toon_content)
+
     try:
-        result = toon.decode(toon_content)
-        logger.debug("Successfully decoded TOON")
-        return result
-    except AttributeError:
-        # If decode doesn't exist, try other common method names
-        logger.debug("toon.decode() not found, trying alternative methods")
+        if hasattr(toon, "decode"):
+            return toon.decode(toon_content)
         if hasattr(toon, "loads"):
             return toon.loads(toon_content)
-        elif hasattr(toon, "parse"):
+        if hasattr(toon, "parse"):
             return toon.parse(toon_content)
-        else:
-            raise ValueError(
-                f"toon library does not have decode, loads, or parse methods. "
-                f"Available: {[attr for attr in dir(toon) if not attr.startswith('_')]}"
-            )
+
+        raise RuntimeError("toon library has no decode / loads / parse method")
+
     except Exception as e:
-        # Log the full error and content for debugging
-        logger.error("TOON decode error: {}. Content length: {}", e, len(toon_content))
-        logger.debug("Full TOON content: {}", toon_content)
-        # Re-raise with more context
-        raise ValueError(
-            f"Failed to decode TOON: {e}. Content preview: {toon_content[:200]}"
-        ) from e
+        logger = __import__("loguru", fromlist=["logger"]).logger
+        logger.debug(f"Full TOON content: {toon_content}")
+        raise ValueError(f"Failed to decode TOON: {e}") from e
 
 
 def parse_json_from_llm_response(llm_response: str | Message, tgt_type: Type[T]) -> T:

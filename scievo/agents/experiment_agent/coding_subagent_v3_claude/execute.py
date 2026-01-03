@@ -15,13 +15,13 @@ from scievo.core.types import Message
 from scievo.prompts import PROMPTS
 from scievo.tools.claude_agent_sdk_tool import run_claude_agent_sdk
 
-from .state import CodingAgentState
+from .state import ClaudeCodingAgentState
 
 LLM_NAME = "experiment_coding"
 AGENT_NAME = "experiment_coding"
 
 
-def claude_node(agent_state: CodingAgentState) -> CodingAgentState:
+def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
     """
     Execute the coding task using Claude Agent SDK.
 
@@ -99,7 +99,7 @@ def claude_node(agent_state: CodingAgentState) -> CodingAgentState:
     return agent_state
 
 
-def summary_node(agent_state: CodingAgentState) -> CodingAgentState:
+def summary_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
     """Generate summary of the coding workflow and results."""
     logger.debug("summary_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("summary")

@@ -306,4 +306,6 @@ def search_papers(query: str, sources: List[str] = None, max_results: int = 10) 
 
         return wrap_dict_to_toon(result)
     except Exception as e:
-        return f"Error searching papers: {e}"
+        logger.exception("Error searching papers")
+        # Return error in TOON format to avoid parsing errors
+        return wrap_dict_to_toon({"error": f"Error searching papers: {e}", "papers": []})
