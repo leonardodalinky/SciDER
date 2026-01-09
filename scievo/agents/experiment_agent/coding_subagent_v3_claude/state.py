@@ -2,7 +2,7 @@ from scievo.core.code_env import LocalEnv
 from scievo.core.types import HistoryState, ToolsetState
 
 
-class CodingAgentState(ToolsetState, HistoryState):
+class ClaudeCodingAgentState(ToolsetState, HistoryState):
     """State of the Coding Subagent V3 Claude.
 
     This agent delegates coding tasks to Claude Agent SDK which has its own

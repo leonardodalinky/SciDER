@@ -6,6 +6,6 @@ Claude Agent SDK has its own internal planning and execution mechanisms.
 """
 
 from .build import build
-from .state import CodingAgentState
+from .state import ClaudeCodingAgentState
 
-__all__ = ["build", "CodingAgentState"]
+__all__ = ["build", "ClaudeCodingAgentState"]
