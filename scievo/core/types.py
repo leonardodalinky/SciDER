@@ -7,11 +7,12 @@ import tiktoken
 from functional import seq
 from langgraph.graph import START
 from litellm import Message as LLMessage
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel
 from rich.console import Console
 from rich.style import Style
 
 from .exec import SessionBase
+from .exec.manager import SessionManager
 
 console = Console()
 
@@ -335,12 +336,16 @@ class RBankState(BaseModel):
 
 
 class ExecState(BaseModel):
-    # Current execution state
-    _session: SessionBase = PrivateAttr(init=False)
+    session_id: str | None = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     @property
     def session(self) -> SessionBase:
-        return self._session
+        s = SessionManager().get_session(self.session_id)
+        if s is None:
+            raise RuntimeError(
+                f"Session with ID {self.session_id} not found. It may not be registered yet."
+            )
+        return s

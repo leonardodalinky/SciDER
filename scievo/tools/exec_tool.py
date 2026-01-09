@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 register_toolset_desc("exec", "Execution session management toolset for command execution.")
 
+MAX_COMMAND_OUTPUT_LENGTH = 16000
+
 
 @register_tool(
     "exec",
@@ -45,11 +47,11 @@ def exec_command(agent_state: "ExecState", command: str) -> str:
         is_finished = ctx.wait(timeout=TIMEOUT)
 
         if not is_finished or ctx.is_running():
-            result = ctx.get_input_output()
+            result = ctx.get_input_output(max_length=MAX_COMMAND_OUTPUT_LENGTH)
             return f"WARNING: Command execution of `{command}` is not finished in {TIMEOUT} seconds. Try to check the execution status later.\nCurrent input & output:\n---\n{result}"
 
         # Get the result
-        result = ctx.get_input_output()
+        result = ctx.get_input_output(max_length=MAX_COMMAND_OUTPUT_LENGTH)
 
         # Check for errors
         if ctx.has_error():
@@ -123,15 +125,15 @@ def exec_check(agent_state: "ExecState") -> str:
 
         # Check the state
         if ctx.is_running():
-            result = ctx.get_input_output()
+            result = ctx.get_input_output(MAX_COMMAND_OUTPUT_LENGTH)
             return (
                 f"Command of `{ctx.command}` is still running...\nCurrent input & output:\n{result}"
             )
         elif ctx.is_completed():
-            result = ctx.get_input_output()
+            result = ctx.get_input_output(MAX_COMMAND_OUTPUT_LENGTH)
             return f"Command of `{ctx.command}` completed successfully:\n{result}"
         elif ctx.has_error():
-            result = ctx.get_input_output()
+            result = ctx.get_input_output(MAX_COMMAND_OUTPUT_LENGTH)
             error_msg = ctx.get_error()
             return f"Command of `{ctx.command}` failed with error: {error_msg}\n{result}"
         else:

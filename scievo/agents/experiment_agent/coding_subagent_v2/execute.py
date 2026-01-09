@@ -8,6 +8,7 @@ to OpenHands SDK. The flow is: START -> openhands_node -> summary_node -> END
 import os
 
 from loguru import logger
+from openhands.sdk.event import ActionEvent
 
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
@@ -52,6 +53,12 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
 - Ensure that all changes are made in a way that maintains the integrity of the codebase.
 - Avoid long-running executions of training or data processing; focus on code changes. If needed for code testing, design some simple test code instead.
 
+# Important Notes:
+- DO NOT train the full model. Just train a demo if needed for testing code changes.
+- DO NOT run large data processing tasks. Just simulate with small data if needed for testing code
+- Always ensure that the code runs without errors after your changes.
+- I would run the full experiments later after getting your code changes.
+
 # Workspace
 {workspace_dir}
 
@@ -70,13 +77,21 @@ def openhands_node(agent_state: CodingAgentState) -> CodingAgentState:
         conversation.send_message(message)
 
         # Run the agent until completion
-        conversation.run()
+        with agent_state.workspace:
+            conversation.run()
 
         # Extract the last response from OpenHands
         if conversation.state.events:
             for e in reversed(conversation.state.events):
-                if e.source == "agent":
-                    last_response = "\n".join([c.text for c in e.llm_message.content])
+                if isinstance(e, ActionEvent) and e.source == "agent":
+                    if hasattr(e, "llm_message") and e.llm_message:
+                        content = e.llm_message.content
+                    elif (m := getattr(e, "to_llm_message", None)) is not None and callable(m):
+                        content = m().content
+                    else:
+                        # Unable to extract content from this event
+                        continue
+                    last_response = "\n".join([c.text for c in content])
                     break
             else:
                 last_response = "Coding task completed (no detailed response available)."

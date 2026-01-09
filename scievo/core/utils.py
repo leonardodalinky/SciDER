@@ -80,6 +80,9 @@ def unwrap_dict_from_toon(toon_str: str) -> dict:
         raise TypeError(f"Expected str or dict, got {type(toon_str)}")
     match = re.search(
         r"```toon\s*\n(.*?)\n```",
+    # Extract toon content from code block if present
+    toon_match = re.search(
+        r"(?:```\s*)?(?:toon\s*)?(.*)(?:```)?",
         toon_str,
         flags=re.DOTALL | re.IGNORECASE,
     )
@@ -135,7 +138,9 @@ def parse_markdown_from_llm_response(llm_response: str | Message) -> str:
     else:
         text = llm_response
     markdown_match = re.search(
-        r"(?:```\s*)?(?:markdown\s*)?(.*)(?:```)?", text, flags=re.DOTALL | re.IGNORECASE
+        r"(?:```\s*)?(?:markdown\s*)?(.*)(?:```)?",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
     )  # must find something, at least return the entire text
     if not markdown_match:
         raise ValueError("Failed to find markdown in LLM response")
@@ -147,6 +152,10 @@ def array_to_bullets(arr: list[str]) -> str:
     return "\n".join([f"- {s}" for s in arr])
 
 
-def hello_world() -> None:
-    """Print 'Hello, World!' to the console."""
-    print("Hello, World!")
+def smart_truncate(text: str, max_length: int = 32000) -> str:
+    """Truncate text if it exceeds max_length. Keep the head and tail, and adding in the middle."""
+    if len(text) <= max_length:
+        return text
+    MIDDLE_TEXT = f"\n...[truncated about {len(text) - max_length} characters]...\n"
+    half_length = (max_length - len(MIDDLE_TEXT)) // 2  # keep some buffer for the middle part
+    return text[:half_length] + MIDDLE_TEXT + text[-half_length:]

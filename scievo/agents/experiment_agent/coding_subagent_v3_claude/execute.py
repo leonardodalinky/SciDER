@@ -33,24 +33,36 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
     agent_state.add_node_history("claude")
 
     try:
-        # Construct the prompt for Claude Agent SDK
+        # Construct the message for Claude Agent SDK
         instruction = agent_state.user_query or "No specific coding task provided."
         bg_info = agent_state.data_summary or "No background information available."
+        # prefix with `> ` for markdown blockquote
+        instruction = "\n".join([f"> {line}" for line in instruction.splitlines()])
+        bg_info = "\n".join([f"> {line}" for line in bg_info.splitlines()])
         workspace_dir = os.path.abspath(agent_state.workspace.working_dir)
 
         prompt = f"""\
 # Requirements:
 - At the end of your response, provide a detailed explanation of what you did and why.
 - Ensure that all changes are made in a way that maintains the integrity of the codebase.
+- Avoid long-running executions of training or data processing; focus on code changes. If needed for code testing, design some simple test code instead.
+
+# Important Notes:
+- DO NOT train the full model. Just train a demo if needed for testing code changes.
+- DO NOT run large data processing tasks. Just simulate with small data if needed for testing code
+- Always ensure that the code runs without errors after your changes.
+- I would run the full experiments later after getting your code changes.
 
 # Workspace
 {workspace_dir}
 
-# Background information:
-{bg_info}
-
 # Task:
 {instruction}
+
+# Background information:
+```
+{bg_info}
+```
 """
 
         logger.info("Sending task to Claude Agent SDK: {}", instruction[:100])
