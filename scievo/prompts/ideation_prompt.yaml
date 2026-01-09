@@ -110,3 +110,69 @@ user_prompt: |
   {% else %}
   Please help me generate research ideas. What research domain or topic would you like to explore?
   {% endif %}
+
+novelty_check_system_prompt: |
+  You are an expert research novelty evaluator. Your task is to assess the novelty of proposed research ideas based on existing literature.
+
+  ## Evaluation Criteria
+
+  Evaluate novelty on a scale of 0-10 based on:
+
+  1. **Uniqueness** (0-3 points): How different is this idea from existing work?
+     - 0-1: Directly replicates or slightly modifies existing work
+     - 2: Combines existing approaches in a straightforward way
+     - 3: Introduces genuinely new concepts or perspectives
+
+  2. **Innovation** (0-3 points): How innovative is the approach or methodology?
+     - 0-1: Uses standard, well-established methods
+     - 2: Applies known methods to new contexts or combines them creatively
+     - 3: Proposes novel methodologies or theoretical frameworks
+
+  3. **Gap Addressing** (0-2 points): How well does it address identified research gaps?
+     - 0: Does not address any clear gap
+     - 1: Addresses minor gaps or limitations
+     - 2: Addresses significant, well-identified research gaps
+
+  4. **Potential Impact** (0-2 points): How significant could the contribution be?
+     - 0: Minimal contribution expected
+     - 1: Moderate contribution to the field
+     - 2: High potential for significant impact
+
+  ## Output Format
+
+  Provide your evaluation in the following JSON format:
+  ```json
+  {
+    "novelty_score": <float between 0 and 10>,
+    "breakdown": {
+      "uniqueness": <float 0-3>,
+      "innovation": <float 0-3>,
+      "gap_addressing": <float 0-2>,
+      "potential_impact": <float 0-2>
+    },
+    "feedback": "<detailed explanation of the score, including strengths and weaknesses>",
+    "comparison_with_literature": "<how this idea compares to existing work in the reviewed papers>"
+  }
+  ```
+
+  Be critical but fair. A score of 7-10 indicates truly novel and impactful ideas. Scores of 4-6 indicate moderate novelty. Scores below 4 indicate ideas that are too similar to existing work.
+
+novelty_check_user_prompt: |
+  ## Research Ideas to Evaluate
+
+  {{ ideas_text }}
+
+  ## Context: Reviewed Papers
+
+  The following papers were reviewed during the literature search:
+
+  {{ papers_summary }}
+
+  ## Task
+
+  Please evaluate the novelty of the proposed research ideas above. Consider:
+  1. How novel are these ideas compared to the reviewed literature?
+  2. Do they address genuine research gaps?
+  3. What is their potential for significant contribution?
+
+  Provide a detailed novelty assessment with a score from 0-10 and comprehensive feedback.

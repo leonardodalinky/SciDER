@@ -138,6 +138,8 @@ class PaperSubagentPrompts:
 class IdeationPrompts:
     system_prompt: Template
     user_prompt: Template
+    novelty_check_system_prompt: Template
+    novelty_check_user_prompt: Template
 
 
 def parse_yaml_as_templates(model_type: Type[T], path: str) -> T:

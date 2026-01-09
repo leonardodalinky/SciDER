@@ -18,4 +18,6 @@ class IdeationAgentState(ToolsetState, HistoryState):
 
     # Ideation output
     research_ideas: list[dict] = []  # Generated research ideas
+    novelty_score: float | None = None  # Novelty score (0-10) from novelty check
+    novelty_feedback: str | None = None  # Feedback on novelty assessment
     output_summary: str | None = None  # Final ideation report
