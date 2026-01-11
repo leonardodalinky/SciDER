@@ -25,7 +25,8 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
                 working_dir=agent_state.workspace,
                 current_coding_summary=(
                     agent_state.coding_summaries[-1]
-                    if len(agent_state.coding_summaries) > 0
+                    if agent_state.coding_summaries is not None
+                    and len(agent_state.coding_summaries) > 0
                     else None
                 ),
                 coding_summaries=agent_state.coding_summaries,
@@ -50,6 +51,7 @@ def build():
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("monitoring", execute.monitoring_node)
     g.add_node("summary", execute.summary_node)
+    g.add_node("history_compression", execute.history_compression_node)
 
     # Add edges
     # Start -> Init -> Gateway
@@ -65,6 +67,7 @@ def build():
             "tool_calling",
             "monitoring",
             "summary",
+            "history_compression",
         ],
     )
 
@@ -76,6 +79,9 @@ def build():
 
     # Monitoring -> Gateway (after checking/interrupting)
     g.add_edge("monitoring", "gateway")
+
+    # History compression -> Gateway
+    g.add_edge("history_compression", "gateway")
 
     # Summary -> END
     g.add_edge("summary", END)

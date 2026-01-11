@@ -1,10 +1,12 @@
 import os
 import re
+import threading
 import time
 
 import pexpect
 from loguru import logger
 
+from .manager import CommandContextManager, SessionManager
 from .session_base import CommandContextBase, CommandState, SessionBase
 
 _PROMPT = r"AISHELL(\w)> "  # \w shows current working directory
@@ -15,10 +17,20 @@ CONT_PROMPT = "AISHELL_CONT> "  # unique PS2
 class LocalShellContext(CommandContextBase):
     """Context object for managing non-blocking command execution in local PTY sessions."""
 
-    def __init__(self, session: "LocalShellSession", command: str, timeout: float | None = None):
-        super().__init__(session, command, timeout)
-        # Store session with correct type for accessing PTY-specific attributes
-        self.session: "LocalShellSession" = session  # type: ignore
+    @property
+    def session(self) -> "LocalShellSession":
+        """Get the session instance associated with this context."""
+        s = SessionManager().get_session(self.session_id)
+        if s is None:
+            raise ValueError(f"Session with ID {self.session_id} not found")
+        # check type
+        if not isinstance(s, LocalShellSession):
+            raise TypeError(f"Session with ID {self.session_id} is not a LocalShellSession")
+        return s
+
+    def send_input(self, input_data: str):
+        """Send input to the running command. Called with caution. No newline by default."""
+        self.session.process.send(input_data)
 
     def _send_command(self):
         """Send the command to the PTY process."""
@@ -27,8 +39,10 @@ class LocalShellContext(CommandContextBase):
     def _cancel_command(self):
         """Cancel the command by sending Ctrl-C."""
         self.session.ctrlc(n=3)
+        # Record end buffer position
+        self.end_buffer_position = self.session.get_history_position()
 
-    def get_input_output(self) -> str:
+    def get_input_output(self, max_length: int | None = None) -> str:
         """Get the input and output of the command. Used for AI conversation context."""
         raw_content = self.session.get_history(self.start_buffer_position)
         # regex find last match by PRMOPT
@@ -43,6 +57,12 @@ class LocalShellContext(CommandContextBase):
         if self.end_buffer_position is not None:
             res = res[: self.end_buffer_position - self.start_buffer_position]
         res = res.removesuffix(prompt_start)
+
+        if max_length is not None:
+            from scievo.core.utils import smart_truncate
+
+            res = smart_truncate(res, max_length=max_length)
+
         return res
 
     def _monitor_completion(self):
@@ -61,14 +81,17 @@ class LocalShellContext(CommandContextBase):
                     break
 
                 # Try to match the prompt without blocking
-                idx = self.session.process.expect([PROMPT, CONT_PROMPT], timeout=check_interval)
+                idx = self.session.expect([PROMPT, CONT_PROMPT], timeout=check_interval)
 
                 # Command completed
                 with self._lock:
+                    if self.state != CommandState.RUNNING:
+                        logger.debug("Command already not running, exiting monitor loop")
+                        break  # Already not running, exit
+
                     if idx == 1:
                         # Continuation prompt - syntax error
-                        self.session.process.sendcontrol("c")
-                        self.session.process.expect(PROMPT, timeout=5)
+                        self._cancel_command()
                         self.state = CommandState.ERROR
                         self.error = "Command is incomplete (syntax error)"
                     else:
@@ -95,6 +118,8 @@ class LocalShellContext(CommandContextBase):
                     self.error = f"Error: {e}"
                     logger.error(f"Error monitoring command: {e}")
                 break
+        else:
+            logger.debug("Monitoring stopped externally")
 
 
 class LocalShellSession(SessionBase):
@@ -102,6 +127,8 @@ class LocalShellSession(SessionBase):
 
     def __init__(self, shell_path: str = "/bin/bash", cwd: str | None = None):
         super().__init__()
+
+        self._expect_lock = threading.Lock()
 
         session_env = {
             **os.environ,
@@ -141,6 +168,14 @@ class LocalShellSession(SessionBase):
         self.process.sendline(f"export PS2='{CONT_PROMPT}'")
         self.process.expect(PROMPT, timeout=5)
 
+        # Register this session with SessionManager and store the session ID
+        self.session_id = SessionManager().register_session(self)
+
+    def expect(self, *args, **kwargs) -> int:
+        """Wrapper around pexpect's expect method."""
+        with self._expect_lock:
+            return self.process.expect(*args, **kwargs)
+
     def send_control(self, key: str):
         """
         Send Ctrl+<key> to the shell session.
@@ -151,7 +186,7 @@ class LocalShellSession(SessionBase):
         if self.process.isalive():
             self.process.sendcontrol(key.lower())
 
-    def ctrlc(self, n: int = 2):
+    def ctrlc(self, n: int = 3):
         """
         Send Ctrl-C to the shell session.
 
@@ -159,17 +194,24 @@ class LocalShellSession(SessionBase):
         and then waits for the shell prompt to reappear within a 5-second timeout.
 
         Args:
-            n (int, optional): Times to send Ctrl-C. Defaults to 2 to make sure the shell is interrupted.
+            n (int, optional): Max times to send Ctrl-C. Defaults to 3 to make sure the shell is interrupted.
         """
         assert n >= 1, "n must be at least 1"
         if self.process.isalive():
             for _ in range(n):
                 self.send_control("c")
-            self.process.expect(PROMPT, timeout=5)
+                idx = self.expect([PROMPT, pexpect.TIMEOUT], timeout=5)
+                if idx == 0:
+                    # Prompt appeared, command interrupted
+                    return
+            else:
+                logger.warning("Failed to interrupt the command after multiple Ctrl-C attempts.")
 
     def terminate_session(self):
         if self.process.isalive():
             self.process.terminate(force=True)
+        # Unregister from SessionManager
+        SessionManager().unregister_session(self.session_id)
 
     def exec(self, command: str, timeout: float | None = None) -> LocalShellContext:
         """
@@ -192,7 +234,9 @@ class LocalShellSession(SessionBase):
         """
         if self.is_running_command():
             raise RuntimeError("A command is already running in this session")
-        ctx = LocalShellContext(self, command, timeout)
+        ctx = LocalShellContext(self.session_id, command, timeout)
+        # Register context with CommandContextManager and store the context ID
+        context_id = CommandContextManager().register_context(ctx)
         with self._context_lock:
-            self.current_context = ctx
+            self.current_context_id = context_id
         return ctx.start()

@@ -28,14 +28,14 @@ LLM_NAME = "experiment_agent"
 load_dotenv()
 CODING_AGENT_VERSION = os.getenv("CODING_AGENT_VERSION", "v2")  # default to v2
 match CODING_AGENT_VERSION:
-    case "v1":
-        raise RuntimeError("Coding Agent v1 is deprecated and no longer supported.")
     case "v2":
         from .coding_subagent_v2 import build as coding_build
         from .coding_subagent_v2.state import CodingAgentState
     case "v3":
         from .coding_subagent_v3_claude import build as coding_build
         from .coding_subagent_v3_claude.state import CodingAgentState
+    case _:
+        raise ValueError(f"Unsupported CODING_AGENT_VERSION: {CODING_AGENT_VERSION}")
 
 # Compile sub-agent graphs as global variables
 coding_graph = coding_build().compile()
@@ -101,8 +101,9 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     coding_query = PROMPTS.experiment_agent.coding_subagent_query_prompt.render(
         user_query=agent_state.user_query,
         repo_source=agent_state.repo_source or "Not specified",
-        revision_feedback_list=revision_feedback_list,
-        previous_coding_summaries=previous_coding_summaries,
+        # TODO: limit to last revision and coding summary for now
+        revision_feedback_list=revision_feedback_list[-1:],
+        previous_coding_summaries=previous_coding_summaries[-1:],
         revision_analysis=revision_analysis_text,
         current_revision=agent_state.current_revision,
     )

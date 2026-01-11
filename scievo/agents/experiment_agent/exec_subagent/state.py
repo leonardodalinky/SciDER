@@ -1,4 +1,5 @@
 from scievo.core.code_env import LocalEnv
+from scievo.core.exec.manager import SessionManager
 from scievo.core.exec.pty_session import LocalShellSession
 from scievo.core.types import ExecState, HistoryState, ToolsetState
 
@@ -45,7 +46,9 @@ class ExecAgentState(ExecState, ToolsetState, HistoryState):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        _session = LocalShellSession(cwd=self.workspace.working_dir)
-        self._session = _session
+        if self.session_id is None:
+            s = LocalShellSession(cwd=self.workspace.working_dir)
+            # Store session ID instead of the session instance
+            self.session_id = s.session_id
         # add initial toolset
         self.toolsets.append("exec")

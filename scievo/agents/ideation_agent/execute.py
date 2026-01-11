@@ -2,7 +2,7 @@
 Execution nodes for the Ideation Agent
 
 This agent generates research ideas through literature review.
-Flow: START -> literature_search -> analyze_papers -> generate_ideas -> ideation_report -> END
+Flow: START -> literature_search -> analyze_papers -> generate_ideas -> novelty_check -> ideation_report -> END
 """
 
 from loguru import logger
@@ -240,6 +240,155 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
     return agent_state
 
 
+def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
+    """Check the novelty of generated research ideas and assign a score (0-10)."""
+    logger.debug("novelty_check_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("novelty_check")
+
+    try:
+        # Extract the ideas from the conversation history
+        ideas_text = ""
+        for msg in reversed(agent_state.history):
+            if msg.role == "assistant" and msg.agent_sender == AGENT_NAME:
+                if msg.content:
+                    ideas_text = msg.content
+                    break
+
+        # Fallback to patched_history
+        if not ideas_text:
+            for msg in reversed(agent_state.patched_history):
+                if msg.role == "assistant" and msg.agent_sender == AGENT_NAME:
+                    if msg.content:
+                        ideas_text = msg.content
+                        break
+
+        if not ideas_text:
+            logger.warning("No ideas found for novelty check")
+            agent_state.novelty_score = 0.0
+            agent_state.novelty_feedback = "No ideas were generated to evaluate."
+            return agent_state
+
+        # Format papers summary for context
+        papers_summary = ""
+        if agent_state.papers:
+            papers_summary = "\n\n".join(
+                [
+                    f"- {p.get('title', 'Unknown')} ({p.get('published', 'Unknown')})"
+                    for p in agent_state.papers[:20]  # Top 20 papers
+                ]
+            )
+        else:
+            papers_summary = "No papers were reviewed."
+
+        # Build prompt for novelty check
+        user_prompt_content = PROMPTS.ideation.novelty_check_user_prompt.render(
+            ideas_text=ideas_text,
+            papers_summary=papers_summary,
+        )
+        user_prompt = Message(
+            role="user",
+            content=user_prompt_content,
+            agent_sender=AGENT_NAME,
+        )
+        agent_state.add_message(user_prompt)
+
+        # Get system prompt
+        system_prompt = PROMPTS.ideation.novelty_check_system_prompt.render()
+
+        # Call LLM for novelty evaluation (no tools, just text generation)
+        msg = ModelRegistry.completion(
+            LLM_NAME,
+            agent_state.patched_history,
+            system_prompt=system_prompt,
+            agent_sender=AGENT_NAME,
+            tools=None,
+            tool_choice="none",
+        ).with_log()
+
+        agent_state.add_message(msg)
+
+        # Parse the novelty assessment from LLM response
+        if msg.content:
+            try:
+                # Try to extract JSON from the response
+                import json
+                import re
+
+                from json_repair import repair_json
+
+                # Look for JSON block (may be in code block or plain text)
+                json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+                json_match = re.search(json_pattern, msg.content, re.DOTALL)
+                if not json_match:
+                    # Try to find JSON object without code block
+                    json_pattern = r"(\{[^{}]*\"novelty_score\"[^{}]*\})"
+                    json_match = re.search(json_pattern, msg.content, re.DOTALL)
+
+                if json_match:
+                    json_str = json_match.group(1)
+                    try:
+                        # Try to repair JSON if needed
+                        json_str = repair_json(json_str)
+                        assessment = json.loads(json_str)
+                        agent_state.novelty_score = float(assessment.get("novelty_score", 0.0))
+                        feedback_parts = []
+                        if assessment.get("feedback"):
+                            feedback_parts.append(assessment["feedback"])
+                        if assessment.get("comparison_with_literature"):
+                            feedback_parts.append(
+                                f"Comparison with Literature: {assessment['comparison_with_literature']}"
+                            )
+                        agent_state.novelty_feedback = (
+                            "\n\n".join(feedback_parts)
+                            if feedback_parts
+                            else "No feedback provided."
+                        )
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, try text extraction
+                        raise ValueError("JSON parsing failed")
+                else:
+                    # Fallback: try to extract score from text
+                    score_match = re.search(
+                        r"novelty[_\s]*score[:\s]*([0-9.]+)", msg.content, re.IGNORECASE
+                    )
+                    if score_match:
+                        agent_state.novelty_score = float(score_match.group(1))
+                        agent_state.novelty_feedback = msg.content
+                    else:
+                        logger.warning("Could not parse novelty score from LLM response")
+                        agent_state.novelty_score = 5.0  # Default middle score
+                        agent_state.novelty_feedback = msg.content
+            except Exception as parse_error:
+                logger.warning("Failed to parse novelty assessment: {}", parse_error)
+                agent_state.novelty_score = 5.0  # Default middle score
+                agent_state.novelty_feedback = (
+                    f"Error parsing assessment: {str(parse_error)}\n\nLLM Response: {msg.content}"
+                )
+        else:
+            logger.warning("LLM returned no content for novelty check")
+            agent_state.novelty_score = 5.0
+            agent_state.novelty_feedback = "No assessment was generated."
+
+        # Clamp score to 0-10 range
+        agent_state.novelty_score = max(0.0, min(10.0, agent_state.novelty_score))
+
+        logger.info("Novelty check completed. Score: {:.2f}/10", agent_state.novelty_score)
+
+    except Exception as e:
+        logger.exception("Novelty check error")
+        agent_state.novelty_score = 5.0  # Default middle score on error
+        agent_state.novelty_feedback = f"Error during novelty check: {str(e)}"
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"[Novelty Check Error] {str(e)}",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
+    return agent_state
+
+
 def ideation_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
     """Generate final ideation report summarizing research ideas."""
     logger.debug("ideation_report_node of Agent {}", AGENT_NAME)
@@ -292,6 +441,17 @@ def ideation_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         if agent_state.research_domain:
             domain_section = f"\n## Research Domain\n{agent_state.research_domain}\n"
 
+        # Include novelty assessment if available
+        novelty_section = ""
+        if agent_state.novelty_score is not None:
+            novelty_section = f"""
+## Novelty Assessment
+
+**Novelty Score: {agent_state.novelty_score:.2f}/10**
+
+{agent_state.novelty_feedback or "No feedback available."}
+"""
+
         report = f"""# Research Ideation Report
 
 ## Research Topic
@@ -303,8 +463,7 @@ def ideation_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
 ## Generated Research Ideas
 
 {ideas_text}
-
-## Summary
+{novelty_section}## Summary
 This ideation report was generated through literature review of {len(agent_state.papers)} academic papers.
 The research ideas presented above are based on analysis of current research gaps and opportunities.
 """

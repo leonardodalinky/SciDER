@@ -5,15 +5,17 @@ Experiment Execution Agent - handles running experiments in local shell sessions
 import inspect
 import json
 import time
+from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
 
+from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.core.utils import parse_json_from_llm_response, wrap_dict_to_toon
-from scievo.prompts import PROMPTS
+from scievo.prompts import PROMPTS, SKILLS
 from scievo.tools import Tool, ToolRegistry
 
 from .state import ExecAgentState
@@ -25,13 +27,16 @@ AGENT_NAME = "experiment_exec"
 BUILTIN_TOOLSETS = [
     "state",
     "exec",  # The exec toolset is built-in for this agent
+    "fs",
 ]
 ALLOWED_TOOLSETS = [
     "history",
-    "fs",
 ]  # Can be extended if needed
 
-MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120]  # in seconds
+MONITORING_INTERVALS = [5, 10, 10, 20, 20, 30, 45, 60, 60, 120, 120, 180]  # in seconds
+
+# load uv skill md
+UV_SKILL = Path(__file__).parent.parent.parent.parent / "tools" / "skills" / "uv_venv_management.md"
 
 
 def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
@@ -42,6 +47,14 @@ def gateway_node(agent_state: ExecAgentState) -> ExecAgentState:
 
 def gateway_conditional(agent_state: ExecAgentState) -> str:
     """Determine the next node based on the last message"""
+    # compress history if needed
+    if (
+        constant.HISTORY_AUTO_COMPRESSION
+        and "history_compression" not in agent_state.node_history[-2:]
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+    ):
+        return "history_compression"
+
     # Check if there's a command currently running in the session
     if agent_state.is_monitor_mode:
         # A command is running -> go to monitoring node
@@ -78,7 +91,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": agent_state.workspace,
+        "workspace": agent_state.workspace.working_dir,
         "current_activated_toolsets": agent_state.toolsets,
     }
 
@@ -86,6 +99,7 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     system_prompt = PROMPTS.experiment_exec.exec_system_prompt.render(
         state_text=wrap_dict_to_toon(selected_state),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
+        uv_skill=SKILLS.uv_skill,
     )
 
     # Construct tools
@@ -138,7 +152,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
         return agent_state
 
     # Get current output from the running command
-    current_output = ctx.get_input_output()
+    current_output = ctx.get_input_output(max_length=32000)
 
     if not agent_state.session.is_running_command():
         # Command has completed while we were waiting
@@ -202,7 +216,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     elif "ctrlc" in r.action.lower():
         logger.debug("Monitoring decision: interrupting the running command.")
         ctx.cancel()
-        agent_state.is_monitor_mode = False
+        logger.debug("Monitoring is interrupted. Command is cancelled.")
         monitoring_ctrlc_user_msg = Message(
             role="user",
             content=PROMPTS.experiment_exec.monitoring_ctrlc_user_prompt.render(
@@ -213,6 +227,7 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
             agent_sender=AGENT_NAME,
         )
         agent_state.add_message(monitoring_ctrlc_user_msg)
+        agent_state.is_monitor_mode = False
     else:
         logger.warning(
             f"Unknown monitoring action '{r.action}' received. Continuing to wait by default."
@@ -388,3 +403,8 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.monitoring_attempts = 0
 
     return agent_state
+
+
+def history_compression_node(agent_state: ExecAgentState) -> ExecAgentState:
+    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
+    return history_compression.invoke_history_compression(agent_state)

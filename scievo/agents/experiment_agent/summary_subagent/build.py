@@ -44,6 +44,7 @@ def build():
     g.add_node("llm_chat", execute.llm_chat_node)
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("finalize", execute.finalize_node)
+    g.add_node("history_compression", execute.history_compression_node)
 
     # Add edges
     # Start -> Init -> Gateway
@@ -58,6 +59,7 @@ def build():
             "llm_chat",
             "tool_calling",
             "finalize",
+            "history_compression",
         ],
     )
 
@@ -66,6 +68,9 @@ def build():
 
     # Tool calling -> Gateway
     g.add_edge("tool_calling", "gateway")
+
+    # History compression -> Gateway
+    g.add_edge("history_compression", "gateway")
 
     # Finalize -> END
     g.add_edge("finalize", END)
