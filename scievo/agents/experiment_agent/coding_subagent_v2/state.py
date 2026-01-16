@@ -2,8 +2,18 @@ import os
 import uuid
 from typing import Optional
 
+# Now import openhands (will use local version if paths were added)
 from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
-from openhands.sdk.context.condenser import LLMSummarizingCondenser
+
+# Setup openhands paths first (must be before any openhands imports)
+from scievo.core import openhands_import  # noqa: F401
+
+# Try to import LLMSummarizingCondenser if available
+try:
+    from openhands.sdk.context.condenser import LLMSummarizingCondenser
+except ImportError:
+    # Fallback: LLMSummarizingCondenser is not available in this version
+    LLMSummarizingCondenser = None
 from openhands.sdk.context.skills import Skill
 from pydantic import PrivateAttr
 
@@ -102,17 +112,22 @@ Besides, try to avoid long time operations that may block the process, e.g., tra
 </SHORT_RUNNING>
 """,
             )
-            agent = Agent(
-                llm=llm,
-                tools=tools,
-                system_prompt_kwargs={"cli_mode": True},
-                condenser=LLMSummarizingCondenser(
+            # Build agent kwargs - only include condenser if available
+            agent_kwargs = {
+                "llm": llm,
+                "tools": tools,
+                "system_prompt_kwargs": {"cli_mode": True},
+                "agent_context": agent_context,
+            }
+            # Add condenser only if LLMSummarizingCondenser is available
+            if LLMSummarizingCondenser is not None:
+                agent_kwargs["condenser"] = LLMSummarizingCondenser(
                     llm=llm.model_copy(update={"usage_id": "condenser"}),
                     max_size=48,
                     keep_first=4,
-                ),
-                agent_context=agent_context,
-            )
+                )
+
+            agent = Agent(**agent_kwargs)
             _openhands_conversation = Conversation(
                 agent=agent, workspace=self.workspace.working_dir
             )

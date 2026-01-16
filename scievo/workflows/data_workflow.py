@@ -271,8 +271,10 @@ class DataWorkflow(BaseModel):
 
         try:
             # Prepare paper subagent state
+            # Pass data_summary so dataset search can find similar datasets
             paper_state = PaperSearchAgentState(
                 user_query=self.user_query,
+                data_summary=self.data_summary,  # Pass data analysis summary
             )
 
             # Invoke paper subagent graph

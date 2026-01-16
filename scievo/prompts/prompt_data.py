@@ -26,6 +26,7 @@ class Prompts:
     experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
     experiment_agent: "ExperimentAgentPrompts"
     paper_subagent: "PaperSubagentPrompts"
+    ideation: "IdeationPrompts"
 
 
 @dataclass
@@ -187,6 +188,9 @@ def init():
         ),
         paper_subagent=parse_yaml_as_templates(
             PaperSubagentPrompts, DIR / "paper_subagent_prompt.yaml"
+        ),
+        ideation=parse_yaml_as_templates(
+            IdeationPrompts, os.path.join(DIR, "ideation_prompt.yaml")
         ),
     )
 

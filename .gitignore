@@ -211,5 +211,5 @@ tmp_*
 rsync_tmp_*
 .aider*
 data_analysis.md
-
+software-agent-sdk
 env
