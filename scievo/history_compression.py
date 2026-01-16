@@ -2,12 +2,14 @@
 Subgraph for compressing conversation history.
 """
 
+from typing import TypeVar
+
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 from pydantic import BaseModel
 
 from scievo.core import constant
-from scievo.core.errors import AgentError
+from scievo.core.errors import AgentError, sprint_chained_exception
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import HistoryState, Message
 from scievo.core.utils import parse_markdown_from_llm_response
@@ -188,3 +190,45 @@ def build():
     g.add_edge("compress", END)
 
     return g
+
+
+########################
+## Compiled subgraph instance
+########################
+
+T = TypeVar("T", bound=HistoryState)
+
+history_compress_subgraph_compiled = build().compile()
+
+
+def invoke_history_compression(agent_state: T) -> T:
+    agent_state.add_node_history("history_compression")
+    try:
+        res = history_compress_subgraph_compiled.invoke(
+            HistoryCompressionState(
+                hc_input_history_state=agent_state,
+            )
+        )
+    except Exception as e:
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"history_compression_error: {sprint_chained_exception(e)}",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+        return agent_state
+
+    output_patch = res.get("hc_output_patch", None)
+    if output_patch:
+        agent_state.history_patches.append(output_patch)
+    else:
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content="history_compression_error: No output patch",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
+    return agent_state

@@ -203,9 +203,7 @@ summary_prompt: |
   1. **Original Task**: What was the coding objective?
   2. **Approach**: What steps were taken to complete the task?
   3. **Key Changes**: What were the most important code modifications made?
-  4. **Validation Results**: Were there any test runs or validations? What were the outcomes?
-  5. **Final Status**: Was the task completed successfully? Any remaining issues?
-  6. **Key Files Modified**: Which files were created or modified?
-  7. **Instructions for Next Steps**: How to activate the environment for the updated code, like `uv` for python project? How to run or test the updated code?
+  4. **Final Status**: Was the task completed successfully? Any remaining issues?
+  5. **Instructions for Next Steps**: How to activate the environment for the updated code, like `uv` for python project? How to run the main entrypoint of the updated code to do the training or main processing?
 
   Please be concise but thorough.

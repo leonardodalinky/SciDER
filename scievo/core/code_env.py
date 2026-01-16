@@ -16,6 +16,7 @@ class LocalEnv(AbstractContextManager, BaseModel):
     def __init__(self, working_dir: str | Path, create_dir_if_missing: bool = True):
         """Initialise the environment with an optional auto-create directory flag."""
         # Resolve and validate the target directory.
+        working_dir = Path(working_dir).resolve()
         super().__init__(working_dir=working_dir, create_dir_if_missing=create_dir_if_missing)
         if self.working_dir.exists():
             if not self.working_dir.is_dir():
