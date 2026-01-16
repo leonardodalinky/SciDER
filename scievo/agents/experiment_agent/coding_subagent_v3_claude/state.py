@@ -22,3 +22,7 @@ class ClaudeCodingAgentState(ToolsetState, HistoryState):
 
     # Output summary (output)
     output_summary: str | None = None
+
+
+# Alias for consistency with v2 (CodingAgentState)
+CodingAgentState = ClaudeCodingAgentState
