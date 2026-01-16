@@ -1,20 +1,10 @@
 import os
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-# Now import openhands (will use local version if paths were added)
-from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
+if TYPE_CHECKING:
+    from openhands.sdk import Conversation
 
-# Setup openhands paths first (must be before any openhands imports)
-from scievo.core import openhands_import  # noqa: F401
-
-# Try to import LLMSummarizingCondenser if available
-try:
-    from openhands.sdk.context.condenser import LLMSummarizingCondenser
-except ImportError:
-    # Fallback: LLMSummarizingCondenser is not available in this version
-    LLMSummarizingCondenser = None
-from openhands.sdk.context.skills import Skill
 from pydantic import PrivateAttr
 
 from scievo.core.code_env import LocalEnv
@@ -51,6 +41,33 @@ class CodingAgentState(ToolsetState, HistoryState):
         super().__init__(*args, **kwargs)
         # Create a default empty conversation if not provided
         if _openhands_conversation is None:
+            enable_openhands = os.getenv("SCIEVO_ENABLE_OPENHANDS", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "y",
+            }
+            if not enable_openhands:
+                raise RuntimeError(
+                    "OpenHands coding subagent (v2) is disabled. "
+                    "Set env `SCIEVO_ENABLE_OPENHANDS=1` to enable it, or use the Claude coding subagent "
+                    "(`CODING_AGENT_VERSION=v3`)."
+                )
+
+            # Setup openhands paths first (must be before any openhands imports)
+            # Local imports so importing this module doesn't require OpenHands unless v2 is used.
+            from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
+            from openhands.sdk.context.skills import Skill
+
+            from scievo.core import openhands_import  # noqa: F401
+
+            # Try to import LLMSummarizingCondenser if available
+            try:
+                from openhands.sdk.context.condenser import LLMSummarizingCondenser
+            except ImportError:
+                # Fallback: LLMSummarizingCondenser is not available in this version
+                LLMSummarizingCondenser = None
+
             api_key = os.getenv("OPENHANDS_API_KEY") or os.getenv("LLM_API_KEY")
             model = os.getenv("OPENHANDS_MODEL", "anthropic/claude-sonnet-4-5-20250929")
 
