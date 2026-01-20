@@ -1,7 +1,32 @@
 """
 SciEvo Streamlit Chat Interface - Enhanced Version
 
-A ChatGPT-like interface with real-time progress tracking and intermediate outputs.
+A ChatGPT-like interface with unified conversation view showing all agent messages.
+
+## Conversation Logging
+
+All agents and subagents log their messages to a unified conversation log that is
+displayed in real-time during workflow execution. Messages are captured via the
+WorkflowMonitor callback system.
+
+To log agent messages from within the workflow code:
+    from workflow_monitor import get_monitor, PhaseType
+
+    monitor = get_monitor()
+    monitor.log_update(
+        phase=PhaseType.DATA_EXECUTION,
+        status="progress",
+        message="Analyzing dataset structure...",
+        agent_name="Data Agent",
+        message_type="thought"  # Options: status, thought, action, result, error
+    )
+
+Message types:
+- status: General status updates (blue background)
+- thought: Agent reasoning/planning (purple background)
+- action: Tool calls or actions taken (orange background)
+- result: Results or completions (green background)
+- error: Errors or warnings (red background)
 """
 
 import os
@@ -18,8 +43,10 @@ os.environ.setdefault("SCIEVO_ENABLE_OPENHANDS", "0")  # Disable OpenHands by de
 # Add parent directory to path to import scievo
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import display_components as dc
-from workflow_monitor import get_monitor, reset_monitor
+import threading
+import time as time_module
+
+from workflow_monitor import PhaseType, get_monitor, reset_monitor
 
 from scievo.core.llms import ModelRegistry
 from scievo.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
@@ -36,7 +63,6 @@ def register_all_models():
     # Default model (can be overridden via environment variable)
     default_model = os.getenv("SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite")
     default_api_key = gemini_api_key
-    print("default_api_key: ", default_api_key)
     if not default_api_key:
         st.error(
             "❌ No API key found! Please set GEMINI_API_KEY or OPENAI_API_KEY in your environment."
@@ -115,6 +141,10 @@ def init_session_state():
         st.session_state.workflow_data = {}
     if "show_advanced" not in st.session_state:
         st.session_state.show_advanced = False
+    if "conversation_log" not in st.session_state:
+        st.session_state.conversation_log = []
+    if "last_update_count" not in st.session_state:
+        st.session_state.last_update_count = 0
 
 
 # ==================== Sidebar Configuration ====================
@@ -263,6 +293,105 @@ def render_sidebar():
         }
 
 
+# ==================== Conversation Display ====================
+def display_conversation_log():
+    """Display unified conversation log from all agents."""
+    st.markdown("### 💬 Agent Conversation")
+
+    if not st.session_state.conversation_log:
+        st.info("No messages yet. Waiting for agents to start...")
+        return
+
+    # Create a scrollable container for messages
+    conversation_container = st.container()
+
+    with conversation_container:
+        for entry in st.session_state.conversation_log:
+            timestamp = time_module.strftime("%H:%M:%S", time_module.localtime(entry["timestamp"]))
+            agent_name = entry.get("agent_name", "System")
+            message = entry["message"]
+            message_type = entry.get("message_type", "status")
+
+            # Choose styling based on message type and agent
+            if message_type == "error":
+                icon = "❌"
+                color = "#ffebee"
+            elif message_type == "result":
+                icon = "✅"
+                color = "#e8f5e9"
+            elif message_type == "action":
+                icon = "⚡"
+                color = "#fff3e0"
+            elif message_type == "thought":
+                icon = "💭"
+                color = "#f3e5f5"
+            else:
+                icon = "ℹ️"
+                color = "#e3f2fd"
+
+            # Display message
+            st.markdown(
+                f"""
+                <div style="background-color: {color}; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #666;">
+                    <div style="font-size: 0.8em; color: #666; margin-bottom: 5px;">
+                        <strong>{icon} {agent_name}</strong> · <span style="font-family: monospace;">{timestamp}</span>
+                    </div>
+                    <div style="color: #333;">
+                        {message}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def update_conversation_from_monitor():
+    """Update conversation log from monitor updates."""
+    monitor = get_monitor()
+    updates = monitor.get_updates()
+
+    # Only process new updates
+    new_updates = updates[st.session_state.last_update_count :]
+
+    for update in new_updates:
+        # Map phase to agent name
+        phase_to_agent = {
+            "ideation_": "Ideation Agent",
+            "data_": "Data Agent",
+            "experiment_init": "Experiment Agent",
+            "experiment_coding": "Coding Subagent",
+            "experiment_exec": "Execution Subagent",
+            "experiment_summary": "Summary Subagent",
+            "experiment_analysis": "Analysis Subagent",
+            "experiment_revision": "Experiment Agent",
+        }
+
+        agent_name = update.agent_name
+        if not agent_name:
+            # Try to infer from phase
+            phase_str = str(update.phase.value)
+            for prefix, name in phase_to_agent.items():
+                if phase_str.startswith(prefix):
+                    agent_name = name
+                    break
+            if not agent_name:
+                agent_name = "System"
+
+        # Add to conversation log
+        st.session_state.conversation_log.append(
+            {
+                "timestamp": update.timestamp,
+                "agent_name": agent_name,
+                "message": update.message,
+                "message_type": update.message_type,
+                "phase": str(update.phase.value),
+                "status": update.status,
+            }
+        )
+
+    st.session_state.last_update_count = len(updates)
+
+
 # ==================== Workflow Runner ====================
 class WorkflowRunner:
     """Manages workflow execution with progress tracking."""
@@ -271,10 +400,22 @@ class WorkflowRunner:
         self.config = config
         self.workflow = None
         self.monitor = get_monitor()
+        self.running = False
+        self.result = None
+        self.error = None
 
     def run(self):
         """Run the workflow with progress tracking."""
         try:
+            # Log workflow start
+            self.monitor.log_update(
+                phase=PhaseType.IDEATION_LITERATURE_SEARCH,
+                status="started",
+                message=f"Starting workflow for: {self.config['user_query']}",
+                agent_name="System",
+                message_type="status",
+            )
+
             # Create workflow
             self.workflow = FullWorkflowWithIdeation(
                 user_query=self.config["user_query"],
@@ -294,11 +435,44 @@ class WorkflowRunner:
 
             # Run workflow
             result = self.workflow.run()
+
+            # Log completion
+            self.monitor.log_update(
+                phase=PhaseType.COMPLETE,
+                status="completed",
+                message="Workflow completed successfully!",
+                agent_name="System",
+                message_type="result",
+            )
+
             return result
 
         except Exception as e:
-            st.error(f"Error running workflow: {str(e)}")
+            # Log error to conversation
+            self.monitor.log_update(
+                phase=PhaseType.ERROR,
+                status="error",
+                message=f"Error: {str(e)}",
+                agent_name="System",
+                message_type="error",
+            )
             raise
+
+    def run_async(self):
+        """Run workflow in background thread."""
+
+        def _run():
+            self.running = True
+            try:
+                self.result = self.run()
+            except Exception as e:
+                self.error = e
+            finally:
+                self.running = False
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return thread
 
 
 # ==================== Main App ====================
@@ -359,100 +533,60 @@ def main():
                 else:
                     st.session_state.workflow_running = True
                     st.session_state.workflow_result = None
-                    st.session_state.workflow_data = {
-                        "ideation_papers": [],
-                        "research_ideas": [],
-                        "novelty_score": None,
-                        "ideation_summary": None,
-                        "ideation_status": "Starting...",
-                        "papers": [],
-                        "datasets": [],
-                        "metrics": [],
-                        "data_summary": None,
-                        "data_status": "Pending",
-                        "current_revision": 0,
-                        "max_revisions": config["max_revisions"],
-                        "current_phase": "init",
-                        "execution_results": [],
-                        "revision_summaries": [],
-                    }
+                    st.session_state.conversation_log = []
+                    st.session_state.last_update_count = 0
+                    st.session_state.workflow_data = {}
                     reset_monitor()
                     st.rerun()
 
     elif st.session_state.workflow_running:
-        # Show workflow progress
+        # Display conversation log
         st.markdown("### 🔄 Workflow Running")
 
-        # Progress containers
-        progress_container = st.container()
+        # Create placeholder for conversation updates
+        conversation_placeholder = st.empty()
 
-        with progress_container:
-            # Run workflow
-            try:
-                runner = WorkflowRunner(config)
+        # Run workflow in async mode to allow UI updates
+        if "workflow_thread" not in st.session_state:
+            runner = WorkflowRunner(config)
+            st.session_state.workflow_thread = runner
+            runner.run_async()
 
-                # Show initial status
-                status_placeholder = st.empty()
-                status_placeholder.info("🚀 Initializing workflow...")
+        runner = st.session_state.workflow_thread
 
-                # Progress tracking
-                progress_bar = st.progress(0)
-                phase_text = st.empty()
+        # Update conversation from monitor
+        update_conversation_from_monitor()
 
-                # Run workflow
-                with st.spinner("Running workflow..."):
-                    result = runner.run()
+        # Display conversation in placeholder
+        with conversation_placeholder.container():
+            display_conversation_log()
 
-                # Update progress to complete
-                progress_bar.progress(100)
-                phase_text.success("✅ Workflow completed!")
-
-                # Store result
-                st.session_state.workflow_result = result
-                st.session_state.workflow_running = False
-
-                # Show intermediate results during execution
-                if result.current_phase in ["ideation", "data_analysis", "experiment"]:
-                    # Update workflow data
-                    st.session_state.workflow_data.update(
-                        {
-                            "ideation_papers": result.ideation_papers,
-                            "novelty_score": result.novelty_score,
-                            "ideation_summary": result.ideation_summary,
-                            "papers": result.papers,
-                            "datasets": result.datasets,
-                            "metrics": result.metrics,
-                            "data_summary": result.data_summary,
-                        }
-                    )
-
-                    # Display progress based on phase
-                    if result.current_phase == "ideation":
-                        dc.display_ideation_progress(st.session_state.workflow_data)
-                    elif result.current_phase == "data_analysis":
-                        dc.display_data_agent_progress(st.session_state.workflow_data)
-                    elif result.current_phase == "experiment":
-                        if hasattr(result, "_experiment_workflow") and result._experiment_workflow:
-                            st.session_state.workflow_data.update(
-                                {
-                                    "current_revision": result._experiment_workflow.current_revision,
-                                    "current_phase": result._experiment_workflow.current_phase,
-                                    "execution_results": result._experiment_workflow.all_execution_results,
-                                    "revision_summaries": result._experiment_workflow.revision_summaries,
-                                }
-                            )
-                        dc.display_experiment_progress(st.session_state.workflow_data)
-
+            # Show spinner while running
+            if runner.running:
+                st.info("⏳ Workflow in progress... (auto-refreshing)")
+                time_module.sleep(2)  # Wait before next refresh
                 st.rerun()
 
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-                st.exception(e)
+        # Check if workflow completed or errored
+        if not runner.running:
+            if runner.error:
+                st.error(f"❌ Error: {str(runner.error)}")
+                st.exception(runner.error)
                 st.session_state.workflow_running = False
+                del st.session_state.workflow_thread
 
                 if st.button("🔄 Reset and Try Again"):
                     st.session_state.workflow_result = None
+                    st.session_state.conversation_log = []
                     st.rerun()
+            elif runner.result:
+                # Store result and update state
+                st.session_state.workflow_result = runner.result
+                st.session_state.workflow_running = False
+                del st.session_state.workflow_thread
+                st.success("✅ Workflow completed successfully!")
+                time_module.sleep(1)
+                st.rerun()
 
     else:
         # Show results
@@ -461,8 +595,34 @@ def main():
         if result:
             st.markdown("### ✅ Workflow Complete")
 
-            # Display final results
-            dc.display_final_results(result)
+            # Display full conversation log
+            display_conversation_log()
+
+            # Show brief summary
+            st.markdown("---")
+            st.markdown("### 📋 Summary")
+
+            summary_col1, summary_col2 = st.columns(2)
+
+            with summary_col1:
+                st.markdown("**Status:**")
+                st.success(f"✅ {result.final_status}")
+
+                if hasattr(result, "workspace_path"):
+                    st.markdown("**Workspace:**")
+                    st.code(str(result.workspace_path))
+
+            with summary_col2:
+                if hasattr(result, "novelty_score") and result.novelty_score:
+                    st.metric("Novelty Score", f"{result.novelty_score:.1f}/10")
+
+                if hasattr(result, "papers"):
+                    st.metric("Papers Found", len(result.papers))
+
+            # Show final summary if available
+            if hasattr(result, "final_summary") and result.final_summary:
+                with st.expander("📄 View Full Summary", expanded=False):
+                    st.markdown(result.final_summary)
 
             # Action buttons
             st.markdown("---")
@@ -470,19 +630,22 @@ def main():
 
             with col1:
                 if st.button("💾 Save Summary", use_container_width=True):
-                    saved_path = result.save_summary()
-                    st.success(f"Saved to: {saved_path}")
+                    if hasattr(result, "save_summary"):
+                        saved_path = result.save_summary()
+                        st.success(f"Saved to: {saved_path}")
 
             with col2:
                 if st.button("🔄 Start New Research", use_container_width=True):
                     st.session_state.workflow_result = None
                     st.session_state.workflow_running = False
-                    st.session_state.workflow_data = {}
+                    st.session_state.conversation_log = []
+                    st.session_state.last_update_count = 0
                     st.rerun()
 
             with col3:
                 if st.button("📂 Open Workspace", use_container_width=True):
-                    st.info(f"Workspace: {result.workspace_path}")
+                    if hasattr(result, "workspace_path"):
+                        st.info(f"Workspace: {result.workspace_path}")
 
     # Footer
     st.markdown("---")

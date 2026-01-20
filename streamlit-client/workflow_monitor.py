@@ -46,6 +46,8 @@ class ProgressUpdate:
     status: str  # "started", "progress", "completed", "error"
     message: str
     data: dict[str, Any] | None = None
+    agent_name: str | None = None  # Name of the agent/subagent that generated this
+    message_type: str = "status"  # "status", "thought", "action", "result", "error"
 
 
 class WorkflowMonitor:
@@ -68,10 +70,18 @@ class WorkflowMonitor:
         status: str,
         message: str,
         data: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+        message_type: str = "status",
     ):
         """Log a progress update."""
         update = ProgressUpdate(
-            timestamp=time.time(), phase=phase, status=status, message=message, data=data or {}
+            timestamp=time.time(),
+            phase=phase,
+            status=status,
+            message=message,
+            data=data or {},
+            agent_name=agent_name,
+            message_type=message_type,
         )
 
         with self.lock:
