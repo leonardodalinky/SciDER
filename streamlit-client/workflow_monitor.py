@@ -46,6 +46,10 @@ class ProgressUpdate:
     status: str  # "started", "progress", "completed", "error"
     message: str
     data: dict[str, Any] | None = None
+    agent_name: str | None = None  # Name of the agent/subagent that generated this
+    message_type: str = "status"  # "status", "thought", "action", "result", "error"
+    node_name: str | None = None  # Name of the node that generated this
+    intermediate_output: dict[str, Any] | None = None  # Node's intermediate output/state
 
 
 class WorkflowMonitor:
@@ -68,10 +72,22 @@ class WorkflowMonitor:
         status: str,
         message: str,
         data: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+        message_type: str = "status",
+        node_name: str | None = None,
+        intermediate_output: dict[str, Any] | None = None,
     ):
         """Log a progress update."""
         update = ProgressUpdate(
-            timestamp=time.time(), phase=phase, status=status, message=message, data=data or {}
+            timestamp=time.time(),
+            phase=phase,
+            status=status,
+            message=message,
+            data=data or {},
+            agent_name=agent_name,
+            message_type=message_type,
+            node_name=node_name,
+            intermediate_output=intermediate_output,
         )
 
         with self.lock:
@@ -84,6 +100,27 @@ class WorkflowMonitor:
                     callback(update)
                 except Exception as e:
                     print(f"Error in callback: {e}")
+
+    def log_node_update(
+        self,
+        phase: PhaseType,
+        node_name: str,
+        status: str,
+        message: str,
+        intermediate_output: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+        message_type: str = "status",
+    ):
+        """Log a node-level progress update with intermediate output."""
+        self.log_update(
+            phase=phase,
+            status=status,
+            message=message,
+            agent_name=agent_name,
+            message_type=message_type,
+            node_name=node_name,
+            intermediate_output=intermediate_output,
+        )
 
     def get_updates(self) -> list[ProgressUpdate]:
         """Get all updates."""
