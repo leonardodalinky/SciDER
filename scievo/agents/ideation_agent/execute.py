@@ -107,6 +107,12 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
             ).with_log()
         )
 
+    logger.bind(
+        agent=AGENT_NAME,
+        node="literature_search",
+        papers=len(agent_state.papers),
+    ).info("literature_search_node completed")
+
     return agent_state
 
 
@@ -132,6 +138,12 @@ def analyze_papers_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         result = analyze_papers_for_ideas(
             papers=agent_state.papers,
             research_domain=research_domain,
+        )
+
+        logger.info(
+            "agent={}, result={}",
+            AGENT_NAME,
+            result,
         )
 
         # Parse the result
@@ -162,6 +174,12 @@ def analyze_papers_node(agent_state: IdeationAgentState) -> IdeationAgentState:
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+
+    logger.info(
+        "agent={}, analyzed_papers={}",
+        AGENT_NAME,
+        len(agent_state.analyzed_papers),
+    )
 
     return agent_state
 
@@ -216,12 +234,18 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             tool_choice="none",  # Explicitly disable tool calls
         ).with_log()
 
+        logger.info(
+            "agent={}, msg={}",
+            AGENT_NAME,
+            msg.content,
+        )
+
         agent_state.add_message(msg)
 
         # Log the response for debugging
         if msg.content:
             logger.info("Generated research ideas (content length: {})", len(msg.content))
-            logger.debug("Ideas content preview: {}", msg.content[:200])
+            logger.debug(f"Ideas content preview: {msg.content}")
         elif msg.tool_calls:
             logger.warning("LLM returned tool calls instead of ideas: {}", len(msg.tool_calls))
         else:
@@ -306,6 +330,12 @@ def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         ).with_log()
 
         agent_state.add_message(msg)
+
+        logger.info(
+            "agent={}, node=novelty_check, msg={}",
+            AGENT_NAME,
+            msg.content,
+        )
 
         # Parse the novelty assessment from LLM response
         if msg.content:

@@ -136,6 +136,14 @@ class PaperSubagentPrompts:
     summary_prompt: Template
 
 
+@dataclass
+class IdeationPrompts:
+    system_prompt: Template
+    user_prompt: Template
+    novelty_check_system_prompt: Template
+    novelty_check_user_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str | Path) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)

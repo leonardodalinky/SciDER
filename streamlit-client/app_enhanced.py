@@ -357,8 +357,6 @@ def display_conversation_log(grouped: bool = False):
                             </div>
                             <div id="19" style="color: #333; font-size: 0.9em;">
                                 {icon} {message}
-                            </div>
-                        </div>
                         """,
                         unsafe_allow_html=True,
                     )
@@ -402,8 +400,6 @@ def display_conversation_log(grouped: bool = False):
                         </div>
                         <div id="16" style="color: #333;">
                             {message}
-                        </div>
-                    </div>
                     """,
                     unsafe_allow_html=True,
                 )
@@ -731,8 +727,6 @@ def display_logs_dialog():
                         </div>
                         <div id="15" style="color: #333; font-size: 0.9em; font-family: monospace; white-space: pre-wrap;">
                             {message.replace('<', '&lt;').replace('>', '&gt;')}
-                        </div>
-                    </div>
                     """,
                     unsafe_allow_html=True,
                 )
