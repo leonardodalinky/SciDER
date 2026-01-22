@@ -29,6 +29,7 @@ Message types:
 - error: Errors or warnings (red background)
 """
 
+import html
 import os
 import sys
 import time
@@ -350,11 +351,11 @@ def display_conversation_log(grouped: bool = False):
                     # Display message
                     st.markdown(
                         f"""
-                        <div style="background-color: {color}; padding: 8px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #666;">
-                            <div style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
+                        <div id="21" style="background-color: {color}; padding: 8px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #666;">
+                            <div id="20" style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
                                 <span style="font-family: monospace;">{timestamp}</span>
                             </div>
-                            <div style="color: #333; font-size: 0.9em;">
+                            <div id="19" style="color: #333; font-size: 0.9em;">
                                 {icon} {message}
                             </div>
                         </div>
@@ -395,11 +396,11 @@ def display_conversation_log(grouped: bool = False):
                 # Display message
                 st.markdown(
                     f"""
-                    <div style="background-color: {color}; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #666;">
-                        <div style="font-size: 0.8em; color: #666; margin-bottom: 5px;">
+                    <div id="17" style="background-color: {color}; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #666;">
+                        <div id="18" style="font-size: 0.8em; color: #666; margin-bottom: 5px;">
                             <strong>{icon} {agent_name}</strong> · <span style="font-family: monospace;">{timestamp}</span>
                         </div>
-                        <div style="color: #333;">
+                        <div id="16" style="color: #333;">
                             {message}
                         </div>
                     </div>
@@ -475,18 +476,19 @@ def display_agent_conversations_dialog():
                             color = "#e3f2fd"
 
                         # Display message
+                        print(f"message: {message}")
+                        safe_message = html.escape(message)
+                        print(f"safe_message: {safe_message}")
                         st.markdown(
                             f"""
-                            <div style="background-color: {color}; padding: 8px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #666;">
-                                <div style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
-                                    <span style="font-family: monospace;">{timestamp}</span>
-                                    {f' · <span style="font-style: italic;">{phase}</span>' if phase else ''}
-                                    {f' · <span style="font-weight: bold;">{entry.get("status", "")}</span>' if entry.get("status") else ''}
+                            <div id="7" style="background-color: {color}; padding: 8px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #666;">
+                                <div id="8" style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
+                                    <span id="9" style="font-family: monospace;">{timestamp}</span>
+                                    {f' · <span id="10" style="font-style: italic;">{phase}</span>' if phase else ''}
+                                    {f' · <span id="11" style="font-weight: bold;">{entry.get("status", "")}</span>' if entry.get("status") else ''}
                                 </div>
-                                <div style="color: #333; font-size: 0.9em;">
-                                    {icon} {message}
-                                </div>
-                            </div>
+                                <div id="12" style="color: #333; font-size: 0.9em;">
+                                    {icon} {safe_message}
                             """,
                             unsafe_allow_html=True,
                         )
@@ -719,15 +721,15 @@ def display_logs_dialog():
             ):
                 st.markdown(
                     f"""
-                    <div style="background-color: {color}; padding: 8px; border-radius: 5px; border-left: 3px solid {border_color}; margin-bottom: 8px;">
-                        <div style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
+                    <div id="13" style="background-color: {color}; padding: 8px; border-radius: 5px; border-left: 3px solid {border_color}; margin-bottom: 8px;">
+                        <div id="14" style="font-size: 0.75em; color: #666; margin-bottom: 3px;">
                             <strong>Level:</strong> {level} ·
                             <strong>Time:</strong> {timestamp} ·
                             <strong>Module:</strong> {module} ·
                             <strong>Function:</strong> {function} ·
                             <strong>Line:</strong> {line}
                         </div>
-                        <div style="color: #333; font-size: 0.9em; font-family: monospace; white-space: pre-wrap;">
+                        <div id="15" style="color: #333; font-size: 0.9em; font-family: monospace; white-space: pre-wrap;">
                             {message.replace('<', '&lt;').replace('>', '&gt;')}
                         </div>
                     </div>
