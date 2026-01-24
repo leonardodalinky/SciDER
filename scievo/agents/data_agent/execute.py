@@ -170,6 +170,19 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     ).with_log()
     agent_state.add_message(msg)
 
+    llm_output = (
+        msg.content
+        if msg.content
+        else ("[Tool calls: " + str(len(msg.tool_calls)) + "]" if msg.tool_calls else "[No output]")
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "llm_chat",
+            "output": llm_output,
+        }
+    )
+
     return agent_state
 
 
@@ -192,6 +205,8 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
 
     function_map = {tool.name: tool.func for tool in tools.values()}
 
+    tool_results = []
+
     # Execute each tool call
     for tool_call in last_msg.tool_calls:
         tool_name = tool_call.function.name
@@ -206,6 +221,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
 
         # Parse tool arguments
@@ -221,6 +237,7 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -231,9 +248,11 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
 
         # Execute the tool
+        result = None
         try:
             # Pass the graph state to the tool function
             func = function_map[tool_name]
@@ -258,6 +277,9 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
+            tool_results.append(
+                {"tool": tool_name, "result": str(result)[:1000] if result else "No result"}
+            )
 
         except Exception as e:
             error_msg = f"Tool {tool_name} execution failed: {e}"
@@ -267,8 +289,23 @@ def tool_calling_node(agent_state: DataAgentState) -> DataAgentState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
+            tool_results.append({"tool": tool_name, "result": error_msg})
 
-        agent_state.add_message(Message(**tool_response).with_log())
+        tool_response_msg = Message(**tool_response).with_log()
+        agent_state.add_message(tool_response_msg)
+
+    tool_output_parts = []
+    for tr in tool_results:
+        tool_output_parts.append(f"Tool: {tr['tool']}\nResult: {tr['result']}")
+
+    tool_output = "\n\n".join(tool_output_parts) if tool_output_parts else "No tool calls executed"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "tool_calling",
+            "output": tool_output,
+        }
+    )
 
     return agent_state
 
@@ -282,21 +319,34 @@ def mem_extraction_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
     agent_state.add_node_history("mem_extraction")
     context_window = agent_state.patched_history[-constant.MEM_EXTRACTION_CONTEXT_WINDOW :]
     logger.info("Agent {} begins to Memory Extraction", AGENT_NAME)
+    mem_output = "Memory extraction completed"
     try:
-        _ = mem_extraction_subgraph_compiled.invoke(
+        result = mem_extraction_subgraph_compiled.invoke(
             mem_extraction.MemExtractionState(
                 mem_dir=Path(agent_state.sess_dir) / f"short_term",
                 input_msgs=context_window,
                 input_agent_name=AGENT_NAME,
             )
         )
+        if isinstance(result, dict) and "output_memos" in result:
+            mem_output = f"Extracted {len(result.get('output_memos', []))} memory entries"
     except Exception as e:
+        error_msg = f"mem_extraction_error: {sprint_chained_exception(e)}"
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"mem_extraction_error: {sprint_chained_exception(e)}",
+                content=error_msg,
                 agent_sender=AGENT_NAME,
             ).with_log()
+        )
+        mem_output = error_msg
+
+    if isinstance(agent_state, DataAgentState):
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "mem_extraction",
+                "output": mem_output,
+            }
         )
 
     return agent_state
@@ -304,7 +354,25 @@ def mem_extraction_node(agent_state: MemHistoryMixin) -> MemHistoryMixin:
 
 def history_compression_node(agent_state: DataAgentState) -> DataAgentState:
     logger.debug("history_compression_node of Agent {}", AGENT_NAME)
-    return history_compression.invoke_history_compression(agent_state)
+
+    history_before = len(agent_state.history)
+    agent_state = history_compression.invoke_history_compression(agent_state)
+    history_after = len(agent_state.history)
+
+    compression_output = f"Compressed history: {history_before} -> {history_after} messages"
+    if agent_state.history_patches:
+        last_patch = agent_state.history_patches[-1]
+        if last_patch.patched_message and last_patch.patched_message.content:
+            compression_output = f"Compressed {last_patch.n_messages} messages into:\n{last_patch.patched_message.content[:500]}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "history_compression",
+            "output": compression_output,
+        }
+    )
+
+    return agent_state
 
 
 def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
@@ -353,6 +421,19 @@ def generate_summary_node(agent_state: DataAgentState) -> DataAgentState:
         )
         logger.error("generate_summary_node failed: {}", error_msg)
 
+    summary_output = (
+        summary_msg.content
+        if "summary_msg" in locals() and summary_msg.content
+        else (error_msg if "error_msg" in locals() else "No summary generated")
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "generate_summary",
+            "output": summary_output,
+        }
+    )
+
     return agent_state
 
 
@@ -384,13 +465,23 @@ def critic_node(agent_state: DataAgentState) -> DataAgentState:
         assert res.get("critic_msg", None) is not None, "critic_msg is None"
         critic_msg: Message = res.get("critic_msg")
         agent_state.add_message(critic_msg.with_log())
+        critic_output = critic_msg.content if critic_msg.content else "No critic feedback"
     except Exception as e:
+        error_msg = f"critic_error: {sprint_chained_exception(e)}"
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"critic_error: {sprint_chained_exception(e)}",
+                content=error_msg,
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+        critic_output = error_msg
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "critic",
+            "output": critic_output if "critic_output" in locals() else "No critic output",
+        }
+    )
 
     return agent_state

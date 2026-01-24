@@ -102,6 +102,19 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
 
     agent_state.add_message(msg)
 
+    llm_output = (
+        msg.content
+        if msg.content
+        else ("[Tool calls: " + str(len(msg.tool_calls)) + "]" if msg.tool_calls else "[No output]")
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "llm_chat",
+            "output": llm_output,
+        }
+    )
+
     return agent_state
 
 
@@ -125,6 +138,8 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
 
     function_map = {tool.name: tool.func for tool in tools.values()}
 
+    tool_results = []
+
     # Execute each tool call
     for tool_call in last_msg.tool_calls:
         tool_name = tool_call.function.name
@@ -139,6 +154,7 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
 
         # Parse tool arguments
@@ -154,6 +170,7 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
         except AssertionError as e:
             error_msg = f"Invalid tool arguments: {e}"
@@ -164,6 +181,7 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
                 "content": error_msg,
             }
             agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
             continue
 
         # Execute the tool
@@ -187,6 +205,9 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
                 "tool_name": tool_name,
                 "content": str(result),  # Ensure result is string
             }
+            tool_results.append(
+                {"tool": tool_name, "result": str(result)[:1000] if result else "No result"}
+            )
 
         except Exception as e:
             logger.exception(f"Tool {tool_name} execution failed")
@@ -197,8 +218,22 @@ def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
                 "tool_name": tool_name,
                 "content": error_msg,
             }
+            tool_results.append({"tool": tool_name, "result": error_msg})
 
         agent_state.add_message(Message(**tool_response).with_log())
+
+    tool_output_parts = []
+    for tr in tool_results:
+        tool_output_parts.append(f"Tool: {tr['tool']}\nResult: {tr['result']}")
+
+    tool_output = "\n\n".join(tool_output_parts) if tool_output_parts else "No tool calls executed"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "tool_calling",
+            "output": tool_output,
+        }
+    )
 
     return agent_state
 
@@ -245,9 +280,34 @@ def finalize_node(agent_state: SummaryAgentState) -> SummaryAgentState:
         except Exception as e:
             logger.error(f"Failed to save summary to {agent_state.output_path}: {e}")
 
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "finalize",
+            "output": agent_state.summary_text,
+        }
+    )
+
     return agent_state
 
 
 def history_compression_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     logger.debug("history_compression_node of Agent {}", AGENT_NAME)
-    return history_compression.invoke_history_compression(agent_state)
+
+    history_before = len(agent_state.history)
+    agent_state = history_compression.invoke_history_compression(agent_state)
+    history_after = len(agent_state.history)
+
+    compression_output = f"Compressed history: {history_before} -> {history_after} messages"
+    if agent_state.history_patches:
+        last_patch = agent_state.history_patches[-1]
+        if last_patch.patched_message and last_patch.patched_message.content:
+            compression_output = f"Compressed {last_patch.n_messages} messages into:\n{last_patch.patched_message.content[:500]}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "history_compression",
+            "output": compression_output,
+        }
+    )
+
+    return agent_state

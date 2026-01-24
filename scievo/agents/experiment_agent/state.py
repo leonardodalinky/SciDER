@@ -49,6 +49,9 @@ class ExperimentAgentState(ToolsetState, HistoryState):
         "init"
     )
 
+    # Intermediate states
+    intermediate_state: list[dict] = []
+
     # ==================== OUTPUT ====================
     # Final experiment result status
     final_status: Literal["success", "failed", "max_revisions_reached"] | None = None

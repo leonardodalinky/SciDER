@@ -77,6 +77,7 @@ class DataWorkflow(BaseModel):
     final_status: Literal["success", "failed"] | None = None
     data_summary: str = ""
     data_agent_history: list = []
+    data_agent_intermediate_state: list[dict] = []
     error_message: str | None = None
 
     # Paper subagent results
@@ -231,6 +232,7 @@ class DataWorkflow(BaseModel):
 
             # Extract data summary from history
             self.data_agent_history = result_state.history
+            self.data_agent_intermediate_state = result_state.intermediate_state
             self.data_summary = self._extract_data_summary(result_state)
 
             logger.info("DataAgent completed successfully")

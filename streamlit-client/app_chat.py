@@ -185,7 +185,7 @@ def run_data(path, q):
     out = ["## Data Analysis Complete"]
     if w.data_summary:
         out.append(w.data_summary)
-    return "\n\n".join(out), []
+    return "\n\n".join(out), w.data_agent_intermediate_state
 
 
 def run_experiment(q, path):
@@ -200,7 +200,7 @@ def run_experiment(q, path):
     else:
         return "No data analysis file", []
     w.run()
-    return w.final_summary or "Experiment finished", []
+    return w.final_summary or "Experiment finished", w.experiment_agent_intermediate_state
 
 
 def run_full(cfg):

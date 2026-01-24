@@ -72,6 +72,7 @@ class ExperimentWorkflow(BaseModel):
     execution_results: list = []
     current_revision: int = 0
     error_message: str | None = None
+    experiment_agent_intermediate_state: list[dict] = []
 
     # Internal: compiled graph (lazy loaded)
     _experiment_agent_graph: object = PrivateAttr(default=None)
@@ -182,6 +183,7 @@ class ExperimentWorkflow(BaseModel):
             self.final_status = result_state.final_status
             self.execution_results = result_state.all_execution_results
             self.current_revision = result_state.current_revision
+            self.experiment_agent_intermediate_state = result_state.intermediate_state
             self.final_summary = self._compose_summary(result_state)
             self.current_phase = "complete"
 
@@ -227,9 +229,7 @@ class ExperimentWorkflow(BaseModel):
         logger.info("Finalizing experiment workflow")
 
         if not success and not self.final_summary:
-            self.final_summary = (
-                f"# Experiment Workflow Failed\n\nError: {self.error_message}"
-            )
+            self.final_summary = f"# Experiment Workflow Failed\n\nError: {self.error_message}"
 
         logger.info(get_separator())
         logger.info(f"Experiment Workflow completed: {self.final_status}")

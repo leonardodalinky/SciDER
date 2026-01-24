@@ -22,6 +22,9 @@ class SummaryAgentState(ToolsetState, HistoryState):
     # This is human-readable markdown containing the experiment summary
     summary_text: str = ""
 
+    # Intermediate states
+    intermediate_state: list[dict] = []
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # add initial toolset
