@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import streamlit as st
@@ -56,13 +57,29 @@ def register_all_models():
         ModelRegistry.register(name=name, model=model, api_key=key)
 
 
-def stream_markdown(text, delay=0.03):
+def stream_markdown(text, delay=0.02):
     buf = ""
     slot = st.empty()
     for line in text.split("\n"):
         buf += line + "\n"
         slot.markdown(buf)
         time.sleep(delay)
+
+
+def render_intermediate_state(intermediate_state):
+    if not intermediate_state:
+        return
+    by_node = defaultdict(list)
+    for item in intermediate_state:
+        by_node[item.get("node_name", "unknown")].append(item.get("output", ""))
+
+    st.divider()
+    st.subheader("Intermediate States")
+    for node, outputs in by_node.items():
+        with st.expander(node, expanded=False):
+            for i, content in enumerate(outputs, 1):
+                st.markdown(f"**Step {i}**")
+                st.markdown(content)
 
 
 if "initialized" not in st.session_state:
@@ -152,7 +169,7 @@ def run_ideation(q):
         out.append("## Generated Research Ideas\n")
         for i, idea in enumerate(rs.research_ideas[:5], 1):
             out.append(f"### {i}. {idea.get('title','')}\n{idea.get('description','')}")
-    return "\n\n".join(out) if out else "No result"
+    return ("\n\n".join(out) if out else "No result", rs.intermediate_state)
 
 
 def run_data(path, q):
@@ -164,11 +181,11 @@ def run_data(path, q):
     )
     w.run()
     if w.final_status != "success":
-        return "Data workflow failed"
+        return "Data workflow failed", []
     out = ["## Data Analysis Complete"]
     if w.data_summary:
         out.append(w.data_summary)
-    return "\n\n".join(out)
+    return "\n\n".join(out), []
 
 
 def run_experiment(q, path):
@@ -181,9 +198,9 @@ def run_experiment(q, path):
             recursion_limit=100,
         )
     else:
-        return "No data analysis file"
+        return "No data analysis file", []
     w.run()
-    return w.final_summary or "Experiment finished"
+    return w.final_summary or "Experiment finished", []
 
 
 def run_full(cfg):
@@ -196,7 +213,7 @@ def run_full(cfg):
         max_revisions=5,
     )
     w.run()
-    return w.final_summary or "Workflow finished"
+    return w.final_summary or "Workflow finished", []
 
 
 if prompt := st.chat_input("Ask or run command"):
@@ -211,14 +228,16 @@ if prompt := st.chat_input("Ask or run command"):
             st.session_state.messages.append({"role": "assistant", "content": cfg["msg"]})
         else:
             if cfg["type"] == "ideation":
-                resp = run_ideation(cfg.get("query"))
+                resp, intermediate_state = run_ideation(cfg.get("query"))
             elif cfg["type"] == "data":
-                resp = run_data(cfg["path"], cfg["query"])
+                resp, intermediate_state = run_data(cfg["path"], cfg["query"])
             elif cfg["type"] == "experiment":
-                resp = run_experiment(cfg["query"], cfg.get("path"))
+                resp, intermediate_state = run_experiment(cfg["query"], cfg.get("path"))
             elif cfg["type"] == "full":
-                resp = run_full(cfg)
+                resp, intermediate_state = run_full(cfg)
             else:
-                resp = "Unknown command"
+                resp, intermediate_state = "Unknown command", []
+
             stream_markdown(resp)
+            render_intermediate_state(intermediate_state)
             st.session_state.messages.append({"role": "assistant", "content": resp})
