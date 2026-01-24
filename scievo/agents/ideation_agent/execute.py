@@ -113,6 +113,24 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
         papers=len(agent_state.papers),
     ).info("literature_search_node completed")
 
+    search_result_text = f"Found {len(agent_state.papers)} papers for query: '{query if 'query' in locals() else agent_state.user_query}'\n\n"
+    if agent_state.papers:
+        search_result_text += "\n".join(
+            [
+                f"{i+1}. {p.get('title', 'Unknown')} - {', '.join(p.get('authors', [])[:3])}"
+                for i, p in enumerate(agent_state.papers[:10])
+            ]
+        )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "literature_search",
+            "output": search_result_text,
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
+
     return agent_state
 
 
@@ -146,11 +164,13 @@ def analyze_papers_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             result,
         )
 
+        analysis_text = str(result)
+
         # Parse the result
         try:
             analysis = unwrap_dict_from_toon(result)
             if isinstance(analysis, dict):
-                agent_state.analyzed_papers = agent_state.papers  # Mark as analyzed
+                agent_state.analyzed_papers = agent_state.papers
                 logger.info("Analyzed {} papers", len(agent_state.papers))
             else:
                 logger.warning("Unexpected result format from analyze_papers_for_ideas")
@@ -180,6 +200,17 @@ def analyze_papers_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         AGENT_NAME,
         len(agent_state.analyzed_papers),
     )
+
+    analysis_output = analysis_text if "analysis_text" in locals() else "No analysis output"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "analyze_papers",
+            "output": analysis_output,
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
 
     return agent_state
 
@@ -260,6 +291,23 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+
+    ideas_output = ""
+    if "msg" in locals() and msg.content:
+        ideas_output = msg.content
+    elif "msg" in locals() and msg.tool_calls:
+        ideas_output = f"[Tool calls made: {len(msg.tool_calls)}]"
+    else:
+        ideas_output = "[No content generated]"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "generate_ideas",
+            "output": ideas_output,
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
 
     return agent_state
 
@@ -416,6 +464,25 @@ def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             ).with_log()
         )
 
+    novelty_output = ""
+    if "msg" in locals() and msg.content:
+        novelty_output = msg.content
+    elif agent_state.novelty_feedback:
+        novelty_output = (
+            f"Novelty Score: {agent_state.novelty_score}\n\n{agent_state.novelty_feedback}"
+        )
+    else:
+        novelty_output = f"Novelty Score: {agent_state.novelty_score}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "novelty_check",
+            "output": novelty_output,
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
+
     return agent_state
 
 
@@ -521,5 +588,20 @@ The research ideas presented above are based on analysis of current research gap
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
+
+    report_output = (
+        agent_state.output_summary
+        if agent_state.output_summary
+        else report if "report" in locals() else "No report generated"
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "ideation_report",
+            "output": report_output,
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
 
     return agent_state

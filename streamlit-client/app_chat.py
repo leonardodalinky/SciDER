@@ -142,7 +142,6 @@ def run_ideation(q):
             + json.dumps(
                 {
                     "novelty_score": rs.novelty_score,
-                    "breakdown": rs.novelty_breakdown,
                     "feedback": rs.novelty_feedback,
                 },
                 indent=2,
