@@ -227,17 +227,22 @@ if prompt := st.chat_input("Ask or run command"):
             stream_markdown(cfg["msg"])
             st.session_state.messages.append({"role": "assistant", "content": cfg["msg"]})
         else:
-            if cfg["type"] == "ideation":
-                resp, intermediate_state = run_ideation(cfg.get("query"))
-            elif cfg["type"] == "data":
-                resp, intermediate_state = run_data(cfg["path"], cfg["query"])
-            elif cfg["type"] == "experiment":
-                resp, intermediate_state = run_experiment(cfg["query"], cfg.get("path"))
-            elif cfg["type"] == "full":
-                resp, intermediate_state = run_full(cfg)
-            else:
-                resp, intermediate_state = "Unknown command", []
+            loading_placeholder = st.empty()
+            with loading_placeholder.container():
+                st.markdown("Processing your request...")
+                with st.spinner(""):
+                    if cfg["type"] == "ideation":
+                        resp, intermediate_state = run_ideation(cfg.get("query"))
+                    elif cfg["type"] == "data":
+                        resp, intermediate_state = run_data(cfg["path"], cfg["query"])
+                    elif cfg["type"] == "experiment":
+                        resp, intermediate_state = run_experiment(cfg["query"], cfg.get("path"))
+                    elif cfg["type"] == "full":
+                        resp, intermediate_state = run_full(cfg)
+                    else:
+                        resp, intermediate_state = "Unknown command", []
 
+            loading_placeholder.empty()
             stream_markdown(resp)
             render_intermediate_state(intermediate_state)
             st.session_state.messages.append({"role": "assistant", "content": resp})
