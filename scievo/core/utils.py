@@ -79,9 +79,6 @@ def unwrap_dict_from_toon(toon_str: str) -> dict:
     if not isinstance(toon_str, str):
         raise TypeError(f"Expected str or dict, got {type(toon_str)}")
     match = re.search(
-        r"```toon\s*\n(.*?)\n```",
-    # Extract toon content from code block if present
-    toon_match = re.search(
         r"(?:```\s*)?(?:toon\s*)?(.*)(?:```)?",
         toon_str,
         flags=re.DOTALL | re.IGNORECASE,

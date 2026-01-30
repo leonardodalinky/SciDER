@@ -27,7 +27,13 @@ class Brain:
 
                     brain_dir = os.getenv("BRAIN_DIR")
                     if brain_dir is None:
-                        raise ValueError("BRAIN_DIR environment variable must be set.")
+                        # Use default location if BRAIN_DIR is not set
+                        default_brain_dir = Path.cwd() / "tmp_brain"
+                        logger.warning(
+                            "BRAIN_DIR environment variable not set. Using default: {}",
+                            default_brain_dir,
+                        )
+                        brain_dir = str(default_brain_dir)
 
                     logger.info("Brain directory: {}", brain_dir)
 
@@ -41,9 +47,7 @@ class Brain:
         return cls()
 
     @classmethod
-    def new_session_named(
-        cls, session_name: str, session_prefix: str = "ss_"
-    ) -> BrainSession:
+    def new_session_named(cls, session_name: str, session_prefix: str = "ss_") -> BrainSession:
         """Create a new session directory with a named session."""
         session_dir = cls.instance().brain_dir / f"{session_prefix}{session_name}"
         logger.info("New session directory: {}", session_dir)

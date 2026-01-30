@@ -26,9 +26,21 @@ AGENT_NAME = "experiment_agent"
 LLM_NAME = "experiment_agent"
 
 load_dotenv()
-CODING_AGENT_VERSION = os.getenv("CODING_AGENT_VERSION", "v2")  # default to v2
+CODING_AGENT_VERSION = os.getenv("CODING_AGENT_VERSION", "v3")  # default to Claude (v3)
+_OPENHANDS_ENABLED = os.getenv("SCIEVO_ENABLE_OPENHANDS", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "y",
+}
 match CODING_AGENT_VERSION:
     case "v2":
+        if not _OPENHANDS_ENABLED:
+            raise RuntimeError(
+                "CODING_AGENT_VERSION=v2 requires OpenHands, but OpenHands is disabled.\n"
+                "Hint: set `CODING_AGENT_VERSION=v3` to use the Claude coding agent, or enable OpenHands with "
+                "`SCIEVO_ENABLE_OPENHANDS=1`."
+            )
         from .coding_subagent_v2 import build as coding_build
         from .coding_subagent_v2.state import CodingAgentState
     case "v3":
@@ -72,7 +84,7 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     """Run the Coding Subagent (stateless invocation).
 
     The coding subagent receives repo_source and handles git cloning
-    and workspace setup internally using OpenHands tools.
+    and workspace setup internally. By default this uses the Claude Agent SDK/Claude Code path (v3).
     """
     logger.info(f"Running Coding Subagent (revision {agent_state.current_revision})")
     agent_state.current_phase = "coding"

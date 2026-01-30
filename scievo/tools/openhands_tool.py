@@ -10,9 +10,6 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-# Setup openhands paths first (must be before any openhands imports)
-from scievo.core import openhands_import  # noqa: F401
-
 from .registry import register_tool, register_toolset_desc
 
 if TYPE_CHECKING:
@@ -77,6 +74,23 @@ def code_subagent(agent_state, instruction: str, bg_info: str) -> str:
 
     if not instruction.strip():
         return "Error: instruction must be a non-empty string."
+
+    enable_openhands = os.getenv("SCIEVO_ENABLE_OPENHANDS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+    if not enable_openhands:
+        return (
+            "Error: OpenHands toolset is disabled.\n"
+            "Hint: set env `SCIEVO_ENABLE_OPENHANDS=1` to enable it, or switch to the Claude coding subagent "
+            "(set `CODING_AGENT_VERSION=v3`)."
+        )
+
+    # Setup openhands paths first (must be before any openhands imports)
+    # Keep this import local to avoid mutating sys.path unless OpenHands is explicitly enabled.
+    from scievo.core import openhands_import  # noqa: F401
 
     conversation: "Conversation | LocalConversation" = getattr(
         agent_state, "openhands_conversation", None

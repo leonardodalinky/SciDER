@@ -1,0 +1,79 @@
+# Example Configuration for SciEvo Workflows
+# Copy and modify these settings as needed
+
+# ==================== Example 1: Ideation Only ====================
+example_ideation_only:
+  research_query: "self-supervised learning for protein structure prediction"
+  research_domain: "computational biology"
+  workspace_path: "./workspace/protein_research"
+  run_data_workflow: false
+  run_experiment_workflow: false
+  ideation_agent_recursion_limit: 50
+
+# ==================== Example 2: Ideation + Data Analysis ====================
+example_with_data:
+  research_query: "improve sentiment analysis on social media data"
+  research_domain: "natural language processing"
+  workspace_path: "./workspace/sentiment_analysis"
+  data_path: "./data/twitter_sentiment.csv"
+  data_desc: "Twitter dataset with sentiment labels"
+  run_data_workflow: true
+  run_experiment_workflow: false
+  ideation_agent_recursion_limit: 50
+  data_agent_recursion_limit: 100
+
+# ==================== Example 3: Full Pipeline ====================
+example_full_pipeline:
+  research_query: "predict stock prices using LSTM models"
+  research_domain: "machine learning"
+  workspace_path: "./workspace/stock_prediction"
+  data_path: "./data/stock_prices.csv"
+  data_desc: "Historical stock price data with technical indicators"
+  run_data_workflow: true
+  run_experiment_workflow: true
+  max_revisions: 5
+  ideation_agent_recursion_limit: 50
+  data_agent_recursion_limit: 100
+  experiment_agent_recursion_limit: 100
+
+# ==================== Example 4: Chemistry Research ====================
+example_chemistry:
+  research_query: "design novel drug molecules for cancer treatment"
+  research_domain: "computational chemistry"
+  workspace_path: "./workspace/drug_design"
+  data_path: "./data/molecular_properties.csv"
+  run_data_workflow: true
+  run_experiment_workflow: true
+  max_revisions: 3
+  repo_source: null  # No existing code repository
+
+# ==================== Example 5: Time Series Forecasting ====================
+example_timeseries:
+  research_query: "forecast energy consumption using transformer models"
+  research_domain: "time series analysis"
+  workspace_path: "./workspace/energy_forecast"
+  data_path: "./data/energy_consumption.csv"
+  data_desc: "Hourly energy consumption data for 2 years"
+  run_data_workflow: true
+  run_experiment_workflow: true
+  max_revisions: 7
+
+# ==================== Advanced Configuration Tips ====================
+#
+# Recursion Limits:
+#   - Ideation: 30-70 (depends on topic complexity)
+#   - Data: 80-150 (more for complex data analysis)
+#   - Experiment: 80-150 (more for complex experiments)
+#
+# Max Revisions:
+#   - Simple experiments: 3-5
+#   - Complex experiments: 5-10
+#
+# Data Path:
+#   - Supports: CSV, JSON, Excel, Parquet
+#   - Can be file or directory
+#
+# Repo Source:
+#   - Local path: "./code" or "/absolute/path"
+#   - Git URL: "https://github.com/user/repo"
+#   - Leave empty/null for fresh start

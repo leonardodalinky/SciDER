@@ -14,6 +14,7 @@ from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
 from scievo.prompts import PROMPTS
 from scievo.tools.claude_agent_sdk_tool import run_claude_agent_sdk
+from scievo.tools.claude_code_tool import run_claude_code
 
 from .state import ClaudeCodingAgentState
 
@@ -67,8 +68,8 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
 
         logger.info("Sending task to Claude Agent SDK: {}", instruction[:100])
 
-        # Call Claude Agent SDK tool
-        result = run_claude_agent_sdk(
+        # Call Claude Agent SDK tool (preferred)
+        sdk_result = run_claude_agent_sdk(
             prompt=prompt,
             cwd=workspace_dir,
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
@@ -76,27 +77,46 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
             **{constant.__AGENT_STATE_NAME__: agent_state},
         )
 
-        # Minimal implementation: use result directly without TOON parsing
-        result_str = str(result)
-
-        has_error = False
-        lines = result_str.split("\n")
-        for line in lines[:10]:  # Check first 10 lines for error field
-            stripped = line.strip()
-            # Check for explicit error field (not error=None which is normal)
-            if stripped.startswith("error:") and "error=None" not in line:
-                has_error = True
-                break
-
-        # Success case: task completed successfully
-        logger.info("Claude Agent SDK completed task")
-        agent_state.add_message(
-            Message(
-                role="assistant",
-                content=f"[Claude Agent SDK Result]\nClaude Agent SDK has completed the coding task. The changes have been applied to the workspace.",
-                agent_sender="claude_agent_sdk",
-            ).with_log()
+        sdk_text = str(sdk_result)
+        has_error = any(
+            (line.strip().startswith("error:") and "error=None" not in line)
+            for line in sdk_text.splitlines()[:20]
         )
+
+        if not has_error:
+            logger.info("Claude Agent SDK completed task")
+            agent_state.add_message(
+                Message(
+                    role="assistant",
+                    content=(
+                        "[Claude Agent SDK Result]\n"
+                        "Claude Agent SDK has completed the coding task. The changes have been applied to the workspace.\n\n"
+                        f"{sdk_text}"
+                    ),
+                    agent_sender="claude_agent_sdk",
+                ).with_log()
+            )
+        else:
+            # Fallback to Claude Code CLI (still Claude-based, but doesn't require SDK install)
+            logger.warning("Claude Agent SDK returned an error; falling back to Claude Code CLI")
+            cli_result = run_claude_code(
+                instruction=prompt,
+                cwd=workspace_dir,
+                timeout=1800,
+                **{constant.__AGENT_STATE_NAME__: agent_state},
+            )
+            agent_state.add_message(
+                Message(
+                    role="assistant",
+                    content=(
+                        "[Claude Agent SDK Error]\n"
+                        f"{sdk_text}\n\n"
+                        "[Claude Code CLI Fallback Result]\n"
+                        f"{str(cli_result)}"
+                    ),
+                    agent_sender="claude_code",
+                ).with_log()
+            )
 
     except Exception as e:
         logger.exception("Claude Agent SDK error")

@@ -17,7 +17,7 @@ def build():
     """
     g = StateGraph(ClaudeCodingAgentState)
 
-    # Nodes - minimal: just OpenHands execution and summary
+    # Nodes - minimal: just Claude execution and summary
     g.add_node("claude", execute.claude_node)
     g.add_node("summary", execute.summary_node)
 

@@ -16,6 +16,9 @@ class IdeationAgentState(ToolsetState, HistoryState):
     papers: list[dict] = []  # Papers found during literature search
     analyzed_papers: list[dict] = []  # Papers that have been analyzed
 
+    # Intermediate states
+    intermediate_state: list[dict] = []
+
     # Ideation output
     research_ideas: list[dict] = []  # Generated research ideas
     novelty_score: float | None = None  # Novelty score (0-10) from novelty check
