@@ -77,6 +77,13 @@ def init_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     ).with_log()
     agent_state.add_message(init_msg)
 
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "init",
+            "output": init_msg.content,
+        }
+    )
+
     return agent_state
 
 
@@ -149,6 +156,27 @@ def run_coding_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     else:
         agent_state.loop_results[-1]["coding_summary"] = coding_summary
 
+    coding_output = coding_summary
+    if isinstance(result_state, dict) and "intermediate_state" in result_state:
+        coding_intermediate = result_state.get("intermediate_state", [])
+        if coding_intermediate:
+            coding_output = (
+                f"{coding_summary}\n\n[Coding Subagent Intermediate States]\n"
+                + "\n".join(
+                    [
+                        f"{item.get('node_name', 'unknown')}: {item.get('output', '')[:200]}"
+                        for item in coding_intermediate
+                    ]
+                )
+            )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "run_coding_subagent",
+            "output": coding_output,
+        }
+    )
+
     return agent_state
 
 
@@ -189,6 +217,24 @@ def run_exec_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentState
     ):
         agent_state.loop_results[-1]["exec_result"] = result_state["execution_summary_dict"]
 
+    exec_output = json.dumps(result_state.get("execution_summary_dict", {}), indent=2)
+    if isinstance(result_state, dict) and "intermediate_state" in result_state:
+        exec_intermediate = result_state.get("intermediate_state", [])
+        if exec_intermediate:
+            exec_output = f"{exec_output}\n\n[Exec Subagent Intermediate States]\n" + "\n".join(
+                [
+                    f"{item.get('node_name', 'unknown')}: {item.get('output', '')[:200]}"
+                    for item in exec_intermediate
+                ]
+            )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "run_exec_subagent",
+            "output": exec_output,
+        }
+    )
+
     return agent_state
 
 
@@ -220,6 +266,27 @@ def run_summary_subagent(agent_state: ExperimentAgentState) -> ExperimentAgentSt
         and agent_state.loop_results[-1].get("revision") == agent_state.current_revision
     ):
         agent_state.loop_results[-1]["summary"] = result_state["summary_text"]
+
+    summary_output = result_state.get("summary_text", "No summary generated")
+    if isinstance(result_state, dict) and "intermediate_state" in result_state:
+        summary_intermediate = result_state.get("intermediate_state", [])
+        if summary_intermediate:
+            summary_output = (
+                f"{summary_output}\n\n[Summary Subagent Intermediate States]\n"
+                + "\n".join(
+                    [
+                        f"{item.get('node_name', 'unknown')}: {item.get('output', '')[:200]}"
+                        for item in summary_intermediate
+                    ]
+                )
+            )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "run_summary_subagent",
+            "output": summary_output,
+        }
+    )
 
     return agent_state
 
@@ -292,6 +359,13 @@ def analysis_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 
     logger.debug(f"Analysis for revision {agent_state.current_revision} completed")
 
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "analysis",
+            "output": analysis_text,
+        }
+    )
+
     return agent_state
 
 
@@ -310,6 +384,13 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
     if agent_state.current_revision >= agent_state.max_revisions - 1:
         logger.warning("Max revisions reached")
         agent_state.final_status = "max_revisions_reached"
+        judge_output = "Max revisions reached - stopping"
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "revision_judge",
+                "output": judge_output,
+            }
+        )
         return agent_state
 
     # Get the latest summary
@@ -350,12 +431,14 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
         issues_to_fix: list[str] = []
 
     # Parse the response using utility function
+    judge_output = response.content
     try:
         result = parse_json_from_llm_response(response, JudgeDecisionModel)
 
         if result.decision == "COMPLETE":
             logger.info("Revision judge decided: COMPLETE")
             agent_state.final_status = "success"
+            judge_output = f"Decision: COMPLETE\nReason: {result.reason}"
         else:
             logger.info(f"Revision judge decided: CONTINUE - {result.reason}")
             # Prepare for next revision
@@ -371,9 +454,18 @@ def revision_judge_node(agent_state: ExperimentAgentState) -> ExperimentAgentSta
                 agent_sender=AGENT_NAME,
             )
             agent_state.add_message(feedback_msg)
+            judge_output = f"Decision: CONTINUE\nReason: {result.reason}\nIssues to fix: {result.issues_to_fix}"
     except Exception as e:
         logger.error(f"Error parsing judge response: {e}")
         agent_state.final_status = "success"
+        judge_output = f"Error parsing judge response: {e}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "revision_judge",
+            "output": judge_output,
+        }
+    )
 
     return agent_state
 
@@ -410,5 +502,12 @@ def finalize_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
 ## All Execution Results
 {exec_results_text}
 """
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "finalize",
+            "output": agent_state.final_summary,
+        }
+    )
 
     return agent_state

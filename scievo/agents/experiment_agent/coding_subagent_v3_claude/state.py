@@ -23,6 +23,9 @@ class ClaudeCodingAgentState(ToolsetState, HistoryState):
     # Output summary (output)
     output_summary: str | None = None
 
+    # Intermediate states
+    intermediate_state: list[dict] = []
+
 
 # Alias for consistency with v2 (CodingAgentState)
 CodingAgentState = ClaudeCodingAgentState

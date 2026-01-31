@@ -124,6 +124,19 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
 
     agent_state.add_message(msg)
 
+    llm_output = (
+        msg.content
+        if msg.content
+        else ("[Tool calls: " + str(len(msg.tool_calls)) + "]" if msg.tool_calls else "[No output]")
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "llm_chat",
+            "output": llm_output,
+        }
+    )
+
     return agent_state
 
 
@@ -149,6 +162,13 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
         logger.warning("monitoring_node called but no command is running")
         agent_state.monitoring_attempts = 0
         agent_state.is_monitor_mode = False
+
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "monitoring",
+                "output": "No command running - monitoring stopped",
+            }
+        )
         return agent_state
 
     # Get current output from the running command
@@ -234,6 +254,17 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
         )
         agent_state.is_monitor_mode = True
 
+    monitoring_output = f"Monitoring attempt {agent_state.monitoring_attempts}, total time: {total_monitoring_seconds}s"
+    if ctx:
+        monitoring_output += f"\nCommand: {ctx.command if hasattr(ctx, 'command') else 'Unknown'}\nAction: {r.action}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "monitoring",
+            "output": monitoring_output,
+        }
+    )
+
     return agent_state
 
 
@@ -290,6 +321,19 @@ def summary_node(agent_state: ExecAgentState) -> ExecAgentState:
             "key_outputs": agent_state.execution_summary,
             "errors_issues": str(e),
         }
+
+    summary_output = (
+        json.dumps(agent_state.execution_summary_dict, indent=2)
+        if agent_state.execution_summary_dict
+        else agent_state.execution_summary
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "summary",
+            "output": summary_output,
+        }
+    )
 
     return agent_state
 
@@ -402,9 +446,57 @@ def tool_calling_node(agent_state: ExecAgentState) -> ExecAgentState:
     # Reset monitoring attempts after tool execution
     agent_state.monitoring_attempts = 0
 
+    tool_results = []
+    for tool_call in last_msg.tool_calls:
+        tool_name = tool_call.function.name
+        for msg in reversed(agent_state.history):
+            if (
+                msg.role == "tool"
+                and hasattr(msg, "tool_call_id")
+                and msg.tool_call_id == tool_call.id
+            ):
+                tool_results.append(
+                    {
+                        "tool": tool_name,
+                        "result": msg.content[:1000] if msg.content else "No result",
+                    }
+                )
+                break
+
+    tool_output_parts = []
+    for tr in tool_results:
+        tool_output_parts.append(f"Tool: {tr['tool']}\nResult: {tr['result']}")
+
+    tool_output = "\n\n".join(tool_output_parts) if tool_output_parts else "No tool calls executed"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "tool_calling",
+            "output": tool_output,
+        }
+    )
+
     return agent_state
 
 
 def history_compression_node(agent_state: ExecAgentState) -> ExecAgentState:
     logger.debug("history_compression_node of Agent {}", AGENT_NAME)
-    return history_compression.invoke_history_compression(agent_state)
+
+    history_before = len(agent_state.history)
+    agent_state = history_compression.invoke_history_compression(agent_state)
+    history_after = len(agent_state.history)
+
+    compression_output = f"Compressed history: {history_before} -> {history_after} messages"
+    if agent_state.history_patches:
+        last_patch = agent_state.history_patches[-1]
+        if last_patch.patched_message and last_patch.patched_message.content:
+            compression_output = f"Compressed {last_patch.n_messages} messages into:\n{last_patch.patched_message.content[:500]}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "history_compression",
+            "output": compression_output,
+        }
+    )
+
+    return agent_state

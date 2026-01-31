@@ -36,6 +36,13 @@ def init_node(agent_state: ExecAgentState) -> ExecAgentState:
     else:
         logger.warning("Agent history is not empty during init_node; skipping adding user query.")
 
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "init",
+            "output": user_msg.content if "user_msg" in locals() else "Initialization complete",
+        }
+    )
+
     return agent_state
 
 
