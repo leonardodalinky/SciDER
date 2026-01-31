@@ -44,6 +44,9 @@ class ExecAgentState(ExecState, ToolsetState, HistoryState):
     # Whether to force monitoring in the next step (internal use)
     is_monitor_mode: bool = False
 
+    # Intermediate states
+    intermediate_state: list[dict] = []
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.session_id is None:

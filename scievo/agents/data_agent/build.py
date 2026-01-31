@@ -14,7 +14,12 @@ mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
 
 def finialize_node(agent_state: DataAgentState) -> DataAgentState:
     """A finalization node to do any final processing before ending the graph."""
-    # Here we can add any final steps needed before ending the graph.
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "finalize",
+            "output": f"Finalization complete. Plans completed: {len(agent_state.past_plans)}, Remaining: {len(agent_state.remaining_plans)}",
+        }
+    )
     return agent_state
 
 
@@ -22,6 +27,7 @@ def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
     assert agent_state.talk_mode
     agent_state.remaining_plans = ["Response to users' query."]
 
+    mem_output = "Memory consolidation skipped"
     # consolidate mems
     if constant.REASONING_BANK_ENABLED:
         try:
@@ -32,14 +38,25 @@ def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
                     project_mem_dir=agent_state.project_mem_dir,
                 )
             )
+            mem_output = "Memory consolidation completed"
         except Exception as e:
+            error_msg = f"mem_consolidation_error: {e}"
             agent_state.add_message(
                 Message(
                     role="assistant",
-                    content=f"mem_consolidation_error: {e}",
+                    content=error_msg,
                     agent="noname",
                 ).with_log()
             )
+            mem_output = error_msg
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "prepare_for_talk_mode",
+            "output": mem_output,
+        }
+    )
+
     return agent_state
 
 

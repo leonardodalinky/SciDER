@@ -30,6 +30,13 @@ def init_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     )
     agent_state.add_message(user_msg)
 
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "init",
+            "output": user_msg.content,
+        }
+    )
+
     return agent_state
 
 

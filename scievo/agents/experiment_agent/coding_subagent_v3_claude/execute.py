@@ -128,6 +128,19 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
             ).with_log()
         )
 
+    claude_output = "Claude Agent SDK execution completed"
+    if agent_state.history:
+        last_msg = agent_state.history[-1]
+        if last_msg.role == "assistant" and last_msg.content:
+            claude_output = last_msg.content[:2000]
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "claude",
+            "output": claude_output,
+        }
+    )
+
     return agent_state
 
 
@@ -165,5 +178,12 @@ def summary_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
     agent_state.add_message(msg)
 
     logger.info(f"Coding task summary generated: {len(agent_state.output_summary)} characters")
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "summary",
+            "output": agent_state.output_summary or "No summary generated",
+        }
+    )
 
     return agent_state
