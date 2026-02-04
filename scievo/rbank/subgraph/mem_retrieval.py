@@ -70,7 +70,7 @@ def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
     # Check if input_msgs is empty
     if len(state.input_msgs) == 0:
         logger.debug("No input messages, skipping embedding")
-        state.summary_embedding = None
+        state.summary_embedding = []
         return state
 
     try:
@@ -78,7 +78,7 @@ def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
         # Check if formatted text is empty or only whitespace
         if not formatted_text or not formatted_text.strip():
             logger.debug("Formatted input is empty, skipping embedding")
-            state.summary_embedding = None
+            state.summary_embedding = []
             return state
 
         embeddings = ModelRegistry.embedding(LLM_NAME, [formatted_text])
@@ -86,11 +86,11 @@ def embedding_node(state: MemRetrievalState) -> MemRetrievalState:
             state.summary_embedding = embeddings[0]
         else:
             logger.debug("Retrieval error: embedding returned empty result")
-            state.summary_embedding = None
+            state.summary_embedding = []
     except Exception as e:
         logger.debug("Retrieval error: embedding_error: {}", e)
-        # Don't raise error, just set embedding to None
-        state.summary_embedding = None
+        # Don't raise error, just set embedding to empty list
+        state.summary_embedding = []
 
     logger.debug(
         "Mem Retrieval embedding end: {} dims",

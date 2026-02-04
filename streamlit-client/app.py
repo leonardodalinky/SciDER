@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -21,17 +22,19 @@ from scievo.workflows.experiment_workflow import ExperimentWorkflow
 from scievo.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
 
 st.set_page_config(page_title="SciEvo Chat", layout="centered")
-st.title("SciEvo Research Assistant")
 
 
-def register_all_models():
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+def register_all_models(user_api_key=None, user_model=None):
+    api_key = user_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        st.error("No API key found")
-        st.stop()
+        return False
 
-    default_model = os.getenv("SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
+    default_model = user_model or os.getenv("SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite")
+    openai_api_key = (
+        user_api_key
+        if user_api_key and "openai" in default_model.lower()
+        else os.getenv("OPENAI_API_KEY")
+    )
 
     models = [
         ("ideation", default_model, api_key),
@@ -55,6 +58,8 @@ def register_all_models():
 
     for name, model, key in models:
         ModelRegistry.register(name=name, model=model, api_key=key)
+
+    return True
 
 
 def stream_markdown(text, delay=0.02):
@@ -82,13 +87,101 @@ def render_intermediate_state(intermediate_state):
                 st.markdown(content)
 
 
+def get_next_memo_number(memory_dir: Path) -> int:
+    if not memory_dir.exists():
+        return 1
+
+    existing_memos = [
+        d.name for d in memory_dir.iterdir() if d.is_dir() and d.name.startswith("memo_")
+    ]
+
+    if not existing_memos:
+        return 1
+
+    numbers = []
+    for memo in existing_memos:
+        try:
+            num = int(memo.replace("memo_", ""))
+            numbers.append(num)
+        except ValueError:
+            continue
+
+    return max(numbers) + 1 if numbers else 1
+
+
+def save_chat_history(messages: list, workflow_type: str, metadata: dict = None):
+    base_dir = Path.cwd() / "case-study-memory"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    memo_number = get_next_memo_number(base_dir)
+    memo_dir = base_dir / f"memo_{memo_number}"
+    memo_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().isoformat()
+
+    chat_data = {
+        "timestamp": timestamp,
+        "workflow_type": workflow_type,
+        "metadata": metadata or {},
+        "messages": messages,
+    }
+
+    chat_file = memo_dir / "chat_history.json"
+    with open(chat_file, "w", encoding="utf-8") as f:
+        json.dump(chat_data, f, indent=2, ensure_ascii=False)
+
+    return memo_dir
+
+
+if "api_key" not in st.session_state:
+    st.session_state.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+if "default_model" not in st.session_state:
+    st.session_state.default_model = os.getenv(
+        "SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite"
+    )
+
+if not st.session_state.api_key:
+    st.title("SciEvo Research Assistant")
+    st.warning("API Key Required")
+    st.markdown("Please provide an API key to use the SciEvo Research Assistant.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        model_option = st.selectbox(
+            "Select Model Provider",
+            ["Gemini", "OpenAI"],
+            index=0 if "gemini" in st.session_state.default_model.lower() else 1,
+        )
+
+    with col2:
+        api_key_input = st.text_input(
+            "API Key", type="password", placeholder="Enter your API key here", value=""
+        )
+
+    if st.button("Save API Key", type="primary"):
+        if api_key_input:
+            st.session_state.api_key = api_key_input
+            if model_option == "Gemini":
+                st.session_state.default_model = "gemini/gemini-2.5-flash-lite"
+            else:
+                st.session_state.default_model = "gpt-4o-mini"
+            st.rerun()
+        else:
+            st.error("Please enter a valid API key")
+    st.stop()
+
+st.title("SciEvo Research Assistant")
+
 if "initialized" not in st.session_state:
     if not os.getenv("BRAIN_DIR"):
         os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
     Brain()
-    register_all_models()
-    st.session_state.ideation_graph = ideation_agent.build().compile()
-    st.session_state.initialized = True
+    if register_all_models(st.session_state.api_key, st.session_state.default_model):
+        st.session_state.ideation_graph = ideation_agent.build().compile()
+        st.session_state.initialized = True
+    else:
+        st.error("Failed to register models. Please check your API key.")
+        st.stop()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -246,3 +339,22 @@ if prompt := st.chat_input("Ask or run command"):
             stream_markdown(resp)
             render_intermediate_state(intermediate_state)
             st.session_state.messages.append({"role": "assistant", "content": resp})
+
+            metadata = {
+                "workflow_type": cfg["type"],
+                "query": cfg.get("query"),
+                "path": cfg.get("path"),
+            }
+            if cfg["type"] == "full":
+                metadata.update(
+                    {
+                        "data_path": cfg.get("data_path"),
+                        "run_data": cfg.get("run_data"),
+                        "run_exp": cfg.get("run_exp"),
+                    }
+                )
+
+            memo_dir = save_chat_history(
+                st.session_state.messages, workflow_type=cfg["type"], metadata=metadata
+            )
+            st.session_state.last_saved_memo = str(memo_dir)
