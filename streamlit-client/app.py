@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -84,6 +85,52 @@ def render_intermediate_state(intermediate_state):
             for i, content in enumerate(outputs, 1):
                 st.markdown(f"**Step {i}**")
                 st.markdown(content)
+
+
+def get_next_memo_number(memory_dir: Path) -> int:
+    if not memory_dir.exists():
+        return 1
+
+    existing_memos = [
+        d.name for d in memory_dir.iterdir() if d.is_dir() and d.name.startswith("memo_")
+    ]
+
+    if not existing_memos:
+        return 1
+
+    numbers = []
+    for memo in existing_memos:
+        try:
+            num = int(memo.replace("memo_", ""))
+            numbers.append(num)
+        except ValueError:
+            continue
+
+    return max(numbers) + 1 if numbers else 1
+
+
+def save_chat_history(messages: list, workflow_type: str, metadata: dict = None):
+    base_dir = Path.cwd() / "case-study-memory"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    memo_number = get_next_memo_number(base_dir)
+    memo_dir = base_dir / f"memo_{memo_number}"
+    memo_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().isoformat()
+
+    chat_data = {
+        "timestamp": timestamp,
+        "workflow_type": workflow_type,
+        "metadata": metadata or {},
+        "messages": messages,
+    }
+
+    chat_file = memo_dir / "chat_history.json"
+    with open(chat_file, "w", encoding="utf-8") as f:
+        json.dump(chat_data, f, indent=2, ensure_ascii=False)
+
+    return memo_dir
 
 
 if "api_key" not in st.session_state:
@@ -292,3 +339,22 @@ if prompt := st.chat_input("Ask or run command"):
             stream_markdown(resp)
             render_intermediate_state(intermediate_state)
             st.session_state.messages.append({"role": "assistant", "content": resp})
+
+            metadata = {
+                "workflow_type": cfg["type"],
+                "query": cfg.get("query"),
+                "path": cfg.get("path"),
+            }
+            if cfg["type"] == "full":
+                metadata.update(
+                    {
+                        "data_path": cfg.get("data_path"),
+                        "run_data": cfg.get("run_data"),
+                        "run_exp": cfg.get("run_exp"),
+                    }
+                )
+
+            memo_dir = save_chat_history(
+                st.session_state.messages, workflow_type=cfg["type"], metadata=metadata
+            )
+            st.session_state.last_saved_memo = str(memo_dir)

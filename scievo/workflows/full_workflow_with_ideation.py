@@ -282,7 +282,6 @@ class FullWorkflowWithIdeation(BaseModel):
         self._data_workflow = DataWorkflow(
             data_path=self.data_path,
             workspace_path=self.workspace_path,
-            user_query=self.user_query,  # Pass user_query for paper subagent
             recursion_limit=self.data_agent_recursion_limit,
             data_desc=self.data_desc,
             # Pass Brain-managed directories
