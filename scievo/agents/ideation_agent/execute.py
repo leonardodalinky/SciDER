@@ -5,11 +5,13 @@ This agent generates research ideas through literature review.
 Flow: START -> literature_search -> analyze_papers -> generate_ideas -> novelty_check -> ideation_report -> END
 """
 
+import re
+
 from loguru import logger
 
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
-from scievo.core.utils import unwrap_dict_from_toon
+from scievo.core.utils import parse_json_from_text, unwrap_dict_from_toon
 from scievo.prompts.prompt_data import PROMPTS
 from scievo.tools.arxiv_tool import search_papers
 from scievo.tools.ideation_tool import analyze_papers_for_ideas
@@ -306,6 +308,22 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             "output": ideas_output,
         }
     )
+
+    # parse research ideas
+    agent_state.research_ideas = []
+    if ideas_output and ideas_output not in ["[No content generated]", "[Tool calls made: 1]"]:
+        # Extract the "Proposed Research Ideas" section
+        ideas_section_match = re.search(
+            r"### Proposed Research Ideas\s*\n(.*?)(?:### |$)", ideas_output, re.DOTALL
+        )
+
+        if ideas_section_match:
+            ideas_section = ideas_section_match.group(1)
+            agent_state.research_ideas = parse_json_from_text(ideas_section)
+
+        logger.info("Parsed {} research ideas", len(agent_state.research_ideas))
+    else:
+        logger.warning("No valid ideas output to parse")
 
     logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
 

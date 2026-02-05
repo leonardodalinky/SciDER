@@ -258,9 +258,10 @@ def run_ideation(q):
             )
             + "\n```"
         )
+
     if rs.research_ideas:
         out.append("## Generated Research Ideas\n")
-        for i, idea in enumerate(rs.research_ideas[:5], 1):
+        for i, idea in enumerate(rs.research_ideas[:5], 0):
             out.append(f"### {i}. {idea.get('title','')}\n{idea.get('description','')}")
     return ("\n\n".join(out) if out else "No result", rs.intermediate_state)
 

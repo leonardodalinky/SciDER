@@ -41,7 +41,8 @@ system_prompt: |
 
   Structure your ideation output as:
 
-  ## Research Domain: [Domain Name]
+  ```markdown
+  ## Research Title: [Title Name]
 
   ### Literature Review Summary
   - Number of papers reviewed: [N]
@@ -54,19 +55,24 @@ system_prompt: |
   ...
 
   ### Proposed Research Ideas
-  1. **Idea Title**: [Brief title]
-     - **Description**: [Detailed description]
-     - **Rationale**: [Why this is promising]
-     - **Potential Impact**: [Expected contribution]
-     - **Related Papers**: [Relevant papers that inform this idea]
-
-  2. **Idea Title**: [Brief title]
-     ...
+  ```json
+  [
+    {
+      "title": "Brief Idea Title",
+      "description": "Detailed description of the research idea",
+      "rationale": "Explanation of why this idea is promising",
+      "potential_impact": "Expected contribution to the field",
+      "related_papers": ["Paper 1", "Paper 2"]
+    },
+    ...
+  ]
+  ```
 
   ### Next Steps
   - Suggested papers to read in detail
   - Experiments or analyses to validate ideas
   - Potential collaborators or resources needed
+  ```
 
   Remember to be creative but grounded in the literature. Your ideas should be:
   - **Novel**: Offer something new beyond existing work

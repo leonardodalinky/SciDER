@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Type, TypeVar
 
@@ -143,6 +144,19 @@ def parse_markdown_from_llm_response(llm_response: str | Message) -> str:
         raise ValueError("Failed to find markdown in LLM response")
     markdown_str = markdown_match.group(1).strip()
     return markdown_str
+
+
+def parse_json_from_text(text: str, tgt_type: Type[T] | None = None) -> T | object:
+    json_match = re.search(
+        r"(?:```\s*)?(?:json\s*)?(.*)(?:```)?", text, flags=re.DOTALL | re.IGNORECASE
+    )  # must find something, at least return the entire text
+    if not json_match:
+        raise ValueError("Failed to find JSON in text")
+    json_str = json_match.group(1).strip()
+    json_str = repair_json(json_str)
+    if tgt_type is not None:
+        return tgt_type.model_validate_json(json_str)
+    return json.loads(json_str)
 
 
 def array_to_bullets(arr: list[str]) -> str:
