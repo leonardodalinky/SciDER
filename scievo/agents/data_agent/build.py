@@ -6,10 +6,15 @@ from scievo.core.types import Message
 from scievo.rbank.subgraph import mem_consolidation
 
 from . import execute, plan
+from .paper_subagent import build as paper_subagent_build
+from .paper_subagent.state import PaperSearchAgentState
 from .state import DataAgentState
 
 mem_consolidation_subgraph = mem_consolidation.build()
 mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
+
+paper_subagent_graph = paper_subagent_build()
+paper_subagent_graph_compiled = paper_subagent_graph.compile()
 
 
 def finialize_node(agent_state: DataAgentState) -> DataAgentState:
@@ -20,6 +25,59 @@ def finialize_node(agent_state: DataAgentState) -> DataAgentState:
             "output": f"Finalization complete. Plans completed: {len(agent_state.past_plans)}, Remaining: {len(agent_state.remaining_plans)}",
         }
     )
+    return agent_state
+
+
+def run_paper_subagent(agent_state: DataAgentState) -> DataAgentState:
+    """Run paper subagent to search for relevant papers, datasets, and metrics."""
+    logger.debug("run_paper_subagent of Agent data")
+
+    paper_state = PaperSearchAgentState(
+        user_query=agent_state.user_query,
+        data_summary=agent_state.data_desc,
+    )
+
+    try:
+        result_state = paper_subagent_graph_compiled.invoke(paper_state)
+        result_state = PaperSearchAgentState(**result_state)
+
+        agent_state.papers = result_state.papers
+        agent_state.datasets = result_state.datasets
+        agent_state.metrics = result_state.metrics
+        agent_state.paper_search_summary = result_state.output_summary
+
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "paper_subagent",
+                "output": f"Paper subagent completed. Found {len(result_state.papers)} papers, {len(result_state.datasets)} datasets, {len(result_state.metrics)} metrics.\n\nSummary: {result_state.output_summary or 'No summary'}",
+            }
+        )
+
+        if result_state.output_summary:
+            agent_state.add_message(
+                Message(
+                    role="assistant",
+                    content=f"[Paper Search Results]\n{result_state.output_summary}",
+                    agent="paper_subagent",
+                ).with_log()
+            )
+    except Exception as e:
+        logger.exception("paper_subagent_error")
+        error_msg = f"Paper subagent error: {e}"
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=error_msg,
+                agent="paper_subagent",
+            ).with_log()
+        )
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "paper_subagent",
+                "output": error_msg,
+            }
+        )
+
     return agent_state
 
 
@@ -65,6 +123,7 @@ def build():
     g = StateGraph(DataAgentState)
 
     # nodes
+    g.add_node("paper_subagent", run_paper_subagent)
     g.add_node("planner", plan.planner_node)
     g.add_node("replanner", plan.replanner_node)
 
@@ -80,7 +139,8 @@ def build():
     g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
     # edges from gateway to nodes
-    g.add_edge(START, "planner")
+    g.add_edge(START, "paper_subagent")
+    g.add_edge("paper_subagent", "planner")
     g.add_edge("planner", "gateway")
     g.add_conditional_edges(
         "gateway",
