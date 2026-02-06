@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build:
+      context: ..
+      dockerfile: streamlit-client/Dockerfile
+    container_name: scievo-streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./case-study-memory:/app/streamlit-client/case-study-memory
+      - ./workspace:/app/streamlit-client/workspace
+      - ./tmp_brain:/app/streamlit-client/tmp_brain
+      - ../.env:/app/.env:ro
+    environment:
+      - BRAIN_DIR=/app/streamlit-client/tmp_brain
+      - WORKSPACE_PATH=/app/streamlit-client/workspace
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
