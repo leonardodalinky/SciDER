@@ -19,6 +19,7 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bench_workflows.register_models.gemini import (
+    register_gemini3_medium_high_models,
     register_gemini_low_medium_models,
     register_gemini_medium_high_models,
 )
@@ -150,6 +151,7 @@ Examples:
             "gpt-medium-high",
             "gemini-low-medium",
             "gemini-medium-high",
+            "gemini3-medium-high",
         ],
         default="gemini-low-medium",
         help="Model configuration to use (default: gemini-low-medium)",
@@ -168,6 +170,8 @@ Examples:
             register_gemini_low_medium_models()
         case "gemini-medium-high":
             register_gemini_medium_high_models()
+        case "gemini3-medium-high":
+            register_gemini3_medium_high_models()
 
     # Build user query and data description from MLE-Bench files
     logger.info("Building user query from MLE-Bench task files...")
