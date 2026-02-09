@@ -17,25 +17,25 @@ RUN mkdir ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}
 
 ARG CONDA_ENV_NAME=agent
 
-# copy just `agent_docker/requirements.txt`, so that we can cache conda separately from the agent files
-COPY benchmarks/mlebench/agent_docker/requirements.txt ${AGENT_DIR}/requirements.txt
-
 # Requirements for opencv
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
-
-# create conda environment and install the requirements to it
-RUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \
-    conda clean -afy
-
-# clone git directory to the agent directory
-RUN git clone https://github.com/JunShern/MLAgentBench.git ${AGENT_DIR}/MLAgentBench && \
-    cd ${AGENT_DIR}/MLAgentBench && \
-    git checkout 328c713c02ea43e63f2d11cd7fd1293acb58f09f
-COPY ./benchmark_dir ${AGENT_DIR}/MLAgentBench/MLAgentBench/benchmarks/mlebench
 
 # put remaining necessary agent files in the expected location
 COPY additional_notes.txt /home/additional_notes.txt
 COPY start.sh ${AGENT_DIR}
 
-# set working directory to MLAgentBench
-WORKDIR ${AGENT_DIR}/MLAgentBench
+# copy just `agent_docker/requirements.txt`, so that we can cache conda separately from the agent files
+COPY benchmarks/mlebench/agent_docker/requirements.txt ${AGENT_DIR}/requirements.txt
+
+# create conda environment and install the requirements to it
+RUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \
+    conda clean -afy
+
+COPY scievo/ ${AGENT_DIR}/SciEvoBench/scievo/
+COPY bench_workflows/ ${AGENT_DIR}/SciEvoBench/bench_workflows/
+COPY requirements.txt ${AGENT_DIR}/SciEvoBench/requirements.txt
+RUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/SciEvoBench/requirements.txt && \
+    conda clean -afy
+
+# set working directory to SciEvoBench
+WORKDIR ${AGENT_DIR}/SciEvoBench

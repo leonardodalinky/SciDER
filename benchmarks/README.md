@@ -9,5 +9,5 @@ This folder contains all the benchmarks for the project. Each benchmark is organ
 To clone all the submodules, use the following command:
 
 ```bash
-git update --init --recursive
+git submodule update --init --recursive
 ```

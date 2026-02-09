@@ -1,9 +1,0 @@
-[submodule "bench/datascibench/DataSciBench"]
-	path = bench/datascibench/DataSciBench
-	url = https://github.com/THUDM/DataSciBench
-[submodule "bench/mlebench/mle-bench"]
-	path = bench/mlebench/mle-bench
-	url = https://github.com/openai/mle-bench
-[submodule "bench/scicodebench/SciCode"]
-	path = bench/scicodebench/SciCode
-	url = https://github.com/scicode-bench/SciCode
