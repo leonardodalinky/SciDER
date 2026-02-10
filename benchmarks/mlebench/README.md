@@ -6,12 +6,14 @@ First, create a new uv env:
 
 ```bash
 uv init --python 3.12
+uv venv --seed
+source .venv/bin/activate
 ```
 
 Then, install the dependencies:
 
 ```bash
-uv pip install -e ./mle-bench
+pip install -e ./mle-bench
 ```
 
 Then, git-lfs all the mle-bench:
