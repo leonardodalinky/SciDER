@@ -1,3 +1,6 @@
 [submodule "benchmarks/mlebench/mle-bench"]
 	path = benchmarks/mlebench/mle-bench
 	url = git@github.com:leonardodalinky/mle-bench.git
+[submodule "benchmarks/datascibench/DataSciBench"]
+	path = benchmarks/datascibench/DataSciBench
+	url = git@github.com:leonardodalinky/DataSciBench.git

@@ -46,3 +46,9 @@ Finally, you can run the benchmark:
 ```bash
 pushd mle-bench/; python run_agent.py --agent-id scievo/... --competition-set experiments/splits/low.txt; popd
 ```
+
+Grading:
+
+```bash
+TODO
+```
