@@ -26,6 +26,11 @@ class ClaudeCodingAgentState(ToolsetState, HistoryState):
     # Intermediate states
     intermediate_state: list[dict] = []
 
+    # Whether to store the full Claude output in intermediate state (can be very long). Default False to save memory.
+    intermediate_full_output: bool = False
+    # Whether to skip the final summary step and return full Claude output directly (for evaluation/debugging)
+    skip_summary: bool = False
+
 
 # Alias for consistency with v2 (CodingAgentState)
 CodingAgentState = ClaudeCodingAgentState

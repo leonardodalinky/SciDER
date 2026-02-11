@@ -99,4 +99,5 @@ explicit = true
 [tool.uv.workspace]
 members = [
     "benchmarks/datascibench",
+    "benchmarks/scicodebench",
 ]

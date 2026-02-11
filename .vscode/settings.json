@@ -17,7 +17,9 @@
         // tmp files
         "**/tmp_*",
         // project specific
-        "sth_large/"
+        "sth_large/",
+        "*.h5",
+        "**/*.h5"
     ],
     "sync-rsync.useWSL": true
 }
