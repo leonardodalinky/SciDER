@@ -25,6 +25,12 @@ git lfs pull
 popd
 ```
 
+Later, prepare the data:
+
+```bash
+pushd mle-bench; mlebench prepare --lite; popd
+```
+
 Create `mlebench-env` docker image:
 
 ```bash
@@ -40,7 +46,7 @@ export CODE_DIR=/home/code
 export AGENT_DIR=/home/agent
 export AGENT_NAME=scievo
 
-pushd ../..; docker build --platform=linux/amd64 -t $AGENT_NAME -f benchmarks/mlebench/mle-bench/agents/scievo/Dockerfile --build-arg SUBMISSION_DIR=$SUBMISSION_DIR --build-arg LOGS_DIR=$LOGS_DIR --build-arg CODE_DIR=$CODE_DIR --build-arg AGENT_DIR=$AGENT_DIR; popd
+pushd ../..; docker build --platform=linux/amd64 --no-cache -t $AGENT_NAME -f benchmarks/mlebench/mle-bench/agents/scievo/Dockerfile --build-arg SUBMISSION_DIR=$SUBMISSION_DIR --build-arg LOGS_DIR=$LOGS_DIR --build-arg CODE_DIR=$CODE_DIR --build-arg AGENT_DIR=$AGENT_DIR .; popd
 ```
 
 Finally, you can run the benchmark:

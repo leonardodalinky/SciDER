@@ -115,13 +115,13 @@ jsonschema==4.25.1
     #   mcp
 jsonschema-specifications==2025.9.1
     # via jsonschema
-langchain-core==1.0.2
+langchain-core==1.2.12
     # via
     #   langchain-text-splitters
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
-langchain-text-splitters==1.0.0
+langchain-text-splitters==1.1.0
     # via scievo (pyproject.toml)
 langgraph==1.0.2
     # via scievo (pyproject.toml)
@@ -279,12 +279,16 @@ tqdm==4.67.1
     #   openai
 typing-extensions==4.15.0
     # via
+    #   aiosignal
+    #   anyio
     #   beautifulsoup4
     #   huggingface-hub
     #   langchain-core
     #   openai
     #   pydantic
     #   pydantic-core
+    #   referencing
+    #   starlette
     #   typing-inspection
 typing-inspection==0.4.2
     # via
@@ -294,6 +298,8 @@ tzdata==2025.2
     # via pandas
 urllib3==2.5.0
     # via requests
+uuid-utils==0.14.0
+    # via langchain-core
 uvicorn==0.38.0
     # via mcp
 xxhash==3.6.0

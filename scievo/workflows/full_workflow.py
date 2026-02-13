@@ -161,11 +161,6 @@ class FullWorkflow(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self.data_agent_history = self._data_workflow.data_agent_history
-                # Extract paper subagent results
-                self.papers = self._data_workflow.papers
-                self.datasets = self._data_workflow.datasets
-                self.metrics = self._data_workflow.metrics
-                self.paper_search_summary = self._data_workflow.paper_search_summary
                 self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True
