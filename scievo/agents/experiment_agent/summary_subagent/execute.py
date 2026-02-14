@@ -69,9 +69,9 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": agent_state.workspace.working_dir,
-        "output_path": agent_state.output_path,
-        "current_activated_toolsets": agent_state.toolsets,
+        "workspace": str(agent_state.workspace.working_dir),
+        "output_path": str(agent_state.output_path),
+        "current_activated_toolsets": list(set(agent_state.toolsets)),
     }
 
     # Update system prompt
