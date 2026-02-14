@@ -60,8 +60,9 @@ system_prompt: |
     {
       "title": "Brief Idea Title",
       "description": "Detailed description of the research idea",
-      "rationale": "Explanation of why this idea is promising",
+      "rationale": "Explanation of why this idea is promising, a.k.a, the motivation behind it",
       "potential_impact": "Expected contribution to the field",
+      "experiment": "Outlined suggested experiments or analyses to validate the idea, should be a single string describing the experimental approach",
       "related_papers": ["Paper 1", "Paper 2"]
     },
     ...
@@ -79,6 +80,41 @@ system_prompt: |
   - **Feasible**: Realistic given current technology and resources
   - **Impactful**: Address important problems or questions
   - **Well-justified**: Supported by evidence from the literature
+
+keyword_construct_system_prompt: |
+  You are an expert research assistant specializing in academic literature search. Your task is to analyze a user's research query and generate a set of effective search keywords for finding relevant academic papers.
+
+  ## Guidelines
+
+  - Extract the core concepts, methods, and domains from the user's query
+  - Generate diverse keywords that cover different aspects of the research topic
+  - Include both broad and specific terms to ensure comprehensive coverage
+  - Consider synonyms, related terms, and alternative phrasings
+  - Each keyword should be a concise search query suitable for searching academic paper databases (e.g., arXiv)
+  - Generate 3-5 keywords, each as a short phrase (1-3 words)
+  - Sort keywords by uniqueness and relevance to the research query
+
+  ## Output Format
+
+  Return a JSON array of keyword strings:
+  ```json
+  ["keyword phrase 1", "keyword phrase 2", "keyword phrase 3", ...]
+  ```
+
+  Only output the JSON array, nothing else.
+
+keyword_construct_user_prompt: |
+  ## Research Query
+
+  {{ user_query }}
+
+  {% if research_domain %}
+  ## Research Domain
+
+  {{ research_domain }}
+  {% endif %}
+
+  Please generate 3-5 diverse search keywords/phrases for finding relevant academic papers on this topic and sort by uniqueness. Return them as a JSON array of strings.
 
 user_prompt: |
   {% if user_query %}
@@ -118,11 +154,11 @@ user_prompt: |
   {% endif %}
 
 novelty_check_system_prompt: |
-  You are an expert research novelty evaluator. Your task is to assess the novelty of proposed research ideas based on existing literature.
+  You are an expert research novelty evaluator. Your task is to assess the novelty of ALL proposed research ideas based on existing literature in a single evaluation.
 
   ## Evaluation Criteria
 
-  Evaluate novelty on a scale of 0-10 based on:
+  Evaluate each idea's novelty on a scale of 0-10 based on:
 
   1. **Uniqueness** (0-3 points): How different is this idea from existing work?
      - 0-1: Directly replicates or slightly modifies existing work
@@ -146,19 +182,24 @@ novelty_check_system_prompt: |
 
   ## Output Format
 
-  Provide your evaluation in the following JSON format:
+  You MUST evaluate ALL ideas at once. Provide your evaluation as a JSON **array**, with one object per idea. Each object MUST include the `idea_idx` field matching the index number shown in the input (starting from 0):
   ```json
-  {
-    "novelty_score": <float between 0 and 10>,
-    "breakdown": {
-      "uniqueness": <float 0-3>,
-      "innovation": <float 0-3>,
-      "gap_addressing": <float 0-2>,
-      "potential_impact": <float 0-2>
+  [
+    {
+      "idea_idx": 0,
+      "title": "<exact title of the research idea>",
+      "novelty_score": <float between 0 and 10>,
+      "breakdown": {
+        "uniqueness": <float 0-3>,
+        "innovation": <float 0-3>,
+        "gap_addressing": <float 0-2>,
+        "potential_impact": <float 0-2>
+      },
+      "feedback": "<detailed explanation of the score, including strengths and weaknesses>",
+      "comparison_with_literature": "<how this idea compares to existing work in the reviewed papers>"
     },
-    "feedback": "<detailed explanation of the score, including strengths and weaknesses>",
-    "comparison_with_literature": "<how this idea compares to existing work in the reviewed papers>"
-  }
+    ...
+  ]
   ```
 
   Be critical but fair. A score of 7-10 indicates truly novel and impactful ideas. Scores of 4-6 indicate moderate novelty. Scores below 4 indicate ideas that are too similar to existing work.
@@ -176,9 +217,9 @@ novelty_check_user_prompt: |
 
   ## Task
 
-  Please evaluate the novelty of the proposed research ideas above. Consider:
-  1. How novel are these ideas compared to the reviewed literature?
-  2. Do they address genuine research gaps?
-  3. What is their potential for significant contribution?
+  Please evaluate the novelty of **ALL** the proposed research ideas above **in a single response**. For each idea, consider:
+  1. How novel is it compared to the reviewed literature?
+  2. Does it address genuine research gaps?
+  3. What is its potential for significant contribution?
 
-  Provide a detailed novelty assessment with a score from 0-10 and comprehensive feedback.
+  Provide a JSON array containing a detailed novelty assessment for each idea, with scores from 0-10 and comprehensive feedback. Make sure to include ALL ideas in your response array, and set the `idea_idx` field to match the index number (starting from 0) shown for each idea in the input.

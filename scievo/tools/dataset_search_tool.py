@@ -3,9 +3,9 @@ Toolset for searching academic datasets across multiple repositories.
 Supports searching based on data agent's dataset analysis.
 """
 
+import json
 import re
 import time
-import urllib.parse
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -16,7 +16,6 @@ from loguru import logger
 # from ..core.llms import ModelRegistry  # Moved to function level
 # Message is imported here but only used in functions that have lazy ModelRegistry import
 from ..core.types import Message
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
@@ -687,6 +686,6 @@ def search_datasets(
             for dataset in datasets
         ]
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
-        return wrap_dict_to_toon({"error": f"Error searching datasets: {e}"})
+        return json.dumps({"error": f"Error searching datasets: {e}"})

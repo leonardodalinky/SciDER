@@ -11,7 +11,7 @@ from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
-from scievo.core.utils import wrap_dict_to_toon
+from scievo.core.utils import wrap_text_with_block
 from scievo.prompts import PROMPTS
 from scievo.tools import Tool, ToolRegistry
 
@@ -75,8 +75,10 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     }
 
     # Update system prompt
-    system_prompt = PROMPTS.experiment_summary.system_prompt.render(
-        state_text=wrap_dict_to_toon(selected_state),
+    import json
+
+    system_prompt = PROMPTS.experiment.summary_system_prompt.render(
+        state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
     )
 

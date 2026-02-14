@@ -52,11 +52,22 @@ pushd ../..; docker build --platform=linux/amd64 --no-cache -t $AGENT_NAME -f be
 Finally, you can run the benchmark:
 
 ```bash
-pushd mle-bench/; python run_agent.py --agent-id scievo/... --competition-set experiments/splits/low.txt; popd
+# Set agent ID from `agents/scievo/config.yaml`
+export AGENT_ID=scievo/gemini-low-medium
+
+# GPU
+pushd mle-bench/; python run_agent.py --agent-id $AGENT_ID --competition-set experiments/splits/low.txt --container-config environment/config/container_configs/gpu.json; popd
+# CPU only
+pushd mle-bench/; python run_agent.py --agent-id $AGENT_ID --competition-set experiments/splits/low.txt; popd
 ```
 
 Grading:
 
 ```bash
-TODO
+RUN_GROUP=runs/<run-group>
+
+pushd mle-bench/
+python experiments/make_submission.py --metadata $RUN_GROUP/metadata.json --output $RUN_GROUP/submission.jsonl
+mlebench grade --submission $RUN_GROUP/submission.jsonl --output-dir $RUN_GROUP
+popd
 ```

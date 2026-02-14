@@ -96,7 +96,7 @@ def run_claude_agent_sdk(
     **kwargs,
 ) -> str:
     if not prompt or not prompt.strip():
-        return wrap_dict_to_toon({"error": "prompt must be a non-empty string"})
+        return json.dumps({"error": "prompt must be a non-empty string"})
 
     # Import lazily so SciEvo can run without the SDK installed.
     try:
@@ -127,6 +127,7 @@ def run_claude_agent_sdk(
                 model=CLAUDE_MODEL,
                 allowed_tools=tools,
                 permission_mode=permission_mode,
+                max_buffer_size=10 * 1024 * 1024,  # 10 MB
             )
 
             final_result = None
@@ -150,7 +151,7 @@ def run_claude_agent_sdk(
                 "cwd": str(working_dir),
                 "allowed_tools": tools,
                 "permission_mode": permission_mode,
-                "messages": msgs[-20:],  # keep tail only
+                "messages": msgs[-3:],  # keep tail only
                 "message_count": len(msgs),
                 "final_result": final_result,
             }

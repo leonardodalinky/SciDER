@@ -6,7 +6,7 @@ from typing import Callable
 
 import litellm
 from functional import seq
-from litellm import RateLimitError
+from litellm import RateLimitError, ServiceUnavailableError
 from litellm.types.utils import Usage
 from loguru import logger
 
@@ -103,6 +103,13 @@ class ModelRegistry:
                     f"Encountered ZeroChoiceError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries} after 45 seconds..."
                 )
                 sleep(45)  # brief wait before retry
+            except ServiceUnavailableError as e:
+                if attempt == max_retries - 1:
+                    raise
+                logger.warning(
+                    f"Encountered ServiceUnavailableError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries} after 60 seconds..."
+                )
+                sleep(60)  # brief wait before retry
 
     @classmethod
     def _completion(

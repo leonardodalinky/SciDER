@@ -27,6 +27,7 @@ CLAUDE_PROMPT: Template = Template(
     """\
 # Requirements:
 - At the end of your response, provide a detailed explanation of what you did and why.
+- Avoid directly reading large files; instead, read the specific parts you need or just read the first few lines.
 - Ensure that all changes are made in a way that maintains the integrity of the codebase.
 - Avoid long-running executions of training or data processing; focus on code changes. If needed for code testing, design some simple test code instead.
 

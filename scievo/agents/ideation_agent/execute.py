@@ -2,16 +2,18 @@
 Execution nodes for the Ideation Agent
 
 This agent generates research ideas through literature review.
-Flow: START -> literature_search -> analyze_papers -> generate_ideas -> novelty_check -> ideation_report -> END
+Flow: START -> keyword_construct -> literature_search -> analyze_papers -> generate_ideas -> novelty_check -> ideation_report -> END
 """
 
+import json
 import re
 
 from loguru import logger
+from pydantic import BaseModel, TypeAdapter
 
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
-from scievo.core.utils import parse_json_from_text, unwrap_dict_from_toon
+from scievo.core.utils import parse_json_from_text
 from scievo.prompts.prompt_data import PROMPTS
 from scievo.tools.arxiv_tool import search_papers
 from scievo.tools.ideation_tool import analyze_papers_for_ideas
@@ -26,46 +28,127 @@ AGENT_NAME = "ideation"
 BUILTIN_TOOLSETS = ["ideation", "paper_search"]
 
 
+def keyword_construct_node(agent_state: IdeationAgentState) -> IdeationAgentState:
+    """Extract search keywords from user query using LLM."""
+    logger.debug("keyword_construct_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("keyword_construct")
+
+    try:
+        system_prompt = PROMPTS.ideation.keyword_construct_system_prompt.render()
+        user_prompt_content = PROMPTS.ideation.keyword_construct_user_prompt.render(
+            user_query=agent_state.user_query,
+            research_domain=agent_state.research_domain or "",
+        )
+        user_prompt = Message(
+            role="user",
+            content=user_prompt_content,
+            agent_sender=AGENT_NAME,
+        )
+        agent_state.add_message(user_prompt)
+
+        msg = ModelRegistry.completion(
+            LLM_NAME,
+            agent_state.patched_history,
+            system_prompt=system_prompt,
+            agent_sender=AGENT_NAME,
+            tools=None,
+            tool_choice="none",
+        ).with_log()
+
+        agent_state.add_message(msg)
+
+        # Parse keywords from LLM response
+        if msg.content:
+            try:
+                KeywordsAdapter = TypeAdapter(list[str])
+                KeywordsAdapter.model_validate_json = (
+                    lambda json_str: KeywordsAdapter.validate_json(json_str)
+                )
+                keywords = parse_json_from_text(msg.content, KeywordsAdapter)
+                if keywords and len(keywords) > 0:
+                    agent_state.search_keywords = keywords
+                else:
+                    logger.warning("Empty keywords list, falling back to user query")
+                    agent_state.search_keywords = [agent_state.user_query]
+            except Exception as e:
+                logger.warning("Failed to parse keywords: {}", e)
+                agent_state.search_keywords = [agent_state.user_query]
+        else:
+            agent_state.search_keywords = [agent_state.user_query]
+
+        logger.info(
+            "Extracted {} search keywords: {}",
+            len(agent_state.search_keywords),
+            agent_state.search_keywords,
+        )
+
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"[Keyword Construction] Extracted {len(agent_state.search_keywords)} keywords: {agent_state.search_keywords}",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
+    except Exception as e:
+        logger.exception("Keyword construction error")
+        agent_state.search_keywords = [agent_state.user_query]
+        agent_state.add_message(
+            Message(
+                role="assistant",
+                content=f"[Keyword Construction Error] {str(e)}, falling back to raw query",
+                agent_sender=AGENT_NAME,
+            ).with_log()
+        )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "keyword_construct",
+            "output": f"Keywords: {agent_state.search_keywords}",
+        }
+    )
+
+    logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
+
+    return agent_state
+
+
 def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentState:
     """Search for relevant literature on the research topic."""
     logger.debug("literature_search_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("literature_search")
 
     try:
-        # Use the search_papers tool directly from arxiv_tool
-        query = agent_state.user_query
+        # Use extracted keywords for search (fall back to user query if none)
+        keywords = agent_state.search_keywords or [agent_state.user_query]
         if agent_state.research_domain:
-            query = f"{agent_state.research_domain} {query}"
+            keywords = [f"{agent_state.research_domain} {kw}" for kw in keywords]
+
+        # Join all keywords into a single query string
+        combined_query = " ".join(keywords)
+        logger.info("Searching papers with combined query: '{}'", combined_query)
 
         result = search_papers(
-            query=query,
-            sources=["arxiv"],  # Start with arXiv, can expand later
-            max_results=15,  # Get more papers for ideation
+            query=combined_query,
+            sources=["arxiv"],
+            max_results=15,
         )
 
-        # Parse the result (always TOON format now)
+        # Parse the result
         try:
-            parsed_result = unwrap_dict_from_toon(result)
+            if isinstance(result, str):
+                parsed_result = json.loads(result)
+            else:
+                parsed_result = result
 
             # Handle different return formats
             if isinstance(parsed_result, dict):
-                # Check if it's an error response
                 if "error" in parsed_result:
                     error_msg = parsed_result.get("error", "Unknown error")
                     logger.warning("Search error: {}", error_msg)
                     agent_state.papers = parsed_result.get("papers", [])
-                    # Add error message to history
-                    agent_state.add_message(
-                        Message(
-                            role="assistant",
-                            content=f"[Search Warning] {error_msg}",
-                            agent_sender=AGENT_NAME,
-                        ).with_log()
-                    )
-                # Check if it has 'papers' field (shouldn't happen, but be defensive)
                 elif "papers" in parsed_result:
                     agent_state.papers = parsed_result["papers"]
-                # Otherwise, treat the whole dict as unexpected format
                 else:
                     logger.warning(
                         "Unexpected result format from search_papers: {}",
@@ -73,7 +156,6 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
                     )
                     agent_state.papers = []
             elif isinstance(parsed_result, list):
-                # Direct list of papers (normal case)
                 agent_state.papers = parsed_result
             else:
                 logger.warning("Unexpected result type from search_papers: {}", type(parsed_result))
@@ -86,13 +168,13 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
             )
             agent_state.papers = []
 
-        logger.info("Found {} papers", len(agent_state.papers))
+        logger.info("Found {} papers using keywords: {}", len(agent_state.papers), keywords)
 
         # Add search results to history
         agent_state.add_message(
             Message(
                 role="assistant",
-                content=f"[Literature Search] Found {len(agent_state.papers)} papers for query: '{query}'",
+                content=f"[Literature Search] Found {len(agent_state.papers)} unique papers using {len(keywords)} keywords: {keywords}",
                 agent_sender=AGENT_NAME,
             ).with_log()
         )
@@ -115,7 +197,7 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
         papers=len(agent_state.papers),
     ).info("literature_search_node completed")
 
-    search_result_text = f"Found {len(agent_state.papers)} papers for query: '{query if 'query' in locals() else agent_state.user_query}'\n\n"
+    search_result_text = f"Found {len(agent_state.papers)} unique papers using keywords: {keywords if 'keywords' in locals() else [agent_state.user_query]}\n\n"
     if agent_state.papers:
         search_result_text += "\n".join(
             [
@@ -170,7 +252,10 @@ def analyze_papers_node(agent_state: IdeationAgentState) -> IdeationAgentState:
 
         # Parse the result
         try:
-            analysis = unwrap_dict_from_toon(result)
+            if isinstance(result, str):
+                analysis = json.loads(result)
+            else:
+                analysis = result
             if isinstance(analysis, dict):
                 agent_state.analyzed_papers = agent_state.papers
                 logger.info("Analyzed {} papers", len(agent_state.papers))
@@ -310,6 +395,19 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
     )
 
     # parse research ideas
+    class ResearchIdeaModel(BaseModel):
+        title: str
+        description: str
+        rationale: str
+        potential_impact: str
+        experiment: str
+        related_papers: list[str]
+
+    ResearchIdeasModel = TypeAdapter(list[ResearchIdeaModel])
+    ResearchIdeasModel.model_validate_json = lambda json_str: ResearchIdeasModel.validate_json(
+        json_str
+    )
+
     agent_state.research_ideas = []
     if ideas_output and ideas_output not in ["[No content generated]", "[Tool calls made: 1]"]:
         # Extract the "Proposed Research Ideas" section
@@ -319,7 +417,9 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
 
         if ideas_section_match:
             ideas_section = ideas_section_match.group(1)
-            agent_state.research_ideas = parse_json_from_text(ideas_section)
+            research_ideas = parse_json_from_text(ideas_section, ResearchIdeasModel)
+            research_ideas = [idea.model_dump() for idea in research_ideas]
+            agent_state.research_ideas = research_ideas
 
         logger.info("Parsed {} research ideas", len(agent_state.research_ideas))
     else:
@@ -331,61 +431,73 @@ def generate_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
 
 
 def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
-    """Check the novelty of generated research ideas and assign a score (0-10)."""
+    """Check the novelty of each generated research idea and assign per-idea scores (0-10)."""
     logger.debug("novelty_check_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("novelty_check")
 
-    try:
-        # Extract the ideas from the conversation history
-        ideas_text = ""
-        for msg in reversed(agent_state.history):
-            if msg.role == "assistant" and msg.agent_sender == AGENT_NAME:
-                if msg.content:
-                    ideas_text = msg.content
-                    break
+    # If no research ideas were parsed, set everything to None and return early
+    if not agent_state.research_ideas:
+        logger.warning("No research ideas to evaluate for novelty")
+        agent_state.idea_novelty_assessments = []
+        agent_state.novelty_score = None
+        agent_state.novelty_feedback = None
 
-        # Fallback to patched_history
-        if not ideas_text:
-            for msg in reversed(agent_state.patched_history):
-                if msg.role == "assistant" and msg.agent_sender == AGENT_NAME:
-                    if msg.content:
-                        ideas_text = msg.content
-                        break
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "novelty_check",
+                "output": "No research ideas to evaluate.",
+            }
+        )
+        return agent_state
 
-        if not ideas_text:
-            logger.warning("No ideas found for novelty check")
-            agent_state.novelty_score = 0.0
-            agent_state.novelty_feedback = "No ideas were generated to evaluate."
-            return agent_state
+    # Format papers summary for context (shared across all idea evaluations)
+    papers_summary = ""
+    if agent_state.papers:
+        papers_summary = "\n\n".join(
+            [
+                f"- {p.get('title', 'Unknown')} ({p.get('published', 'Unknown')})"
+                for p in agent_state.papers[:20]
+            ]
+        )
+    else:
+        papers_summary = "No papers were reviewed."
 
-        # Format papers summary for context
-        papers_summary = ""
-        if agent_state.papers:
-            papers_summary = "\n\n".join(
-                [
-                    f"- {p.get('title', 'Unknown')} ({p.get('published', 'Unknown')})"
-                    for p in agent_state.papers[:20]  # Top 20 papers
-                ]
+    system_prompt = PROMPTS.ideation.novelty_check_system_prompt.render()
+
+    agent_state.idea_novelty_assessments = []
+
+    # Format ALL ideas into a single text block for batch evaluation
+    all_ideas_text = ""
+    for idx, idea in enumerate(agent_state.research_ideas):
+        idea_title = idea.get("title", f"Idea {idx + 1}")
+        all_ideas_text += f"### Research Idea (idea_idx={idx}): {idea_title}\n\n"
+        for key in ["description", "rationale", "potential_impact", "experiment"]:
+            if idea.get(key):
+                all_ideas_text += f"**{key.replace('_', ' ').title()}**: {idea[key]}\n\n"
+        if idea.get("related_papers"):
+            all_ideas_text += (
+                f"**Related Papers**: {', '.join(str(p) for p in idea['related_papers'])}\n\n"
             )
-        else:
-            papers_summary = "No papers were reviewed."
+        all_ideas_text += "---\n\n"
 
-        # Build prompt for novelty check
-        user_prompt_content = PROMPTS.ideation.novelty_check_user_prompt.render(
-            ideas_text=ideas_text,
-            papers_summary=papers_summary,
-        )
-        user_prompt = Message(
-            role="user",
-            content=user_prompt_content,
-            agent_sender=AGENT_NAME,
-        )
-        agent_state.add_message(user_prompt)
+    logger.info(
+        "Evaluating novelty for {} ideas in a single batch",
+        len(agent_state.research_ideas),
+    )
 
-        # Get system prompt
-        system_prompt = PROMPTS.ideation.novelty_check_system_prompt.render()
+    # Build prompt for ALL ideas at once
+    user_prompt_content = PROMPTS.ideation.novelty_check_user_prompt.render(
+        ideas_text=all_ideas_text,
+        papers_summary=papers_summary,
+    )
+    user_prompt = Message(
+        role="user",
+        content=user_prompt_content,
+        agent_sender=AGENT_NAME,
+    )
+    agent_state.add_message(user_prompt)
 
-        # Call LLM for novelty evaluation (no tools, just text generation)
+    try:
         msg = ModelRegistry.completion(
             LLM_NAME,
             agent_state.patched_history,
@@ -403,77 +515,36 @@ def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             msg.content,
         )
 
-        # Parse the novelty assessment from LLM response
-        if msg.content:
-            try:
-                # Try to extract JSON from the response
-                import json
-                import re
+        # Parse all novelty assessments from the single LLM response
+        agent_state.idea_novelty_assessments = _parse_batch_novelty_response(
+            msg.content if msg.content else "",
+            agent_state.research_ideas,
+        )
 
-                from json_repair import repair_json
+        for a in agent_state.idea_novelty_assessments:
+            a["experiment"] = agent_state.research_ideas[a["idea_idx"]].get("experiment", "N/A")
 
-                # Look for JSON block (may be in code block or plain text)
-                json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
-                json_match = re.search(json_pattern, msg.content, re.DOTALL)
-                if not json_match:
-                    # Try to find JSON object without code block
-                    json_pattern = r"(\{[^{}]*\"novelty_score\"[^{}]*\})"
-                    json_match = re.search(json_pattern, msg.content, re.DOTALL)
-
-                if json_match:
-                    json_str = json_match.group(1)
-                    try:
-                        # Try to repair JSON if needed
-                        json_str = repair_json(json_str)
-                        assessment = json.loads(json_str)
-                        agent_state.novelty_score = float(assessment.get("novelty_score", 0.0))
-                        feedback_parts = []
-                        if assessment.get("feedback"):
-                            feedback_parts.append(assessment["feedback"])
-                        if assessment.get("comparison_with_literature"):
-                            feedback_parts.append(
-                                f"Comparison with Literature: {assessment['comparison_with_literature']}"
-                            )
-                        agent_state.novelty_feedback = (
-                            "\n\n".join(feedback_parts)
-                            if feedback_parts
-                            else "No feedback provided."
-                        )
-                    except json.JSONDecodeError:
-                        # If JSON parsing fails, try text extraction
-                        raise ValueError("JSON parsing failed")
-                else:
-                    # Fallback: try to extract score from text
-                    score_match = re.search(
-                        r"novelty[_\s]*score[:\s]*([0-9.]+)", msg.content, re.IGNORECASE
-                    )
-                    if score_match:
-                        agent_state.novelty_score = float(score_match.group(1))
-                        agent_state.novelty_feedback = msg.content
-                    else:
-                        logger.warning("Could not parse novelty score from LLM response")
-                        agent_state.novelty_score = 5.0  # Default middle score
-                        agent_state.novelty_feedback = msg.content
-            except Exception as parse_error:
-                logger.warning("Failed to parse novelty assessment: {}", parse_error)
-                agent_state.novelty_score = 5.0  # Default middle score
-                agent_state.novelty_feedback = (
-                    f"Error parsing assessment: {str(parse_error)}\n\nLLM Response: {msg.content}"
-                )
-        else:
-            logger.warning("LLM returned no content for novelty check")
-            agent_state.novelty_score = 5.0
-            agent_state.novelty_feedback = "No assessment was generated."
-
-        # Clamp score to 0-10 range
-        agent_state.novelty_score = max(0.0, min(10.0, agent_state.novelty_score))
-
-        logger.info("Novelty check completed. Score: {:.2f}/10", agent_state.novelty_score)
+        for a in agent_state.idea_novelty_assessments:
+            logger.info(
+                "Novelty for '{}': {:.2f}/10",
+                a["title"],
+                a["novelty_score"],
+            )
 
     except Exception as e:
         logger.exception("Novelty check error")
-        agent_state.novelty_score = 5.0  # Default middle score on error
-        agent_state.novelty_feedback = f"Error during novelty check: {str(e)}"
+        # Fallback: assign default scores to all ideas
+        for idx, idea in enumerate(agent_state.research_ideas):
+            idea_title = idea.get("title", f"Idea {idx + 1}")
+            agent_state.idea_novelty_assessments.append(
+                {
+                    "idea_idx": idx,
+                    "title": idea_title,
+                    "novelty_score": 5.0,
+                    "feedback": f"Error during novelty check: {str(e)}",
+                    "breakdown": None,
+                }
+            )
         agent_state.add_message(
             Message(
                 role="assistant",
@@ -482,26 +553,203 @@ def novelty_check_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             ).with_log()
         )
 
-    novelty_output = ""
-    if "msg" in locals() and msg.content:
-        novelty_output = msg.content
-    elif agent_state.novelty_feedback:
-        novelty_output = (
-            f"Novelty Score: {agent_state.novelty_score}\n\n{agent_state.novelty_feedback}"
+    # Compute aggregate novelty score (average of all per-idea scores)
+    scores = [a["novelty_score"] for a in agent_state.idea_novelty_assessments]
+    agent_state.novelty_score = sum(scores) / len(scores) if scores else None
+
+    # Compose aggregate feedback
+    feedback_lines = []
+    for a in agent_state.idea_novelty_assessments:
+        feedback_lines.append(
+            f"- **{a['title']}**: {a['novelty_score']:.2f}/10 — {a.get('feedback', 'N/A')}"
         )
-    else:
-        novelty_output = f"Novelty Score: {agent_state.novelty_score}"
+    agent_state.novelty_feedback = "\n".join(feedback_lines) if feedback_lines else None
+
+    logger.info(
+        "Novelty check completed for {} ideas. Average score: {:.2f}/10",
+        len(agent_state.idea_novelty_assessments),
+        agent_state.novelty_score if agent_state.novelty_score is not None else 0.0,
+    )
+
+    # Build intermediate state output
+    novelty_output_parts = [
+        (
+            f"Evaluated {len(agent_state.idea_novelty_assessments)} ideas.\n"
+            f"Average Novelty Score: {agent_state.novelty_score:.2f}/10\n"
+            if agent_state.novelty_score is not None
+            else "No ideas evaluated.\n"
+        )
+    ]
+    for a in agent_state.idea_novelty_assessments:
+        novelty_output_parts.append(
+            f"\n### {a['title']}\n"
+            f"Score: {a['novelty_score']:.2f}/10\n"
+            f"Feedback: {a.get('feedback', 'N/A')}"
+        )
 
     agent_state.intermediate_state.append(
         {
             "node_name": "novelty_check",
-            "output": novelty_output,
+            "output": "\n".join(novelty_output_parts),
         }
     )
 
     logger.info("intermediate_state length: ", len(agent_state.intermediate_state))
 
     return agent_state
+
+
+def _parse_batch_novelty_response(content: str, research_ideas: list[dict]) -> list[dict]:
+    """Parse a batch novelty check LLM response into a list of structured assessment dicts.
+
+    The LLM is expected to return a JSON array with one assessment per idea.
+
+    Args:
+        content: The LLM response text containing a JSON array of assessments.
+        research_ideas: The original list of research ideas (for fallback titles).
+
+    Returns:
+        list of dicts, each with keys: idea_idx (int), title (str), novelty_score (float), feedback (str), breakdown (dict|None)
+    """
+    num_ideas = len(research_ideas)
+
+    if not content:
+        return [
+            {
+                "idea_idx": i,
+                "title": idea.get("title", f"Idea {i + 1}"),
+                "novelty_score": 5.0,
+                "feedback": "No assessment was generated.",
+                "breakdown": None,
+            }
+            for i, idea in enumerate(research_ideas)
+        ]
+
+    # Define Pydantic models for structured parsing
+    class BreakdownModel(BaseModel):
+        uniqueness: float | None = None
+        innovation: float | None = None
+        gap_addressing: float | None = None
+        potential_impact: float | None = None
+
+    class NoveltyAssessmentModel(BaseModel):
+        idea_idx: int | None = None
+        title: str | None = None
+        novelty_score: float
+        feedback: str | None = None
+        comparison_with_literature: str | None = None
+        breakdown: BreakdownModel | None = None
+
+    BatchAdapter = TypeAdapter(list[NoveltyAssessmentModel])
+    BatchAdapter.model_validate_json = lambda json_str: BatchAdapter.validate_json(json_str)
+
+    def _build_result(assessment: dict, fallback_idx: int, fallback_title: str) -> dict:
+        """Convert a parsed assessment dict into the standard result format."""
+        score = float(assessment.get("novelty_score", 5.0))
+        score = max(0.0, min(10.0, score))
+
+        idea_idx = assessment.get("idea_idx")
+        if idea_idx is None:
+            idea_idx = fallback_idx
+
+        feedback_parts = []
+        if assessment.get("feedback"):
+            feedback_parts.append(assessment["feedback"])
+        if assessment.get("comparison_with_literature"):
+            feedback_parts.append(
+                f"Comparison with Literature: {assessment['comparison_with_literature']}"
+            )
+        feedback = "\n\n".join(feedback_parts) if feedback_parts else "No feedback provided."
+
+        breakdown = assessment.get("breakdown", None)
+
+        return {
+            "idea_idx": idea_idx,
+            "title": assessment.get("title") or fallback_title,
+            "novelty_score": score,
+            "feedback": feedback,
+            "breakdown": breakdown,
+        }
+
+    try:
+        # Try parsing as a JSON array via TypeAdapter
+        parsed = parse_json_from_text(content, BatchAdapter)
+
+        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+            results = []
+            for i, assessment_obj in enumerate(parsed):
+                # Convert pydantic model to dict if needed
+                if hasattr(assessment_obj, "model_dump"):
+                    assessment = assessment_obj.model_dump()
+                elif isinstance(assessment_obj, dict):
+                    assessment = assessment_obj
+                else:
+                    assessment = dict(assessment_obj)
+
+                fallback_title = (
+                    research_ideas[i].get("title", f"Idea {i + 1}")
+                    if i < num_ideas
+                    else f"Idea {i + 1}"
+                )
+                results.append(_build_result(assessment, i, fallback_title))
+
+            # If LLM returned fewer assessments than ideas, fill in defaults
+            for i in range(len(results), num_ideas):
+                idea_title = research_ideas[i].get("title", f"Idea {i + 1}")
+                logger.warning("No assessment returned for idea: {}", idea_title)
+                results.append(
+                    {
+                        "idea_idx": i,
+                        "title": idea_title,
+                        "novelty_score": 5.0,
+                        "feedback": "No assessment was returned for this idea.",
+                        "breakdown": None,
+                    }
+                )
+
+            return results
+
+        # Fallback: try parsing as a single object (in case LLM didn't return an array)
+        logger.warning(
+            "Batch novelty response was not a valid array, attempting single-object fallback"
+        )
+
+    except Exception as parse_error:
+        logger.warning("Failed to parse batch novelty assessment: {}", parse_error)
+
+    # Fallback: try extracting individual scores via regex
+    try:
+        score_matches = re.findall(r"novelty[_\s]*score[:\s]*([0-9.]+)", content, re.IGNORECASE)
+        if score_matches and len(score_matches) >= num_ideas:
+            results = []
+            for i, score_str in enumerate(score_matches[:num_ideas]):
+                score = max(0.0, min(10.0, float(score_str)))
+                idea_title = research_ideas[i].get("title", f"Idea {i + 1}")
+                results.append(
+                    {
+                        "idea_idx": i,
+                        "title": idea_title,
+                        "novelty_score": score,
+                        "feedback": content,
+                        "breakdown": None,
+                    }
+                )
+            return results
+    except Exception:
+        pass
+
+    # Final fallback: return default scores for all ideas
+    logger.warning("Could not parse any novelty scores from batch response")
+    return [
+        {
+            "idea_idx": i,
+            "title": idea.get("title", f"Idea {i + 1}"),
+            "novelty_score": 5.0,
+            "feedback": f"Failed to parse assessment.\n\nLLM Response: {content}",
+            "breakdown": None,
+        }
+        for i, idea in enumerate(research_ideas)
+    ]
 
 
 def ideation_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
@@ -558,7 +806,31 @@ def ideation_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
 
         # Include novelty assessment if available
         novelty_section = ""
-        if agent_state.novelty_score is not None:
+        if agent_state.idea_novelty_assessments:
+            avg_score = agent_state.novelty_score
+            novelty_section = f"""
+## Novelty Assessment
+
+**Average Novelty Score: {avg_score:.2f}/10** ({len(agent_state.idea_novelty_assessments)} ideas evaluated)
+
+"""
+            for a in agent_state.idea_novelty_assessments:
+                novelty_section += f"### {a['title']}\n\n"
+                novelty_section += f"**Score: {a['novelty_score']:.2f}/10**\n\n"
+                if a.get("feedback"):
+                    novelty_section += f"{a['feedback']}\n\n"
+                if a.get("breakdown"):
+                    bd = a["breakdown"]
+                    novelty_section += (
+                        f"- Uniqueness: {bd.get('uniqueness', 'N/A')}\n"
+                        f"- Innovation: {bd.get('innovation', 'N/A')}\n"
+                        f"- Gap Addressing: {bd.get('gap_addressing', 'N/A')}\n"
+                        f"- Potential Impact: {bd.get('potential_impact', 'N/A')}\n\n"
+                    )
+                if a.get("experiment"):
+                    novelty_section += f"**Suggested Experiment**: {a['experiment']}\n\n"
+                novelty_section += "---\n\n"
+        elif agent_state.novelty_score is not None:
             novelty_section = f"""
 ## Novelty Assessment
 
