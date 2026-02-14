@@ -14,7 +14,7 @@ from scievo import history_compression
 from scievo.core import constant
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
-from scievo.core.utils import parse_json_from_llm_response, wrap_dict_to_toon
+from scievo.core.utils import parse_json_from_llm_response, wrap_text_with_block
 from scievo.prompts import PROMPTS, SKILLS
 from scievo.tools import Tool, ToolRegistry
 
@@ -91,13 +91,15 @@ def llm_chat_node(agent_state: ExecAgentState) -> ExecAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": agent_state.workspace.working_dir,
-        "current_activated_toolsets": agent_state.toolsets,
+        "workspace": str(agent_state.workspace.working_dir),
+        "current_activated_toolsets": list(set(agent_state.toolsets)),
     }
 
     # Update system prompt
+    import json
+
     system_prompt = PROMPTS.experiment_exec.exec_system_prompt.render(
-        state_text=wrap_dict_to_toon(selected_state),
+        state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         uv_skill=SKILLS.uv_skill,
     )

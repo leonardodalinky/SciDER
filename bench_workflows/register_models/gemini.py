@@ -11,12 +11,36 @@ LOW_COST_MODEL = "gemini/gemini-2.5-flash-lite"
 MEDIUM_COST_MODEL = "gemini/gemini-2.5-flash"
 HIGH_COST_MODEL = "gemini/gemini-2.5-pro"
 
+MEDIUM_COST_MODEL_2 = "gemini/gemini-3-flash-preview"
+HIGH_COST_MODEL_2 = "gemini/gemini-3-pro-preview"
+
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 
 def register_gemini_low_medium_models(reasoning: str = "low"):
     """Register Gemini low and medium cost models in the ModelRegistry."""
+    ModelRegistry.register(
+        name="ideation",
+        model=MEDIUM_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="paper_search",
+        model=LOW_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="metric_search",
+        model=LOW_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
     ModelRegistry.register(
         name="data",
         model=LOW_COST_MODEL,
@@ -101,6 +125,27 @@ def register_gemini_low_medium_models(reasoning: str = "low"):
 def register_gemini_medium_high_models(reasoning: str = "low"):
     """Register Gemini medium and high cost models in the ModelRegistry."""
     ModelRegistry.register(
+        name="ideation",
+        model=HIGH_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="paper_search",
+        model=MEDIUM_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="metric_search",
+        model=MEDIUM_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
         name="data",
         model=MEDIUM_COST_MODEL,
         api_key=GEMINI_KEY,
@@ -175,6 +220,109 @@ def register_gemini_medium_high_models(reasoning: str = "low"):
     ModelRegistry.register(
         name="experiment_summary",
         model=HIGH_COST_MODEL,
+        api_key=GEMINI_KEY,
+        reasoning_effort="low",
+    )
+
+
+def register_gemini3_medium_high_models(reasoning: str = "low"):
+    """Register Gemini 3 medium and high cost models in the ModelRegistry."""
+    ModelRegistry.register(
+        name="ideation",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="paper_search",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="metric_search",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="data",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="plan",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+        temperature=0.3,
+        top_p=0.9,
+    )
+
+    ModelRegistry.register(
+        name="critic",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+        temperature=0.3,
+        top_p=0.9,
+    )
+
+    ModelRegistry.register(
+        name="mem",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+    )
+
+    ModelRegistry.register(
+        name="embed",
+        model="text-embedding-3-small",
+        api_key=OPENAI_KEY,
+    )
+
+    ModelRegistry.register(
+        name="history",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+    )
+
+    ModelRegistry.register(
+        name="experiment_agent",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="experiment_coding",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="experiment_execute",
+        model=HIGH_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        reasoning_effort=reasoning,
+    )
+
+    ModelRegistry.register(
+        name="experiment_monitor",
+        model=MEDIUM_COST_MODEL_2,
+        api_key=GEMINI_KEY,
+        temperature=0.3,
+        top_p=0.9,
+    )
+
+    ModelRegistry.register(
+        name="experiment_summary",
+        model=HIGH_COST_MODEL_2,
         api_key=GEMINI_KEY,
         reasoning_effort="low",
     )

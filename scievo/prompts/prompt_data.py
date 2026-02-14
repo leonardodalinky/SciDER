@@ -140,6 +140,8 @@ class PaperSubagentPrompts:
 class IdeationPrompts:
     system_prompt: Template
     user_prompt: Template
+    keyword_construct_system_prompt: Template
+    keyword_construct_user_prompt: Template
     novelty_check_system_prompt: Template
     novelty_check_user_prompt: Template
 

@@ -7,12 +7,12 @@ This toolset provides capabilities to:
 3. Analyze papers for research ideas
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 import requests
 from loguru import logger
 
-from ..core.utils import unwrap_dict_from_toon, wrap_dict_to_toon
 from .arxiv_tool import PaperSearch, search_papers
 from .registry import register_tool, register_toolset_desc
 
@@ -74,20 +74,19 @@ def search_literature(query: str, sources: List[str] = None, max_results: int = 
 
         # Check if result is an error message (starts with "Error")
         if isinstance(result, str) and result.startswith("Error"):
-            # Return error in TOON format
-            return wrap_dict_to_toon({"error": result, "papers": []})
+            return json.dumps({"error": result, "papers": []})
 
-        # Normalize the result: convert 'summary' to 'abstract' for consistency
-
-        try:
-            papers = unwrap_dict_from_toon(result)
-        except (ValueError, Exception) as parse_error:
-            # If TOON parsing fails, it might be an error message
-            logger.warning("Failed to parse search result as TOON: {}", parse_error)
-            if isinstance(result, str) and ("Error" in result or "error" in result.lower()):
-                return wrap_dict_to_toon({"error": result, "papers": []})
-            # Re-raise if it's not an error message
-            raise
+        # Parse JSON result
+        if isinstance(result, str):
+            try:
+                papers = json.loads(result)
+            except json.JSONDecodeError as parse_error:
+                logger.warning("Failed to parse search result as JSON: {}", parse_error)
+                if "Error" in result or "error" in result.lower():
+                    return json.dumps({"error": result, "papers": []})
+                raise
+        else:
+            papers = result
 
         if isinstance(papers, list):
             # Normalize each paper: ensure 'abstract' field exists
@@ -103,13 +102,13 @@ def search_literature(query: str, sources: List[str] = None, max_results: int = 
                         "summary", "No abstract available"
                     )
                 normalized_papers.append(normalized_paper)
-            return wrap_dict_to_toon(normalized_papers)
+            return json.dumps(normalized_papers)
 
-        # If result is not a list, return as is (shouldn't happen, but be defensive)
-        return result
+        # If result is not a list, return as is
+        return json.dumps(papers)
     except Exception as e:
         logger.exception("Error searching literature")
-        return wrap_dict_to_toon({"error": f"Error searching literature: {e}", "papers": []})
+        return json.dumps({"error": f"Error searching literature: {e}", "papers": []})
 
 
 @register_tool(
@@ -173,7 +172,7 @@ def read_paper_abstract(paper_url: str) -> str:
                         "url": entry.link,
                         "source": "arXiv",
                     }
-                    return wrap_dict_to_toon(result)
+                    return json.dumps(result)
 
         # For other URLs, try to fetch and parse HTML
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -202,11 +201,11 @@ def read_paper_abstract(paper_url: str) -> str:
             "url": paper_url,
             "source": "web",
         }
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
 
     except Exception as e:
         logger.exception("Error reading paper abstract")
-        return wrap_dict_to_toon({"error": f"Error reading paper abstract: {e}", "url": paper_url})
+        return json.dumps({"error": f"Error reading paper abstract: {e}", "url": paper_url})
 
 
 @register_tool(
@@ -276,8 +275,8 @@ def analyze_papers_for_ideas(papers: List[Dict[str, Any]], research_domain: str)
             "papers_text": papers_text,
         }
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
 
     except Exception as e:
         logger.exception("Error analyzing papers")
-        return wrap_dict_to_toon({"error": f"Error analyzing papers: {e}", "papers_analyzed": 0})
+        return json.dumps({"error": f"Error analyzing papers: {e}", "papers_analyzed": 0})
