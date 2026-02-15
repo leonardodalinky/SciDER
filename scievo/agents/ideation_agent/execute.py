@@ -121,45 +121,35 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
     try:
         # Use extracted keywords for search (fall back to user query if none)
         keywords = agent_state.search_keywords or [agent_state.user_query]
-        if agent_state.research_domain:
-            keywords = [f"{agent_state.research_domain} {kw}" for kw in keywords]
+        # if agent_state.research_domain:
+        #     keywords = [f"{agent_state.research_domain} {kw}" for kw in keywords]
 
         # Join all keywords into a single query string
         combined_query = " ".join(keywords)
         logger.info("Searching papers with combined query: '{}'", combined_query)
 
-        result = search_papers(
-            query=combined_query,
-            sources=["arxiv"],
-            max_results=15,
-        )
+        parsed_result = []
+        for kw in keywords:
+            result = json.loads(
+                search_papers(
+                    query=kw,
+                    sources=["arxiv"],
+                    max_results=2,
+                )
+            )
+            parsed_result.extend(result)
 
         # Parse the result
         try:
-            if isinstance(result, str):
-                parsed_result = json.loads(result)
-            else:
-                parsed_result = result
-
-            # Handle different return formats
-            if isinstance(parsed_result, dict):
-                if "error" in parsed_result:
+            for p in parsed_result:
+                # Handle different return formats
+                if isinstance(parsed_result, dict) and "error" in parsed_result:
                     error_msg = parsed_result.get("error", "Unknown error")
                     logger.warning("Search error: {}", error_msg)
-                    agent_state.papers = parsed_result.get("papers", [])
-                elif "papers" in parsed_result:
-                    agent_state.papers = parsed_result["papers"]
-                else:
-                    logger.warning(
-                        "Unexpected result format from search_papers: {}",
-                        list(parsed_result.keys()),
-                    )
                     agent_state.papers = []
-            elif isinstance(parsed_result, list):
-                agent_state.papers = parsed_result
+                    break
             else:
-                logger.warning("Unexpected result type from search_papers: {}", type(parsed_result))
-                agent_state.papers = []
+                agent_state.papers = parsed_result
         except Exception as parse_error:
             logger.warning("Failed to parse search results: {}", parse_error)
             logger.debug(

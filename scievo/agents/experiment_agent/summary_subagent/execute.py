@@ -77,7 +77,7 @@ def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
     # Update system prompt
     import json
 
-    system_prompt = PROMPTS.experiment.summary_system_prompt.render(
+    system_prompt = PROMPTS.experiment_summary.summary_system_prompt.render(
         state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
     )

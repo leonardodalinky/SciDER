@@ -103,16 +103,29 @@ keyword_construct_system_prompt: |
 
   Only output the JSON array, nothing else.
 
+  IMPORTANT: The keywords should be directly the short phrases consisting of 1-3 words. DO NOT include any additional text or explanation, like "this is", "the topic is".
+
+  For example, the user query "I want to research on the application of deep learning in medical image analysis" could yield keywords like:
+  ```json
+  ["deep learning", "medical image analysis", "AI in healthcare", "convolutional neural networks", "computer vision in medicine"]
+  ```
+  Avoid generating like this:
+  ```json
+  ["the topic is deep learning", "this is about medical image analysis", "I want to research AI in healthcare", "the method is convolutional neural networks", "the application is computer vision in medicine"]
+  ```
+  This must be avoided. The keywords should be concise and directly usable for searching papers.
+
+
 keyword_construct_user_prompt: |
-  ## Research Query
-
-  {{ user_query }}
-
   {% if research_domain %}
   ## Research Domain
 
   {{ research_domain }}
   {% endif %}
+  ## Research Query
+
+  {{ user_query }}
+
 
   Please generate 3-5 diverse search keywords/phrases for finding relevant academic papers on this topic and sort by uniqueness. Return them as a JSON array of strings.
 
