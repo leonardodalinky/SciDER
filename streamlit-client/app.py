@@ -135,15 +135,28 @@ def run_ideation(q):
 
 
 def run_data(path, q):
+    # Ensure path is absolute and exists
+    data_path = Path(path).resolve()
+    if not data_path.exists():
+        return f"Error: Data path does not exist: {data_path}", []
+
+    # Log path for debugging
+    logger = __import__("loguru").logger
+    logger.info(f"Running data analysis on path: {data_path}")
+    logger.info(
+        f"Path exists: {data_path.exists()}, is_dir: {data_path.is_dir()}, is_file: {data_path.is_file()}"
+    )
+
     w = DataWorkflow(
-        data_path=Path(path),
+        data_path=data_path,
         workspace_path=st.session_state.workspace_path,
         recursion_limit=100,
     )
     w.run()
     intermediate_state = getattr(w, "data_agent_intermediate_state", [])
     if w.final_status != "success":
-        return "Data workflow failed", intermediate_state
+        error_msg = w.error_message or "Data workflow failed"
+        return f"Data workflow failed: {error_msg}", intermediate_state
     out = ["## Data Analysis Complete"]
     if w.data_summary:
         out.append(w.data_summary)
@@ -152,10 +165,19 @@ def run_data(path, q):
 
 def run_experiment(q, path):
     if path:
+        # Ensure path is absolute and exists
+        analysis_path = Path(path).resolve()
+        if not analysis_path.exists():
+            return f"Error: Data analysis file does not exist: {analysis_path}", []
+
+        logger = __import__("loguru").logger
+        logger.info(f"Running experiment with analysis file: {analysis_path}")
+        logger.info(f"Path exists: {analysis_path.exists()}, is_file: {analysis_path.is_file()}")
+
         w = ExperimentWorkflow.from_data_analysis_file(
             workspace_path=st.session_state.workspace_path,
             user_query=q,
-            data_analysis_path=path,
+            data_analysis_path=str(analysis_path),
             max_revisions=5,
             recursion_limit=100,
         )
@@ -166,10 +188,23 @@ def run_experiment(q, path):
 
 
 def run_full(cfg):
+    data_path = None
+    if cfg.get("data_path"):
+        data_path = Path(cfg["data_path"]).resolve()
+        if not data_path.exists():
+            return f"Error: Data path does not exist: {data_path}", []
+
+    logger = __import__("loguru").logger
+    if data_path:
+        logger.info(f"Running full workflow with data path: {data_path}")
+        logger.info(
+            f"Path exists: {data_path.exists()}, is_dir: {data_path.is_dir()}, is_file: {data_path.is_file()}"
+        )
+
     w = FullWorkflowWithIdeation(
         user_query=cfg["query"],
         workspace_path=st.session_state.workspace_path,
-        data_path=Path(cfg["data_path"]) if cfg["data_path"] else None,
+        data_path=data_path,
         run_data_workflow=cfg["run_data"],
         run_experiment_workflow=cfg["run_exp"],
         max_revisions=5,
@@ -203,11 +238,12 @@ def save_and_extract_upload(uploaded_file) -> Path | None:
     with open(zip_path, "wb") as f:
         f.write(uploaded_file.getvalue())
     extract_dir = dest_dir / "extracted"
-    extract_dir.mkdir(exist_ok=True)
+    extract_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path, "r") as zf:
         zf.extractall(extract_dir)
     zip_path.unlink()
-    return extract_dir
+    # Return absolute path to ensure it works in container environments
+    return extract_dir.resolve()
 
 
 def find_data_analysis_file(extract_dir: Path) -> Path | None:
@@ -298,6 +334,8 @@ def save_chat_history(messages: list, workflow_type: str, metadata: dict = None)
 
 if "api_key" not in st.session_state:
     st.session_state.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+if "anthropic_api_key" not in st.session_state:
+    st.session_state.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY") or ""
 if "default_model" not in st.session_state:
     st.session_state.default_model = os.getenv(
         "SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite"
@@ -306,8 +344,9 @@ if "default_model" not in st.session_state:
 if not st.session_state.api_key:
     st.title("SciEvo Research Assistant")
     st.warning("API Key Required")
-    st.markdown("Please provide an API key to use the SciEvo Research Assistant.")
+    st.markdown("Please provide API keys to use the SciEvo Research Assistant.")
 
+    # Model provider selection
     col1, col2 = st.columns(2)
     with col1:
         model_option = st.selectbox(
@@ -318,19 +357,39 @@ if not st.session_state.api_key:
 
     with col2:
         api_key_input = st.text_input(
-            "API Key", type="password", placeholder="Enter your API key here", value=""
+            f"{model_option} API Key",
+            type="password",
+            placeholder=f"Enter your {model_option} API key here",
+            value="",
+            help=f"Required for {model_option} models used in data analysis and ideation",
         )
 
-    if st.button("Save API Key", type="primary"):
+    # Claude API Key input (separate, always shown)
+    st.divider()
+    anthropic_api_key_input = st.text_input(
+        "Anthropic (Claude) API Key",
+        type="password",
+        placeholder="Enter your Anthropic API key here (optional but recommended)",
+        value="",
+        help="Required for Claude Agent SDK (coding agent v3). Used for code generation tasks.",
+    )
+
+    if st.button("Save API Keys", type="primary"):
         if api_key_input:
             st.session_state.api_key = api_key_input
             if model_option == "Gemini":
                 st.session_state.default_model = "gemini/gemini-2.5-flash-lite"
             else:
                 st.session_state.default_model = "gpt-4o-mini"
+
+            # Save Anthropic API key if provided
+            if anthropic_api_key_input:
+                st.session_state.anthropic_api_key = anthropic_api_key_input
+                os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key_input
+
             st.rerun()
         else:
-            st.error("Please enter a valid API key")
+            st.error("Please enter a valid API key for the selected model provider")
     st.stop()
 
 col_title, col_reset = st.columns([5, 1])
@@ -347,9 +406,38 @@ with col_reset:
         ]
         if "selected_workflow" in st.session_state:
             st.session_state.selected_workflow = None
+        # Note: API keys are preserved on reset (user doesn't need to re-enter them)
         st.rerun()
 
 if "initialized" not in st.session_state:
+    # Load environment variables from .env file
+    try:
+        from dotenv import load_dotenv
+
+        # Try to load from parent directory (project root)
+        env_path = Path(__file__).parent.parent / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+        else:
+            # Fallback: try current directory
+            load_dotenv()
+    except Exception as e:
+        logger = __import__("loguru", fromlist=["logger"]).logger
+        logger.warning(f"Failed to load .env file: {e}")
+
+    # Ensure ANTHROPIC_API_KEY is available for Claude Agent SDK
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        # First try to get from session state (user input)
+        anthropic_key = st.session_state.get("anthropic_api_key", "")
+        if anthropic_key:
+            os.environ["ANTHROPIC_API_KEY"] = anthropic_key
+        else:
+            # Fallback: try to get from user's main API key if it's an Anthropic key
+            user_key = st.session_state.get("api_key", "")
+            if user_key and ("anthropic" in user_key.lower() or user_key.startswith("sk-ant-")):
+                os.environ["ANTHROPIC_API_KEY"] = user_key
+                st.session_state.anthropic_api_key = user_key
+
     if not os.getenv("BRAIN_DIR"):
         os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
     Brain()
@@ -433,10 +521,10 @@ elif st.session_state.selected_workflow == "data":
         )
         if st.session_state.get("uploaded_data_path"):
             st.info(f"📁 Using uploaded data: `{st.session_state.uploaded_data_path}`")
-        data_path_manual = st.text_input(
-            "Or enter data path manually",
-            placeholder="e.g. /path/to/data.csv or /path/to/data_dir",
-        )
+        # data_path_manual = st.text_input(
+        #     "Or enter data path manually",
+        #     placeholder="e.g. /path/to/data.csv or /path/to/data_dir",
+        # )
         query = st.text_input("Query", placeholder="What would you like to analyze?")
         submitted = st.form_submit_button("Run Data Analysis", type="primary")
         if submitted and query:
@@ -444,24 +532,33 @@ elif st.session_state.selected_workflow == "data":
             if uploaded_zip:
                 cleanup_uploaded_data()  # Remove previous upload before saving new one
                 extracted = save_and_extract_upload(uploaded_zip)
-                if extracted:
+                if extracted and extracted.exists():
+                    # Use absolute path and verify it exists
+                    extracted = extracted.resolve()
                     st.session_state.uploaded_data_path = str(extracted)
                     st.session_state.workspace_path = extracted.parent
                     path_to_use = str(extracted)
+                    st.success(f"✅ File uploaded and extracted to: {path_to_use}")
                 else:
-                    st.error("Failed to process uploaded zip file.")
-            elif data_path_manual.strip():
-                path_to_use = data_path_manual.strip()
+                    st.error(f"Failed to process uploaded zip file. Extracted path: {extracted}")
+            # elif data_path_manual.strip():
+            #     path_to_use = data_path_manual.strip()
             elif st.session_state.get("uploaded_data_path"):
-                path = Path(st.session_state.uploaded_data_path)
+                path = Path(st.session_state.uploaded_data_path).resolve()
                 if path.exists():
-                    path_to_use = st.session_state.uploaded_data_path
+                    path_to_use = str(path)
                     st.session_state.workspace_path = path.parent
                 else:
+                    st.warning(f"Previously uploaded path no longer exists: {path}")
                     cleanup_uploaded_data()
             if path_to_use:
-                workflow_config = {"type": "data", "path": path_to_use, "query": query}
-                st.session_state.selected_workflow = None
+                # Verify path exists before creating workflow config
+                verify_path = Path(path_to_use).resolve()
+                if not verify_path.exists():
+                    st.error(f"Path does not exist: {path_to_use}")
+                else:
+                    workflow_config = {"type": "data", "path": str(verify_path), "query": query}
+                    st.session_state.selected_workflow = None
             else:
                 st.error("Please upload a zip file or enter a data path.")
 
@@ -477,10 +574,10 @@ elif st.session_state.selected_workflow == "experiment":
         )
         if st.session_state.get("uploaded_experiment_path"):
             st.info(f"📁 Using: `{st.session_state.uploaded_experiment_path}`")
-        data_path_manual = st.text_input(
-            "Or enter data analysis path manually",
-            placeholder="Path to data_analysis.md (optional)",
-        )
+        # data_path_manual = st.text_input(
+        #     "Or enter data analysis path manually",
+        #     placeholder="Path to data_analysis.md (optional)",
+        # )
         query = st.text_input("Experiment Query", placeholder="Describe your experiment...")
         submitted = st.form_submit_button("Run Experiment", type="primary")
         if submitted and query:
@@ -492,22 +589,30 @@ elif st.session_state.selected_workflow == "experiment":
                     if "uploaded_experiment_path" in st.session_state:
                         del st.session_state.uploaded_experiment_path
                 extracted = save_and_extract_upload(uploaded_exp_zip)
-                if extracted:
+                if extracted and extracted.exists():
+                    extracted = extracted.resolve()
                     analysis_file = find_data_analysis_file(extracted)
-                    if analysis_file:
+                    if analysis_file and analysis_file.exists():
+                        analysis_file = analysis_file.resolve()
                         st.session_state.uploaded_experiment_path = str(analysis_file)
                         st.session_state.workspace_path = analysis_file.parent
                         path_to_use = str(analysis_file)
+                        st.success(f"✅ Found analysis file: {path_to_use}")
                     else:
-                        st.error("Zip must contain data_analysis.md or analysis.md")
-            elif data_path_manual.strip():
-                path_to_use = data_path_manual.strip()
+                        st.error(
+                            f"Zip must contain data_analysis.md or analysis.md. Searched in: {extracted}"
+                        )
+                else:
+                    st.error(f"Failed to process uploaded zip file. Extracted path: {extracted}")
+            # elif data_path_manual.strip():
+            #     path_to_use = data_path_manual.strip()
             elif st.session_state.get("uploaded_experiment_path"):
-                p = Path(st.session_state.uploaded_experiment_path)
+                p = Path(st.session_state.uploaded_experiment_path).resolve()
                 if p.exists():
-                    path_to_use = st.session_state.uploaded_experiment_path
+                    path_to_use = str(p)
                     st.session_state.workspace_path = p.parent
                 else:
+                    st.warning(f"Previously uploaded path no longer exists: {p}")
                     if "uploaded_experiment_path" in st.session_state:
                         del st.session_state.uploaded_experiment_path
             if path_to_use:
@@ -529,10 +634,10 @@ elif st.session_state.selected_workflow == "full":
         )
         if st.session_state.get("uploaded_full_data_path"):
             st.info(f"📁 Using: `{st.session_state.uploaded_full_data_path}`")
-        data_path_manual = st.text_input(
-            "Or enter data path manually",
-            placeholder="Path to data file/dir (optional)",
-        )
+        # data_path_manual = st.text_input(
+        #     "Or enter data path manually",
+        #     placeholder="Path to data file/dir (optional)",
+        # )
         run_data = st.checkbox("Run Data Analysis", value=False)
         run_exp = st.checkbox("Run Experiment", value=False)
         submitted = st.form_submit_button("Run Full Workflow", type="primary")
@@ -546,18 +651,26 @@ elif st.session_state.selected_workflow == "full":
                         if "uploaded_full_data_path" in st.session_state:
                             del st.session_state.uploaded_full_data_path
                     extracted = save_and_extract_upload(uploaded_full_zip)
-                    if extracted:
+                    if extracted and extracted.exists():
+                        extracted = extracted.resolve()
                         st.session_state.uploaded_full_data_path = str(extracted)
                         st.session_state.workspace_path = extracted.parent
                         data_path_to_use = str(extracted)
-                elif data_path_manual.strip():
-                    data_path_to_use = data_path_manual.strip()
+                        st.success(f"✅ File uploaded and extracted to: {data_path_to_use}")
+                    else:
+                        st.error(
+                            f"Failed to process uploaded zip file. Extracted path: {extracted}"
+                        )
+                        data_path_to_use = None
+                # elif data_path_manual.strip():
+                #     data_path_to_use = data_path_manual.strip()
                 elif st.session_state.get("uploaded_full_data_path"):
-                    p = Path(st.session_state.uploaded_full_data_path)
+                    p = Path(st.session_state.uploaded_full_data_path).resolve()
                     if p.exists():
-                        data_path_to_use = st.session_state.uploaded_full_data_path
+                        data_path_to_use = str(p)
                         st.session_state.workspace_path = p.parent
                     else:
+                        st.warning(f"Previously uploaded path no longer exists: {p}")
                         if "uploaded_full_data_path" in st.session_state:
                             del st.session_state.uploaded_full_data_path
                 if not data_path_to_use:
