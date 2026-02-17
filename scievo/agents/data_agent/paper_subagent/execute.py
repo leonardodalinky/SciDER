@@ -5,13 +5,12 @@ This module provides a minimal execution flow that searches for papers, datasets
 extracts metrics, and generates a summary.
 Flow: START -> search_node -> dataset_node -> metric_node -> summary_node -> END
 """
-
 import json
-
 from loguru import logger
 
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import Message
+from scievo.core.utils import unwrap_dict_from_toon
 from scievo.prompts.prompt_data import PROMPTS
 from scievo.tools.arxiv_tool import search_papers
 from scievo.tools.dataset_search_tool import search_datasets
