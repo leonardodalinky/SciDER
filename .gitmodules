@@ -1,0 +1,9 @@
+[submodule "benchmarks/mlebench/mle-bench"]
+	path = benchmarks/mlebench/mle-bench
+	url = git@github.com:leonardodalinky/mle-bench.git
+[submodule "benchmarks/scicodebench/SciCode"]
+	path = benchmarks/scicodebench/SciCode
+	url = git@github.com:leonardodalinky/SciCode.git
+[submodule "benchmarks/aiideabench/AI_Idea_Bench"]
+	path = benchmarks/aiideabench/AI_Idea_Bench
+	url = git@github.com:leonardodalinky/AI_Idea_Bench_2025.git

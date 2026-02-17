@@ -1,3 +1,4 @@
+import json
 import os
 import shlex
 import subprocess
@@ -6,7 +7,6 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ..core import constant
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
@@ -132,9 +132,9 @@ def cursor_chat_tool(message: str, **kwargs) -> str:
         args = ["chat", "--message", message]
         result = run_cursor_direct(args, agent_state=agent_state)
 
-        return wrap_dict_to_toon(result.dict())
+        return result.model_dump_json()
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})
 
 
 @register_tool(
@@ -180,7 +180,7 @@ def cursor_edit_tool(message: str, files: list[str] | None = None, **kwargs) -> 
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout or "Unknown error"
             if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor CLI not found. Please ensure Cursor editor is installed and 'cursor' command is available in PATH.",
                         "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
@@ -191,7 +191,7 @@ def cursor_edit_tool(message: str, files: list[str] | None = None, **kwargs) -> 
                 or "key" in error_msg.lower()
                 or "auth" in error_msg.lower()
             ):
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor API key not configured or invalid.",
                         "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
@@ -199,11 +199,11 @@ def cursor_edit_tool(message: str, files: list[str] | None = None, **kwargs) -> 
                     }
                 )
             else:
-                return wrap_dict_to_toon(result.dict())
+                return result.model_dump_json()
 
-        return wrap_dict_to_toon(result.dict())
+        return result.model_dump_json()
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})
 
 
 @register_tool(
@@ -232,7 +232,7 @@ def cursor_fix_tests_tool(**kwargs) -> str:
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout or "Unknown error"
             if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor CLI not found. Please ensure Cursor editor is installed and 'cursor' command is available in PATH.",
                         "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
@@ -243,7 +243,7 @@ def cursor_fix_tests_tool(**kwargs) -> str:
                 or "key" in error_msg.lower()
                 or "auth" in error_msg.lower()
             ):
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor API key not configured or invalid.",
                         "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
@@ -251,8 +251,8 @@ def cursor_fix_tests_tool(**kwargs) -> str:
                     }
                 )
             else:
-                return wrap_dict_to_toon(result.dict())
+                return result.model_dump_json()
 
-        return wrap_dict_to_toon(result.dict())
+        return result.model_dump_json()
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})

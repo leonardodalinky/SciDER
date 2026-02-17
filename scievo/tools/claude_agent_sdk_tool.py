@@ -10,12 +10,16 @@ Reference: https://platform.claude.com/docs/en/agent-sdk/overview
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 from ..core import constant
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
+
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
+
 
 register_toolset_desc(
     "claude_agent_sdk",
@@ -92,13 +96,13 @@ def run_claude_agent_sdk(
     **kwargs,
 ) -> str:
     if not prompt or not prompt.strip():
-        return wrap_dict_to_toon({"error": "prompt must be a non-empty string"})
+        return json.dumps({"error": "prompt must be a non-empty string"})
 
     # Import lazily so SciEvo can run without the SDK installed.
     try:
         from claude_agent_sdk import ClaudeAgentOptions, query  # type: ignore
     except Exception as e:
-        return wrap_dict_to_toon(
+        return json.dumps(
             {
                 "error": "Claude Agent SDK not available",
                 "detail": str(e),
@@ -109,7 +113,7 @@ def run_claude_agent_sdk(
     agent_state = kwargs.get(constant.__AGENT_STATE_NAME__)
     working_dir = _resolve_cwd(cwd, agent_state)
     if not working_dir.exists() or not working_dir.is_dir():
-        return wrap_dict_to_toon({"error": f"Invalid working directory: {str(working_dir)}"})
+        return json.dumps({"error": f"Invalid working directory: {str(working_dir)}"})
 
     tools = allowed_tools or ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
 
@@ -120,27 +124,36 @@ def run_claude_agent_sdk(
         try:
             msgs: list[dict] = []
             options = ClaudeAgentOptions(
+                model=CLAUDE_MODEL,
                 allowed_tools=tools,
                 permission_mode=permission_mode,
+                max_buffer_size=10 * 1024 * 1024,  # 10 MB
             )
+
+            final_result = None
 
             async for message in query(prompt=prompt, options=options):
                 # message is a pydantic-ish object; try best-effort serialization
                 try:
-                    data = message.model_dump()  # type: ignore[attr-defined]
+                    data = asdict(message)
                 except Exception:
                     try:
                         data = dict(message)  # type: ignore[arg-type]
                     except Exception:
                         data = {"raw": str(message)}
                 msgs.append(data)
+                from claude_agent_sdk import ResultMessage
+
+                if isinstance(message, ResultMessage) and message.result is not None:
+                    final_result = message.result
 
             return {
                 "cwd": str(working_dir),
                 "allowed_tools": tools,
                 "permission_mode": permission_mode,
-                "messages": msgs[-20:],  # keep tail only
+                "messages": msgs[-3:],  # keep tail only
                 "message_count": len(msgs),
+                "final_result": final_result,
             }
         finally:
             os.chdir(old)
@@ -172,6 +185,6 @@ def run_claude_agent_sdk(
             with ThreadPoolExecutor(max_workers=1) as ex:
                 result = ex.submit(_run_sync).result()
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
-        return wrap_dict_to_toon({"error": "Claude Agent SDK execution failed", "detail": str(e)})
+        return json.dumps({"error": "Claude Agent SDK execution failed", "detail": str(e)})

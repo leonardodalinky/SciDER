@@ -17,6 +17,33 @@ OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 def register_gpt_low_medium_models(reasoning: str = "low"):
     """Register GPT low and medium cost models in the ModelRegistry."""
     ModelRegistry.register(
+        name="ideation",
+        model=MEDIUM_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
+    ModelRegistry.register(
+        name="paper_search",
+        model=LOW_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
+    ModelRegistry.register(
+        name="metric_search",
+        model=LOW_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
+    ModelRegistry.register(
         name="data",
         model=LOW_COST_MODEL,
         api_key=OPENAI_KEY,
@@ -117,6 +144,33 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
 
 def register_gpt_medium_high_models(reasoning: str = "low"):
     """Register GPT medium and high cost models in the ModelRegistry."""
+    ModelRegistry.register(
+        name="ideation",
+        model=HIGH_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
+    ModelRegistry.register(
+        name="paper_search",
+        model=MEDIUM_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
+    ModelRegistry.register(
+        name="metric_search",
+        model=MEDIUM_COST_MODEL,
+        api_key=OPENAI_KEY,
+        reasoning={
+            "effort": reasoning,
+        },
+    )
+
     ModelRegistry.register(
         name="data",
         model=MEDIUM_COST_MODEL,

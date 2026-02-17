@@ -1,0 +1,9 @@
+# uv-related in this directory
+.venv/
+pyproject.toml
+uv.lock
+.python-version
+# auto-generated main.py
+datascibench/main.py
+mlebench/main.py
+scicodebench/main.py

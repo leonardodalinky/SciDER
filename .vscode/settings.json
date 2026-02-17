@@ -1,9 +1,9 @@
 {
     "sync-rsync.local": "/home/link/github/SciEvo",
     // "sync-rsync.remote": "klin07@astral-8xA30-jump:~/rsync/SciEvo",
-    "sync-rsync.remote": "ubuntu@192.9.141.47:~/rsync/mle-bench/agents/scievo/SciEvo",
+    "sync-rsync.remote": "ubuntu@64.181.243.108:~/SciEvo",
     "sync-rsync.onSave": false,
-    "sync-rsync.onSaveIndividual": true,
+    "sync-rsync.onSaveIndividual": false,
     "sync-rsync.delete": false,
     "sync-rsync.exclude": [
         ".vscode/",
@@ -17,7 +17,9 @@
         // tmp files
         "**/tmp_*",
         // project specific
-        "sth_large/"
+        "sth_large/",
+        "*.h5",
+        "**/*.h5"
     ],
     "sync-rsync.useWSL": true
 }

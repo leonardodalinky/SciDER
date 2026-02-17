@@ -5,7 +5,7 @@ This module provides a minimal execution flow that searches for papers, datasets
 extracts metrics, and generates a summary.
 Flow: START -> search_node -> dataset_node -> metric_node -> summary_node -> END
 """
-
+import json
 from loguru import logger
 
 from scievo.core.llms import ModelRegistry
@@ -180,9 +180,12 @@ def search_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
             max_results=10,
         )
 
-        # Parse the result (tool returns TOON format)
+        # Parse the result (tool returns JSON format)
         try:
-            papers = unwrap_dict_from_toon(result)
+            if isinstance(result, str):
+                papers = json.loads(result)
+            else:
+                papers = result
             if isinstance(papers, list):
                 agent_state.papers = papers
             else:
@@ -234,9 +237,12 @@ def dataset_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
             data_summary=agent_state.data_summary,  # Pass data analysis summary
         )
 
-        # Parse the result (tool returns TOON format)
+        # Parse the result (tool returns JSON format)
         try:
-            datasets = unwrap_dict_from_toon(result)
+            if isinstance(result, str):
+                datasets = json.loads(result)
+            else:
+                datasets = result
             if isinstance(datasets, list):
                 agent_state.datasets = datasets
             else:
@@ -293,9 +299,12 @@ def metric_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
                 max_results=20,
             )
 
-        # Parse the result (tool returns TOON format)
+        # Parse the result (tool returns JSON format)
         try:
-            metrics = unwrap_dict_from_toon(result)
+            if isinstance(result, str):
+                metrics = json.loads(result)
+            else:
+                metrics = result
             if isinstance(metrics, list):
                 agent_state.metrics = metrics
             else:

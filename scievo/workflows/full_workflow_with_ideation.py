@@ -18,28 +18,11 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
-from scievo.agents import ideation_agent
 from scievo.core.brain import Brain
-from scievo.core.llms import ModelRegistry
 from scievo.workflows.data_workflow import DataWorkflow
 from scievo.workflows.experiment_workflow import ExperimentWorkflow
-
-
-def get_separator(margin: int = 4, char: str = "=") -> str:
-    """
-    Generate a separator that fits the terminal width.
-
-    Args:
-        margin: Number of characters to leave as margin (default: 4)
-        char: Character to use for separator (default: '=')
-
-    Returns:
-        Separator string that fits terminal width
-    """
-    terminal_width = shutil.get_terminal_size(fallback=(80, 24)).columns
-    # Leave margin to be safe and ensure minimum width
-    separator_width = max(terminal_width - margin, 10)
-    return char * separator_width
+from scievo.workflows.ideation_workflow import IdeationWorkflow
+from scievo.workflows.utils import get_separator
 
 
 class FullWorkflowWithIdeation(BaseModel):
@@ -102,8 +85,9 @@ class FullWorkflowWithIdeation(BaseModel):
     # Ideation results
     ideation_summary: str = ""
     ideation_papers: list[dict] = []
-    novelty_score: float | None = None
-    novelty_feedback: str | None = None
+    idea_novelty_assessments: list[dict] = []  # Per-idea novelty assessments
+    novelty_score: float | None = None  # Average novelty score
+    novelty_feedback: str | None = None  # Aggregated feedback summary
 
     # Data and Experiment results (from sub-workflows)
     data_summary: str = ""
@@ -123,38 +107,10 @@ class FullWorkflowWithIdeation(BaseModel):
     execution_results: list = []
     error_message: str | None = None
 
-    # Internal: compiled graph and sub-workflows
-    _ideation_agent_graph: object = PrivateAttr(default=None)
+    # Internal: sub-workflows
+    _ideation_workflow: IdeationWorkflow | None = PrivateAttr(default=None)
     _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
-
-    def _ensure_graph(self):
-        """Lazily compile ideation agent graph."""
-        if self._ideation_agent_graph is None:
-            self._ideation_agent_graph = ideation_agent.build().compile()
-
-    def _ensure_ideation_model(self):
-        """Ensure ideation model is registered.
-
-        If not registered, fallback to "data" model configuration.
-        """
-        try:
-            ModelRegistry.instance().get_model_params("ideation")
-        except ValueError:
-            # Fallback to "data" model
-            try:
-                data_params = ModelRegistry.instance().get_model_params("data")
-                ModelRegistry.register(
-                    name="ideation",
-                    model=data_params["model"],
-                    api_key=data_params.get("api_key"),
-                    base_url=data_params.get("base_url"),
-                )
-                logger.debug("Registered ideation model using data model configuration")
-            except ValueError:
-                logger.warning(
-                    "Neither ideation nor data model is registered. Ideation agent may fail."
-                )
 
     def _setup_brain(self):
         """Setup Brain session and memory directories."""
@@ -219,49 +175,44 @@ class FullWorkflowWithIdeation(BaseModel):
 
     def _run_ideation_phase(self) -> bool:
         """
-        Run IdeationAgent to generate research ideas.
+        Run IdeationWorkflow to generate research ideas.
 
         Returns:
             True if successful, False if failed
         """
-        logger.info("Phase 1: Running IdeationAgent for research ideation")
+        logger.info("Phase 1: Running IdeationWorkflow for research ideation")
         self.current_phase = "ideation"
 
-        self._ensure_graph()
-        self._ensure_ideation_model()
-
-        # Prepare ideation agent state
-        from scievo.agents.ideation_agent.state import IdeationAgentState
-
-        ideation_state = IdeationAgentState(
+        self._ideation_workflow = IdeationWorkflow(
             user_query=self.user_query,
+            workspace_path=self.workspace_path,
             research_domain=self.research_domain,
+            recursion_limit=self.ideation_agent_recursion_limit,
+            # Pass Brain-managed directories
+            sess_dir=self.sess_dir,
+            long_term_mem_dir=self.long_term_mem_dir,
+            project_mem_dir=self.project_mem_dir,
         )
 
         try:
-            result = self._ideation_agent_graph.invoke(
-                ideation_state,
-                {"recursion_limit": self.ideation_agent_recursion_limit},
-            )
-            result_state = IdeationAgentState(**result)
+            self._ideation_workflow.run()
 
-            # Extract results
-            self.ideation_summary = result_state.output_summary or ""
-            self.ideation_papers = result_state.papers
-            self.novelty_score = result_state.novelty_score
-            self.novelty_feedback = result_state.novelty_feedback
-
-            logger.info("IdeationAgent completed successfully")
-            logger.info(
-                f"Generated ideas with novelty score: {self.novelty_score:.2f}/10"
-                if self.novelty_score
-                else "Generated ideas (no novelty score)"
-            )
-            return True
+            if self._ideation_workflow.final_status == "success":
+                self.ideation_summary = self._ideation_workflow.ideation_summary
+                self.ideation_papers = self._ideation_workflow.ideation_papers
+                self.idea_novelty_assessments = self._ideation_workflow.idea_novelty_assessments
+                self.novelty_score = self._ideation_workflow.novelty_score
+                self.novelty_feedback = self._ideation_workflow.novelty_feedback
+                logger.info("IdeationWorkflow completed successfully")
+                return True
+            else:
+                self.error_message = self._ideation_workflow.error_message
+                self.current_phase = "failed"
+                return False
 
         except Exception as e:
-            logger.exception("IdeationAgent failed")
-            self.error_message = f"IdeationAgent failed: {e}"
+            logger.exception("IdeationWorkflow failed")
+            self.error_message = f"IdeationWorkflow failed: {e}"
             self.current_phase = "failed"
             return False
 
@@ -295,11 +246,6 @@ class FullWorkflowWithIdeation(BaseModel):
 
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
-                # Extract paper subagent results
-                self.papers = self._data_workflow.papers
-                self.datasets = self._data_workflow.datasets
-                self.metrics = self._data_workflow.metrics
-                self.paper_search_summary = self._data_workflow.paper_search_summary
                 self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True
@@ -358,12 +304,28 @@ class FullWorkflowWithIdeation(BaseModel):
 
     def _compose_summary(self) -> str:
         """Compose the final summary."""
+        novelty_display = ""
+        if self.idea_novelty_assessments:
+            novelty_lines = []
+            for a in self.idea_novelty_assessments:
+                novelty_lines.append(
+                    f"- **{a.get('title', 'Unknown')}**: {a['novelty_score']:.2f}/10"
+                )
+            novelty_display = "\n".join(novelty_lines)
+        elif self.novelty_score is not None:
+            novelty_display = f"{self.novelty_score:.2f}/10"
+        else:
+            novelty_display = "N/A"
+
         ideation_section = f"""## Research Ideation
 
 {self.ideation_summary}
 
-**Novelty Score**: {self.novelty_score:.2f}/10
+**Average Novelty Score**: {f'{self.novelty_score:.2f}/10' if self.novelty_score is not None else 'N/A'}
 **Papers Reviewed**: {len(self.ideation_papers)}
+
+### Per-Idea Novelty
+{novelty_display}
 """
 
         data_section = ""

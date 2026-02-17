@@ -20,23 +20,7 @@ from pydantic import BaseModel, PrivateAttr
 from scievo.core.brain import Brain
 from scievo.workflows.data_workflow import DataWorkflow
 from scievo.workflows.experiment_workflow import ExperimentWorkflow
-
-
-def get_separator(margin: int = 4, char: str = "=") -> str:
-    """
-    Generate a separator that fits the terminal width.
-
-    Args:
-        margin: Number of characters to leave as margin (default: 4)
-        char: Character to use for separator (default: '=')
-
-    Returns:
-        Separator string that fits terminal width
-    """
-    terminal_width = shutil.get_terminal_size(fallback=(80, 24)).columns
-    # Leave margin to be safe and ensure minimum width
-    separator_width = max(terminal_width - margin, 10)
-    return char * separator_width
+from scievo.workflows.utils import get_separator
 
 
 class FullWorkflow(BaseModel):
@@ -177,11 +161,6 @@ class FullWorkflow(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self.data_agent_history = self._data_workflow.data_agent_history
-                # Extract paper subagent results
-                self.papers = self._data_workflow.papers
-                self.datasets = self._data_workflow.datasets
-                self.metrics = self._data_workflow.metrics
-                self.paper_search_summary = self._data_workflow.paper_search_summary
                 self._data_workflow.save_summary()
                 logger.info("DataWorkflow completed successfully")
                 return True

@@ -8,7 +8,6 @@ import feedparser
 import requests
 from loguru import logger
 
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc("paper_search", "Search for academic papers across multiple repositories.")
@@ -39,7 +38,7 @@ class ArXivRepository(PaperRepository):
             # arXiv API expects: all:"query terms" or all:term1+term2
             # Don't pre-encode the query, let urlencode handle it
             search_terms = query.strip().split()
-            search_query_str = "all:" + "+".join(search_terms)
+            search_query_str = "+".join(search_terms)
 
             params = {
                 "search_query": search_query_str,  # Let urlencode handle encoding
@@ -304,8 +303,8 @@ def search_papers(query: str, sources: List[str] = None, max_results: int = 10) 
             for paper in papers
         ]
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
         logger.exception("Error searching papers")
-        # Return error in TOON format to avoid parsing errors
-        return wrap_dict_to_toon({"error": f"Error searching papers: {e}", "papers": []})
+        # Return error in JSON format
+        return json.dumps({"error": f"Error searching papers: {e}", "papers": []})

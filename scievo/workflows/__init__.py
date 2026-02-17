@@ -10,12 +10,15 @@ This package contains different workflow implementations:
 from .data_workflow import DataWorkflow, run_data_workflow
 from .experiment_workflow import ExperimentWorkflow, run_experiment_workflow
 from .full_workflow import FullWorkflow, run_full_workflow
+from .ideation_workflow import IdeationWorkflow, run_ideation_workflow
 
 __all__ = [
     # Full workflow
     "FullWorkflow",
     "run_full_workflow",
     # Partial workflows
+    "IdeationWorkflow",
+    "run_ideation_workflow",
     "DataWorkflow",
     "run_data_workflow",
     "ExperimentWorkflow",

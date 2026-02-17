@@ -13,16 +13,17 @@ This wrapper register models, reads these files, builds user_query, and invokes 
 import sys
 from pathlib import Path
 
+from loguru import logger
+
 # Add parent directory to path to find scievo and bench modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from loguru import logger
-
-from bench.register_models.gemini import (
+from bench_workflows.register_models.gemini import (
+    register_gemini3_medium_high_models,
     register_gemini_low_medium_models,
     register_gemini_medium_high_models,
 )
-from bench.register_models.gpt import (
+from bench_workflows.register_models.gpt import (
     register_gpt_low_medium_models,
     register_gpt_medium_high_models,
 )
@@ -150,6 +151,7 @@ Examples:
             "gpt-medium-high",
             "gemini-low-medium",
             "gemini-medium-high",
+            "gemini3-medium-high",
         ],
         default="gemini-low-medium",
         help="Model configuration to use (default: gemini-low-medium)",
@@ -168,6 +170,8 @@ Examples:
             register_gemini_low_medium_models()
         case "gemini-medium-high":
             register_gemini_medium_high_models()
+        case "gemini3-medium-high":
+            register_gemini3_medium_high_models()
 
     # Build user query and data description from MLE-Bench files
     logger.info("Building user query from MLE-Bench task files...")

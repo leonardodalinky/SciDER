@@ -28,3 +28,5 @@ Thumbs.db
 # Workspaces (user data)
 workspace/
 tmp_*/
+
+case-study-memory/

@@ -14,7 +14,7 @@ from scievo.core import constant
 from scievo.core.errors import sprint_chained_exception
 from scievo.core.llms import ModelRegistry
 from scievo.core.types import HistoryState, Message, RBankState
-from scievo.core.utils import wrap_dict_to_toon, wrap_text_with_block
+from scievo.core.utils import wrap_text_with_block
 from scievo.prompts import PROMPTS
 from scievo.rbank.subgraph import mem_extraction, mem_retrieval
 from scievo.tools import Tool, ToolRegistry
@@ -98,8 +98,8 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
     agent_state.add_node_history("llm_chat")
 
     selected_state = {
-        "workspace": agent_state.workspace.working_dir,
-        "current_activated_toolsets": agent_state.toolsets,
+        "workspace": str(agent_state.workspace.working_dir),
+        "current_activated_toolsets": list(set(agent_state.toolsets)),
     }
 
     # retrieve memos
@@ -126,8 +126,10 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
         memory_text = None
 
     # update system prompt
+    import json
+
     system_prompt = PROMPTS.data.system_prompt.render(
-        state_text=wrap_dict_to_toon(selected_state),
+        state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         memory_text=wrap_text_with_block(memory_text, "markdown"),
         current_plan=(

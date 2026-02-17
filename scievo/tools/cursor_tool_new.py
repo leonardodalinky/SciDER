@@ -1,9 +1,9 @@
+import json
 import os
 import subprocess
 from pathlib import Path
 
 from ..core import constant
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
@@ -160,7 +160,7 @@ def cursor_agent_edit(
                 json_result = json.loads(result["stdout"].strip())
                 if isinstance(json_result, dict):
                     if json_result.get("is_error", False):
-                        return wrap_dict_to_toon(
+                        return json.dumps(
                             {
                                 "error": json_result.get("result", "Unknown error"),
                                 "success": False,
@@ -168,7 +168,7 @@ def cursor_agent_edit(
                             }
                         )
                     else:
-                        return wrap_dict_to_toon(
+                        return json.dumps(
                             {
                                 "success": True,
                                 "result": json_result.get("result", ""),
@@ -184,7 +184,7 @@ def cursor_agent_edit(
         if result["returncode"] != 0:
             error_msg = result.get("stderr", "") or result.get("stdout", "") or "Unknown error"
             if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "cursor-agent command not found. Please ensure Cursor editor is installed and 'cursor-agent' command is available in PATH.",
                         "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
@@ -196,7 +196,7 @@ def cursor_agent_edit(
                 or "key" in error_msg.lower()
                 or "auth" in error_msg.lower()
             ):
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor API key not configured or invalid.",
                         "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
@@ -205,12 +205,12 @@ def cursor_agent_edit(
                     }
                 )
             else:
-                return wrap_dict_to_toon(result)
+                return json.dumps(result)
 
         # Return result (may contain raw text if JSON parsing failed)
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})
 
 
 @register_tool(
@@ -254,7 +254,7 @@ def cursor_agent_chat(message: str, model: str | None = None, **kwargs) -> str:
 
                 json_result = json.loads(result["stdout"].strip())
                 if isinstance(json_result, dict) and "result" in json_result:
-                    return wrap_dict_to_toon(
+                    return json.dumps(
                         {
                             "success": True,
                             "result": json_result.get("result", ""),
@@ -270,7 +270,7 @@ def cursor_agent_chat(message: str, model: str | None = None, **kwargs) -> str:
         if result["returncode"] != 0:
             error_msg = result.get("stderr", "") or result.get("stdout", "") or "Unknown error"
             if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "cursor-agent command not found. Please ensure Cursor editor is installed and 'cursor-agent' command is available in PATH.",
                         "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
@@ -282,7 +282,7 @@ def cursor_agent_chat(message: str, model: str | None = None, **kwargs) -> str:
                 or "key" in error_msg.lower()
                 or "auth" in error_msg.lower()
             ):
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor API key not configured or invalid.",
                         "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
@@ -291,11 +291,11 @@ def cursor_agent_chat(message: str, model: str | None = None, **kwargs) -> str:
                     }
                 )
             else:
-                return wrap_dict_to_toon(result)
+                return json.dumps(result)
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})
 
 
 @register_tool(
@@ -348,7 +348,7 @@ def cursor_agent_fix_tests(
                 json_result = json.loads(result["stdout"].strip())
                 if isinstance(json_result, dict):
                     if json_result.get("is_error", False):
-                        return wrap_dict_to_toon(
+                        return json.dumps(
                             {
                                 "error": json_result.get("result", "Unknown error"),
                                 "success": False,
@@ -356,7 +356,7 @@ def cursor_agent_fix_tests(
                             }
                         )
                     else:
-                        return wrap_dict_to_toon(
+                        return json.dumps(
                             {
                                 "success": True,
                                 "result": json_result.get("result", ""),
@@ -372,7 +372,7 @@ def cursor_agent_fix_tests(
         if result["returncode"] != 0:
             error_msg = result.get("stderr", "") or result.get("stdout", "") or "Unknown error"
             if "command not found" in error_msg.lower() or "not found" in error_msg.lower():
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "cursor-agent command not found. Please ensure Cursor editor is installed and 'cursor-agent' command is available in PATH.",
                         "hint": "Install Cursor from https://cursor.sh and ensure it's added to your PATH.",
@@ -384,7 +384,7 @@ def cursor_agent_fix_tests(
                 or "key" in error_msg.lower()
                 or "auth" in error_msg.lower()
             ):
-                return wrap_dict_to_toon(
+                return json.dumps(
                     {
                         "error": "Cursor API key not configured or invalid.",
                         "hint": "Please configure API keys in Cursor editor settings (Settings > AI > API Keys). "
@@ -393,8 +393,8 @@ def cursor_agent_fix_tests(
                     }
                 )
             else:
-                return wrap_dict_to_toon(result)
+                return json.dumps(result)
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})
