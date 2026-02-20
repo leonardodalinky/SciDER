@@ -796,8 +796,77 @@ def parse_command(prompt):
     return {"type": "ideation", "query": prompt}
 
 
-# Chat input for general questions (use workflow buttons above for structured workflows)
-if prompt := st.chat_input("Ask a question or select a workflow above"):
+def run_ideation(q):
+    s = IdeationAgentState(user_query=q)
+    r = st.session_state.ideation_graph.invoke(s, {"recursion_limit": 50})
+    rs = IdeationAgentState(**r)
+    out = []
+    if rs.output_summary:
+        out.append("## Research Ideas Summary\n\n" + rs.output_summary)
+    if rs.novelty_score is not None:
+        out.append(
+            "## Novelty Evaluation\n```json\n"
+            + json.dumps(
+                {
+                    "novelty_score": rs.novelty_score,
+                    "feedback": rs.novelty_feedback,
+                },
+                indent=2,
+            )
+            + "\n```"
+        )
+    if rs.research_ideas:
+        out.append("## Generated Research Ideas\n")
+        for i, idea in enumerate(rs.research_ideas[:5], 1):
+            out.append(f"### {i}. {idea.get('title','')}\n{idea.get('description','')}")
+    return ("\n\n".join(out) if out else "No result", rs.intermediate_state)
+
+
+def run_data(path, q):
+    w = DataWorkflow(
+        data_path=Path(path),
+        workspace_path=st.session_state.workspace_path,
+        recursion_limit=100,
+    )
+    w.run()
+    intermediate_state = getattr(w, "data_agent_intermediate_state", [])
+    if w.final_status != "success":
+        return "Data workflow failed", intermediate_state
+    out = ["## Data Analysis Complete"]
+    if w.data_summary:
+        out.append(w.data_summary)
+    return "\n\n".join(out), intermediate_state
+
+
+def run_experiment(q, path):
+    if path:
+        w = ExperimentWorkflow.from_data_analysis_file(
+            workspace_path=st.session_state.workspace_path,
+            user_query=q,
+            data_analysis_path=path,
+            max_revisions=5,
+            recursion_limit=100,
+        )
+    else:
+        return "No data analysis file", []
+    w.run()
+    return w.final_summary or "Experiment finished", w.experiment_agent_intermediate_state
+
+
+def run_full(cfg):
+    w = FullWorkflowWithIdeation(
+        user_query=cfg["query"],
+        workspace_path=st.session_state.workspace_path,
+        data_path=Path(cfg["data_path"]) if cfg["data_path"] else None,
+        run_data_workflow=cfg["run_data"],
+        run_experiment_workflow=cfg["run_exp"],
+        max_revisions=5,
+    )
+    w.run()
+    return w.final_summary or "Workflow finished", []
+
+
+if prompt := st.chat_input("Ask or run command"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
