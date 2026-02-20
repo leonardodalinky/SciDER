@@ -14,7 +14,6 @@ SKILLS: "Skills" = None  # type: ignore
 
 @dataclass
 class Prompts:
-    dummy: "DummyPrompts"
     data: "DataPrompts"
     rbank: "RBankPrompts"
     history: "HistoryPrompts"
@@ -23,15 +22,9 @@ class Prompts:
     experiment_summary: "ExperimentSummaryPrompts"
     critic: "CriticPrompts"
     experiment_coding_v2: "ExperimentCodingV2Prompts"
-    experiment_claude_coding_v2: "ExperimentClaudeCodingV2Prompts"
     experiment_agent: "ExperimentAgentPrompts"
     paper_subagent: "PaperSubagentPrompts"
     ideation: "IdeationPrompts"
-
-
-@dataclass
-class DummyPrompts:
-    dummy_prompt: Template
 
 
 @dataclass
@@ -122,15 +115,6 @@ class ExperimentAgentPrompts:
 
 
 @dataclass
-class ExperimentClaudeCodingV2Prompts:
-    system_prompt: Template
-    planner_system_prompt: Template
-    replanner_user_prompt: Template
-    replanner_user_response: Template
-    user_prompt: Template
-
-
-@dataclass
 class PaperSubagentPrompts:
     summary_system_prompt: Template
     summary_prompt: Template
@@ -170,7 +154,6 @@ def init():
     global SKILLS
 
     PROMPTS = Prompts(
-        dummy=parse_yaml_as_templates(DummyPrompts, DIR / "dummy_prompt.yaml"),
         data=parse_yaml_as_templates(DataPrompts, DIR / "data_prompt.yaml"),
         rbank=parse_yaml_as_templates(RBankPrompts, DIR / "rbank_prompt.yaml"),
         history=parse_yaml_as_templates(HistoryPrompts, DIR / "history_prompt.yaml"),
@@ -180,10 +163,6 @@ def init():
         experiment_coding_v2=parse_yaml_as_templates(
             ExperimentCodingV2Prompts,
             DIR / "experiment_coding_prompt_v2.yaml",
-        ),
-        experiment_claude_coding_v2=parse_yaml_as_templates(
-            ExperimentClaudeCodingV2Prompts,
-            DIR / "experiment_claude_coding_prompt_v2.yaml",
         ),
         experiment_exec=parse_yaml_as_templates(
             ExperimentExecPrompts, DIR / "experiment_exec_prompt.yaml"
