@@ -11,7 +11,6 @@ import numpy as np
 from loguru import logger
 
 from ..core.types import Message
-from ..core.utils import wrap_dict_to_toon
 from ..rbank.utils import cosine_similarity
 from .registry import register_tool, register_toolset_desc
 
@@ -398,7 +397,7 @@ def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results
         max_results: Maximum number of metrics to return
 
     Returns:
-        str: TOON-formatted string containing the extracted metrics
+        str: JSON-formatted string containing the extracted metrics
     """
     try:
         extractor = RAGMetricExtractor()
@@ -419,7 +418,7 @@ def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results
             for metric in metrics
         ]
 
-        return wrap_dict_to_toon(result)
+        return json.dumps(result)
     except Exception as e:
         logger.error(f"Error extracting metrics with RAG: {e}")
-        return wrap_dict_to_toon({"error": f"Error extracting metrics: {e}"})
+        return json.dumps({"error": f"Error extracting metrics: {e}"})

@@ -11,6 +11,7 @@ Notes:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -22,7 +23,6 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ..core import constant
-from ..core.utils import wrap_dict_to_toon
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
@@ -129,22 +129,20 @@ def run_claude_code(
 ) -> str:
     try:
         if not instruction or not instruction.strip():
-            return wrap_dict_to_toon({"error": "instruction must be a non-empty string"})
+            return json.dumps({"error": "instruction must be a non-empty string"})
 
         agent_state = kwargs.get(constant.__AGENT_STATE_NAME__)
         working_dir = _resolve_cwd(cwd, agent_state)
         if not working_dir.exists():
-            return wrap_dict_to_toon(
-                {"error": f"Working directory does not exist: {str(working_dir)}"}
-            )
+            return json.dumps({"error": f"Working directory does not exist: {str(working_dir)}"})
         if not working_dir.is_dir():
-            return wrap_dict_to_toon(
+            return json.dumps(
                 {"error": f"Working directory is not a directory: {str(working_dir)}"}
             )
 
         base_cmd = _resolve_claude_cmd()
         if not base_cmd:
-            return wrap_dict_to_toon(
+            return json.dumps(
                 {
                     "error": "Claude Code CLI not found (expected `claude` in PATH).",
                     "hint": "Install Claude Code and ensure `claude` is available, or set env `CLAUDE_CODE_CMD` to the full command.",
@@ -201,13 +199,13 @@ def run_claude_code(
             pass
 
         # Return structured text for LLM consumption
-        return wrap_dict_to_toon(result.model_dump())
+        return json.dumps(result.model_dump())
     except subprocess.TimeoutExpired:
-        return wrap_dict_to_toon(
+        return json.dumps(
             {
                 "error": f"Claude Code command timed out after {timeout} seconds",
                 "hint": "Try increasing timeout, or provide `CLAUDE_CODE_CMD` with non-interactive flags (if supported).",
             }
         )
     except Exception as e:
-        return wrap_dict_to_toon({"error": str(e)})
+        return json.dumps({"error": str(e)})

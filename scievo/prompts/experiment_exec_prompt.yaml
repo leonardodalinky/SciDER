@@ -189,6 +189,22 @@ monitoring_system_prompt: |
   {
     "action": "wait" or "ctrlc",
   }
+  ```
+
+  Its corresponding JSON Schema is:
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["wait", "ctrlc"]
+      }
+    },
+    "required": ["action"],
+    "additionalProperties": false
+  }
+  ```
 
 monitoring_user_prompt: |
   **Monitoring Running Command:**
