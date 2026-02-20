@@ -279,16 +279,12 @@ tqdm==4.67.1
     #   openai
 typing-extensions==4.15.0
     # via
-    #   aiosignal
-    #   anyio
     #   beautifulsoup4
     #   huggingface-hub
     #   langchain-core
     #   openai
     #   pydantic
     #   pydantic-core
-    #   referencing
-    #   starlette
     #   typing-inspection
 typing-inspection==0.4.2
     # via

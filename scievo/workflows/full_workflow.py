@@ -277,7 +277,7 @@ def run_full_workflow(
     workspace_path: str | Path,
     user_query: str,
     repo_source: str | None = None,
-    max_revisions: int = 5,
+    max_revisions: int = 3,
     data_agent_recursion_limit: int = 100,
     experiment_agent_recursion_limit: int = 100,
     session_name: str | None = None,

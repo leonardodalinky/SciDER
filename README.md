@@ -1,17 +1,27 @@
 # SciEvo
 
+## Installation
+
+You can install the project using `pip`:
+
 ```shell
-# for cpu
-uv sync --extra cpu
-
-# for mac
-uv sync --extra mac
-
-# for gpu
-uv sync --extra cu128
+# from git
+pip install git+https://github.com/leonardodalinky/SciEvo
+# locally
+pip install -e .
 ```
 
-Optional: install Claude Code (for `claude_code` toolset):
+## Configuration
+
+The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference.
+
+Also, you can set environment variables directly in your shell or terminal session.
+
+## Coding framwork
+
+Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
+
+### Optional: install Claude Code (for `claude_code` toolset):
 
 - Ensure the `claude` CLI is installed and authenticated on your machine.
 - If your `claude` command needs extra flags, set `CLAUDE_CODE_CMD`, e.g.:
@@ -43,7 +53,15 @@ pre-commit install
 ```
 
 Then, copy `.env.template` to `.env` and fill in the necessary values.
-```
-OPENAI_API_KEY=<your_openai_api_key>
-GEMINI_API_KEY=<your_gemini_api_key>
+
+Finally, run the following command to sync dependencies:
+```shell
+# for cpu
+uv sync --extra cpu
+
+# for mac
+uv sync --extra mac
+
+# for gpu
+uv sync --extra cu128
 ```
