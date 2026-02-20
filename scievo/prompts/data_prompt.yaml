@@ -66,6 +66,10 @@ system_prompt: |
 
   When multiple data files exist, map out how they connect and which order they should be processed.
 
+  ### Avoid writing code or modifing data files
+
+  You should not write code or modify data files. Your task is to analyze the data and provide insights about its structure, content, and relationships. You can call tools to read data files, but you should not write code or modify data files.
+
   ### Tips for Reading Data Files
   - ONLY read a small sample of data (e.g., first 10-50 rows) to avoid overwhelming the context.
   - DO NOT load entire large datasets into memory.

@@ -14,8 +14,8 @@ source .venv/bin/activate
 Then, install the dependencies:
 
 ```bash
-pip install -r AI_Idea_Bench/requirements.txt
 pip install -r ../../requirements.txt
+pip install -r requirements.txt
 ```
 
 Download the dataset from [Huggingface](https://huggingface.co/datasets/yanshengqiu/AI_Idea_Bench_2025) and place `papers_data/` and `target_paper_data.json` under `AI_Idea_Bench/` (this directory).
@@ -30,11 +30,20 @@ python -m spacy download en_core_web_sm
 cd scipdf_parser; bash serve_grobid.sh; cd ..
 ```
 
+My project code framework for reference
+```
+aiideabench/
+├── AI_Idea_Bench (submodule repo)
+├── papers_data
+├── target_paper_data.json
+
+```
+
 Run idea generation:
 
 ```bash
 export SCIEVO_DIR=/path/to/SciEvo
-pushd AI_Idea_Bench/AI-Scientist; python generate_ideas_fron_papers.py; popd
+python AI_Idea_Bench/AI-Scientist/generate_ideas_fron_papers_scievo.py
 ```
 
 Grading:
