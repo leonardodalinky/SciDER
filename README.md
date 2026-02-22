@@ -1,4 +1,7 @@
-# SciEvo
+# SciDER: Scientific Data-centric End-to-end Researcher
+
+[![Python 3.12](https://img.shields.io/badge/python-%E2%89%A53.12-blue)](https://www.python.org/downloads/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 
 ## Installation
 
@@ -6,7 +9,7 @@ You can install the project using `pip`:
 
 ```shell
 # from git
-pip install git+https://github.com/leonardodalinky/SciEvo
+pip install git+https://github.com/leonardodalinky/SciDER
 # locally
 pip install -e .
 ```
@@ -17,7 +20,7 @@ The project is configured using environment variables. You can set these variabl
 
 Also, you can set environment variables directly in your shell or terminal session.
 
-## Coding framwork
+## Coding framework
 
 Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
 
