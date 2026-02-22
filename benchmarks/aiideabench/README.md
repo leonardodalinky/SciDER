@@ -42,8 +42,8 @@ aiideabench/
 Run idea generation:
 
 ```bash
-export SCIEVO_DIR=/path/to/SciEvo
-python AI_Idea_Bench/AI-Scientist/generate_ideas_fron_papers_scievo.py
+export SCIDER_DIR=/path/to/SciDER
+python AI_Idea_Bench/AI-Scientist/generate_ideas_fron_papers_scider.py
 ```
 
 Grading:

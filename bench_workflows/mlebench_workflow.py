@@ -1,7 +1,7 @@
 """
 MLE-Bench Workflow
 
-Simple wrapper for running SciEvo FullWorkflow on MLE-Bench competition tasks.
+Simple wrapper for running SciDER FullWorkflow on MLE-Bench competition tasks.
 
 MLE-Bench provides:
 - instructions.md: Specific task instructions (used as user_query)
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from loguru import logger
 
-# Add parent directory to path to find scievo and bench modules
+# Add parent directory to path to find scider and bench modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bench_workflows.register_models.gemini import (
@@ -27,7 +27,7 @@ from bench_workflows.register_models.gpt import (
     register_gpt_low_medium_models,
     register_gpt_medium_high_models,
 )
-from scievo.workflows.full_workflow import run_full_workflow
+from scider.workflows.full_workflow import run_full_workflow
 
 
 def build_mlebench_user_query(
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="MLE-Bench Workflow - Run SciEvo on MLE-Bench competition tasks",
+        description="MLE-Bench Workflow - Run SciDER on MLE-Bench competition tasks",
         prog="python -m bench.mlebench_workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

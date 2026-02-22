@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test Setup Script for SciEvo Streamlit Interface
+Test Setup Script for SciDER Streamlit Interface
 
 This script validates that all dependencies and configurations are correct.
 """
@@ -26,21 +26,21 @@ def test_imports():
         return False
 
     try:
-        from scievo.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
+        from scider.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
 
-        print("  ✅ SciEvo workflow imported successfully")
+        print("  ✅ SciDER workflow imported successfully")
     except ImportError as e:
-        print(f"  ❌ SciEvo import failed: {e}")
+        print(f"  ❌ SciDER import failed: {e}")
         print("     Fix: Ensure parent directory is set up correctly")
         return False
 
     try:
-        from scievo.core.brain import Brain
-        from scievo.core.llms import ModelRegistry
+        from scider.core.brain import Brain
+        from scider.core.llms import ModelRegistry
 
-        print("  ✅ SciEvo core modules imported successfully")
+        print("  ✅ SciDER core modules imported successfully")
     except ImportError as e:
-        print(f"  ❌ SciEvo core import failed: {e}")
+        print(f"  ❌ SciDER core import failed: {e}")
         return False
 
     return True
@@ -86,7 +86,7 @@ def test_directories():
     print("\n🔍 Testing directory structure...")
 
     parent_dir = Path(__file__).parent.parent
-    required_dirs = ["scievo", "scievo/workflows", "scievo/agents", "scievo/tools"]
+    required_dirs = ["scider", "scider/workflows", "scider/agents", "scider/tools"]
 
     all_exist = True
     for dir_name in required_dirs:
@@ -129,7 +129,7 @@ def test_streamlit_files():
 def main():
     """Run all tests."""
     print("=" * 60)
-    print("SciEvo Streamlit Interface - Setup Validation")
+    print("SciDER Streamlit Interface - Setup Validation")
     print("=" * 60)
 
     tests = [
@@ -173,5 +173,7 @@ def main():
         return 1
 
 
+if __name__ == "__main__":
+    sys.exit(main())
 if __name__ == "__main__":
     sys.exit(main())

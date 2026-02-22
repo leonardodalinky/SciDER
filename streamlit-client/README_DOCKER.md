@@ -1,6 +1,6 @@
-# Docker Setup for SciEvo Streamlit Client
+# Docker Setup for SciDER Streamlit Client
 
-This directory contains Docker configuration files for running the SciEvo Streamlit client in a containerized environment.
+This directory contains Docker configuration files for running the SciDER Streamlit client in a containerized environment.
 
 ## Quick Start
 
@@ -11,7 +11,7 @@ This directory contains Docker configuration files for running the SciEvo Stream
    GEMINI_API_KEY=your_gemini_api_key
    OPENAI_API_KEY=your_openai_api_key
    EMBED_API_KEY=your_embed_api_key
-   SCIEVO_DEFAULT_MODEL=gemini/gemini-2.5-flash-lite
+   SCIDER_DEFAULT_MODEL=gemini/gemini-2.5-flash-lite
    ```
 
 2. **Build and run**:
@@ -28,13 +28,13 @@ This directory contains Docker configuration files for running the SciEvo Stream
 1. **Build the image**:
    ```bash
    cd streamlit-client
-   docker build -t scievo-streamlit:latest -f Dockerfile ..
+   docker build -t scider-streamlit:latest -f Dockerfile ..
    ```
 
 2. **Run the container**:
    ```bash
    docker run -d \
-     --name scievo-streamlit \
+     --name scider-streamlit \
      -p 8501:8501 \
      -v $(pwd)/case-study-memory:/app/streamlit-client/case-study-memory \
      -v $(pwd)/workspace:/app/streamlit-client/workspace \
@@ -42,7 +42,7 @@ This directory contains Docker configuration files for running the SciEvo Stream
      -v ../.env:/app/.env:ro \
      -e BRAIN_DIR=/app/streamlit-client/tmp_brain \
      -e WORKSPACE_PATH=/app/streamlit-client/workspace \
-     scievo-streamlit:latest
+     scider-streamlit:latest
    ```
 
 ## Environment Variables
@@ -52,11 +52,11 @@ The following environment variables can be set:
 - `GEMINI_API_KEY`: Gemini API key for LLM models
 - `OPENAI_API_KEY`: OpenAI API key for LLM models
 - `EMBED_API_KEY`: API key for embedding models
-- `SCIEVO_DEFAULT_MODEL`: Default model to use (default: `gemini/gemini-2.5-flash-lite`)
+- `SCIDER_DEFAULT_MODEL`: Default model to use (default: `gemini/gemini-2.5-flash-lite`)
 - `BRAIN_DIR`: Directory for Brain storage (default: `/app/streamlit-client/tmp_brain`)
 - `WORKSPACE_PATH`: Workspace directory path (default: `/app/streamlit-client/workspace`)
 - `CODING_AGENT_VERSION`: Coding agent version (default: `v3`)
-- `SCIEVO_ENABLE_OPENHANDS`: Enable OpenHands (default: `0`)
+- `SCIDER_ENABLE_OPENHANDS`: Enable OpenHands (default: `0`)
 
 ## Volumes
 
@@ -80,7 +80,7 @@ ports:
 
 Make sure your `.env` file is correctly mounted and contains valid API keys. Check the container logs:
 ```bash
-docker logs scievo-streamlit
+docker logs scider-streamlit
 ```
 
 ### Permission issues

@@ -1,6 +1,6 @@
-# SciEvo Streamlit Chat Interface
+# SciDER Streamlit Chat Interface
 
-A ChatGPT-like web interface for running the complete SciEvo workflow with real-time progress tracking and intermediate output visualization.
+A ChatGPT-like web interface for running the complete SciDER workflow with real-time progress tracking and intermediate output visualization.
 
 ## Features
 
@@ -33,9 +33,9 @@ Or install streamlit directly:
 pip install streamlit
 ```
 
-### 2. Ensure SciEvo is Set Up
+### 2. Ensure SciDER is Set Up
 
-Make sure you've completed the main SciEvo setup from the parent directory:
+Make sure you've completed the main SciDER setup from the parent directory:
 
 ```bash
 cd ..
@@ -252,7 +252,7 @@ pip install streamlit
 
 ### Import Errors
 
-Ensure you're running from the correct directory and that the parent SciEvo package is accessible:
+Ensure you're running from the correct directory and that the parent SciDER package is accessible:
 
 ```bash
 cd streamlit-client
@@ -313,7 +313,7 @@ monitor.add_callback(my_callback)
 The workflow results can be exported and used with other analysis tools:
 
 ```python
-from scievo.workflows.full_workflow_with_ideation import run_full_workflow_with_ideation
+from scider.workflows.full_workflow_with_ideation import run_full_workflow_with_ideation
 
 result = run_full_workflow_with_ideation(
     user_query="your query",
@@ -336,4 +336,4 @@ To improve the interface:
 
 ## License
 
-Same as parent SciEvo project.
+Same as parent SciDER project.

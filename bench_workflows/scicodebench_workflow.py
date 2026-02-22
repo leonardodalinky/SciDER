@@ -8,7 +8,7 @@ from pathlib import Path
 
 from loguru import logger
 
-# Add parent directory to path to find scievo and bench modules
+# Add parent directory to path to find scider and bench modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bench_workflows.register_models.gemini import (
@@ -20,9 +20,9 @@ from bench_workflows.register_models.gpt import (
     register_gpt_low_medium_models,
     register_gpt_medium_high_models,
 )
-from scievo.agents.experiment_agent.coding_subagent_v3_claude import build
-from scievo.agents.experiment_agent.coding_subagent_v3_claude.state import ClaudeCodingAgentState
-from scievo.core.code_env import LocalEnv
+from scider.agents.experiment_agent.coding_subagent_v3_claude import build
+from scider.agents.experiment_agent.coding_subagent_v3_claude.state import ClaudeCodingAgentState
+from scider.core.code_env import LocalEnv
 
 
 def run_coding_workflow(user_query: str, workspace_dir: str | Path | None = None) -> str:
@@ -40,7 +40,7 @@ def run_coding_workflow(user_query: str, workspace_dir: str | Path | None = None
 
     # Create workspace environment
     if workspace_dir is None:
-        workspace_dir = tempfile.mkdtemp(prefix="scievo_coding_")
+        workspace_dir = tempfile.mkdtemp(prefix="scider_coding_")
         logger.info(f"Using temporary workspace: {workspace_dir}")
 
     workspace = LocalEnv(working_dir=workspace_dir, create_dir_if_missing=True)
@@ -185,5 +185,7 @@ Examples:
     # Save to file if requested
     if args.output:
         output_path = Path(args.output)
+        output_path.write_text(result, encoding="utf-8")
+        logger.info(f"Result saved to: {output_path}")
         output_path.write_text(result, encoding="utf-8")
         logger.info(f"Result saved to: {output_path}")

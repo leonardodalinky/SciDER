@@ -1,0 +1,315 @@
+"""
+Summary Subagent - handles generating comprehensive experiment summaries
+"""
+
+import inspect
+import json
+
+from loguru import logger
+
+from scider import history_compression
+from scider.core import constant
+from scider.core.llms import ModelRegistry
+from scider.core.types import Message
+from scider.core.utils import wrap_text_with_block
+from scider.prompts import PROMPTS
+from scider.tools import Tool, ToolRegistry
+
+from .state import SummaryAgentState
+
+LLM_NAME = "experiment_summary"
+AGENT_NAME = "experiment_summary"
+
+BUILTIN_TOOLSETS = [
+    "state",
+    "fs",  # Filesystem tools for reading files and listing directories
+]
+ALLOWED_TOOLSETS = [
+    "history",
+]
+
+
+def gateway_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    """Gateway node - placeholder for conditional routing logic"""
+    logger.trace("gateway_node of Agent {}", AGENT_NAME)
+    return agent_state
+
+
+def gateway_conditional(agent_state: SummaryAgentState) -> str:
+    """Determine the next node based on the last message"""
+    # compress history if needed
+    if (
+        constant.HISTORY_AUTO_COMPRESSION
+        and "history_compression" not in agent_state.node_history[-2:]
+        and agent_state.total_patched_tokens > constant.HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD
+    ):
+        return "history_compression"
+
+    last_msg = agent_state.patched_history[-1]
+
+    # If the last message contains tool calls, execute them
+    if (tool_calls := last_msg.tool_calls) and len(tool_calls) > 0:
+        return "tool_calling"
+
+    # Route based on message role
+    match last_msg.role:
+        case "user" | "tool":
+            # User or tool message -> call LLM
+            return "llm_chat"
+        case "assistant":
+            # Assistant responded without tool calls -> go to finalize
+            return "finalize"
+        case _:
+            raise ValueError(f"Unknown message role: {last_msg.role}")
+
+
+def llm_chat_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    """LLM chat node - gets next action from the model"""
+    logger.debug("llm_chat_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("llm_chat")
+
+    selected_state = {
+        "workspace": str(agent_state.workspace.working_dir),
+        "output_path": str(agent_state.output_path),
+        "current_activated_toolsets": list(set(agent_state.toolsets)),
+    }
+
+    # Update system prompt
+    import json
+
+    system_prompt = PROMPTS.experiment_summary.summary_system_prompt.render(
+        state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
+        toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
+    )
+
+    # Construct tools
+    tools: dict[str, Tool] = {}
+    for toolset in agent_state.toolsets:
+        tools.update(ToolRegistry.get_toolset(toolset))
+    for toolset in BUILTIN_TOOLSETS:
+        tools.update(ToolRegistry.get_toolset(toolset))
+
+    # Get completion from LLM
+    msg = ModelRegistry.completion(
+        LLM_NAME,
+        agent_state.patched_history,
+        system_prompt=(
+            Message(role="system", content=system_prompt)
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
+        agent_sender=AGENT_NAME,
+        tools=[tool.name for tool in tools.values()],
+    ).with_log()
+
+    agent_state.add_message(msg)
+
+    llm_output = (
+        msg.content
+        if msg.content
+        else ("[Tool calls: " + str(len(msg.tool_calls)) + "]" if msg.tool_calls else "[No output]")
+    )
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "llm_chat",
+            "output": llm_output,
+        }
+    )
+
+    return agent_state
+
+
+def tool_calling_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    """Execute tool calls from the last message"""
+    logger.debug("tool_calling_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("tool_calling")
+
+    # Get the last message which contains tool calls
+    last_msg = agent_state.patched_history[-1]
+
+    if not last_msg.tool_calls:
+        raise ValueError("No tool calls found in the last message")
+
+    # Construct tools
+    tools: dict[str, Tool] = {}
+    for toolset in agent_state.toolsets:
+        tools.update(ToolRegistry.get_toolset(toolset))
+    for toolset in BUILTIN_TOOLSETS:
+        tools.update(ToolRegistry.get_toolset(toolset))
+
+    function_map = {tool.name: tool.func for tool in tools.values()}
+
+    tool_results = []
+
+    # Execute each tool call
+    for tool_call in last_msg.tool_calls:
+        tool_name = tool_call.function.name
+
+        # Check if tool exists in function map
+        if tool_name not in function_map:
+            error_msg = f"Tool {tool_name} not found"
+            tool_response = {
+                "role": "tool",
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "content": error_msg,
+            }
+            agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
+            continue
+
+        # Parse tool arguments
+        try:
+            args = json.loads(tool_call.function.arguments)
+            assert isinstance(args, dict)
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid JSON in tool arguments: {e}"
+            tool_response = {
+                "role": "tool",
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "content": error_msg,
+            }
+            agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
+            continue
+        except AssertionError as e:
+            error_msg = f"Invalid tool arguments: {e}"
+            tool_response = {
+                "role": "tool",
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "content": error_msg,
+            }
+            agent_state.add_message(Message(**tool_response).with_log())
+            tool_results.append({"tool": tool_name, "result": error_msg})
+            continue
+
+        # Execute the tool
+        try:
+            func = function_map[tool_name]
+
+            # Check if function expects agent_state parameter
+            sig = inspect.signature(func)
+            if constant.__AGENT_STATE_NAME__ in sig.parameters:
+                args.update({constant.__AGENT_STATE_NAME__: agent_state})
+            if constant.__CTX_NAME__ in sig.parameters:
+                args.update({constant.__CTX_NAME__: {"current_agent": AGENT_NAME}})
+
+            # Execute the tool
+            result = func(**args)
+
+            # Create tool response message
+            tool_response = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "tool_name": tool_name,
+                "content": str(result),  # Ensure result is string
+            }
+            tool_results.append(
+                {"tool": tool_name, "result": str(result)[:1000] if result else "No result"}
+            )
+
+        except Exception as e:
+            logger.exception(f"Tool {tool_name} execution failed")
+            error_msg = f"Tool {tool_name} execution failed: {e}"
+            tool_response = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "tool_name": tool_name,
+                "content": error_msg,
+            }
+            tool_results.append({"tool": tool_name, "result": error_msg})
+
+        agent_state.add_message(Message(**tool_response).with_log())
+
+    tool_output_parts = []
+    for tr in tool_results:
+        tool_output_parts.append(f"Tool: {tr['tool']}\nResult: {tr['result']}")
+
+    tool_output = "\n\n".join(tool_output_parts) if tool_output_parts else "No tool calls executed"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "tool_calling",
+            "output": tool_output,
+        }
+    )
+
+    return agent_state
+
+
+def finalize_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    """Generate final summary and save to file"""
+    logger.debug("finalize_node of Agent {}", AGENT_NAME)
+    agent_state.add_node_history("finalize")
+
+    # Add summary generation prompt
+    summary_prompt = Message(
+        role="user",
+        content=PROMPTS.experiment_summary.summary_prompt.render(),
+        agent_sender=AGENT_NAME,
+    )
+    agent_state.add_message(summary_prompt)
+
+    # Get summary from LLM
+    msg = ModelRegistry.completion(
+        LLM_NAME,
+        agent_state.patched_history,
+        system_prompt=(
+            Message(
+                role="system",
+                content=PROMPTS.experiment_summary.summary_system_prompt.render(),
+            )
+            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+            .content
+        ),
+        agent_sender=AGENT_NAME,
+        tools=None,  # No tools needed for final summary
+    ).with_log()
+
+    # Store the summary text
+    agent_state.summary_text = msg.content or ""
+    agent_state.add_message(msg)
+
+    # Save summary to file
+    if agent_state.output_path is not None:
+        try:
+            with open(agent_state.output_path, "w", encoding="utf-8") as f:
+                f.write(agent_state.summary_text)
+            logger.info(f"Summary saved to {agent_state.output_path}")
+        except Exception as e:
+            logger.error(f"Failed to save summary to {agent_state.output_path}: {e}")
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "finalize",
+            "output": agent_state.summary_text,
+        }
+    )
+
+    return agent_state
+
+
+def history_compression_node(agent_state: SummaryAgentState) -> SummaryAgentState:
+    logger.debug("history_compression_node of Agent {}", AGENT_NAME)
+
+    history_before = len(agent_state.history)
+    agent_state = history_compression.invoke_history_compression(agent_state)
+    history_after = len(agent_state.history)
+
+    compression_output = f"Compressed history: {history_before} -> {history_after} messages"
+    if agent_state.history_patches:
+        last_patch = agent_state.history_patches[-1]
+        if last_patch.patched_message and last_patch.patched_message.content:
+            compression_output = f"Compressed {last_patch.n_messages} messages into:\n{last_patch.patched_message.content[:500]}"
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "history_compression",
+            "output": compression_output,
+        }
+    )
+
+    return agent_state

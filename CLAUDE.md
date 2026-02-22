@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SciEvo is a multi-agent framework for automated scientific experimentation. It orchestrates data analysis and experimental code generation through specialized agents that can search papers, generate code, execute experiments, and maintain long-term memory of insights.
+SciDER is a multi-agent framework for automated scientific experimentation. It orchestrates data analysis and experimental code generation through specialized agents that can search papers, generate code, execute experiments, and maintain long-term memory of insights.
 
 ## Setup and Environment
 
@@ -64,13 +64,13 @@ pre-commit run --all-files
 ### Full Workflow (Data Analysis + Experiment)
 
 ```bash
-python -m scievo.run_workflow full <data_path> <workspace_path> "<user_query>" [repo_source]
+python -m scider.run_workflow full <data_path> <workspace_path> "<user_query>" [repo_source]
 
 # Example
-python -m scievo.run_workflow full data.csv ./workspace "Train SVR model for regression"
+python -m scider.run_workflow full data.csv ./workspace "Train SVR model for regression"
 
 # With options
-python -m scievo.run_workflow full data.csv ./workspace "Train model" \
+python -m scider.run_workflow full data.csv ./workspace "Train model" \
     --data-recursion-limit 100 \
     --experiment-recursion-limit 100 \
     --session-name my_experiment
@@ -79,29 +79,29 @@ python -m scievo.run_workflow full data.csv ./workspace "Train model" \
 ### Data Analysis Only
 
 ```bash
-python -m scievo.run_workflow data <data_path> <workspace_path> [--recursion-limit N] [--session-name NAME]
+python -m scider.run_workflow data <data_path> <workspace_path> [--recursion-limit N] [--session-name NAME]
 
 # Example
-python -m scievo.run_workflow data data.csv ./workspace --session-name my_analysis
+python -m scider.run_workflow data data.csv ./workspace --session-name my_analysis
 ```
 
 ### Experiment Only (Requires Existing Analysis)
 
 ```bash
-python -m scievo.run_workflow experiment <workspace_path> "<user_query>" [data_analysis_path] [--recursion-limit N]
+python -m scider.run_workflow experiment <workspace_path> "<user_query>" [data_analysis_path] [--recursion-limit N]
 
 # Example (uses data_analysis.md from workspace)
-python -m scievo.run_workflow experiment ./workspace "Train SVR model"
+python -m scider.run_workflow experiment ./workspace "Train SVR model"
 
 # With custom analysis file
-python -m scievo.run_workflow experiment ./workspace "Train model" ./my_analysis.md
+python -m scider.run_workflow experiment ./workspace "Train model" ./my_analysis.md
 ```
 
 ## Architecture Overview
 
 ### Core Components
 
-**`scievo/core/`** - Infrastructure and shared utilities
+**`scider/core/`** - Infrastructure and shared utilities
 - `types.py` - Core message types, state management (ToolsetState, HistoryState, RBankState, ExecState)
 - `brain.py` - Singleton session manager coordinating shared application state
 - `llms.py` - Model registry with completion/response API wrappers (supports rate limiting, embeddings)
@@ -110,14 +110,14 @@ python -m scievo.run_workflow experiment ./workspace "Train model" ./my_analysis
 - `utils.py` - TOON/JSON parsing, markdown extraction
 - `constant.py` - Configuration flags and defaults
 
-**`scievo/tools/`** - 20+ tool integrations
+**`scider/tools/`** - 20+ tool integrations
 - Core: `fs_tool`, `shell_tool`, `exec_tool`
 - Search: `arxiv_tool`, `dataset_search_tool`, `metric_search_tool`, `web_tool`
 - Code: `coder_tool`, `cursor_tool`, `claude_code_tool`, `claude_agent_sdk_tool`, `openhands_tool`
 - Other: `github_tool`, `ideation_tool`, `history_tool`, `state_tool`, `todo_tool`, `env_tool`
 - Registry: `Tool` base class with JSON schemas, `ToolRegistry` singleton
 
-**`scievo/agents/`** - Agent implementations using LangGraph
+**`scider/agents/`** - Agent implementations using LangGraph
 - `data_agent/` - Analyzes data, generates `data_analysis.md`, searches papers/datasets
   - Flow: START → planner → gateway (router) → llm_chat/tool_calling/mem_extraction → replanner → finalize → END
   - Sub-agents: `paper_subagent/` for academic search
@@ -127,17 +127,17 @@ python -m scievo.run_workflow experiment ./workspace "Train model" ./my_analysis
 - `ideation_agent/` - Research idea generation
 - `critic_agent/` - Output quality review
 
-**`scievo/workflows/`** - Workflow orchestration
+**`scider/workflows/`** - Workflow orchestration
 - `full_workflow.py` - Chains DataAgent → ExperimentAgent
 - `data_workflow.py` - Standalone DataAgent execution
 - `experiment_workflow.py` - Standalone ExperimentAgent execution
 - `run_workflow.py` - CLI entry point with three subcommands (backward compatibility layer)
 
-**`scievo/prompts/`** - Prompt management
+**`scider/prompts/`** - Prompt management
 - `prompt_data.py` - Dataclass-based organization (DataPrompts, ExperimentPrompts, etc.)
 - YAML files with Jinja2 templating for dynamic content
 
-**`scievo/rbank/`** - ReasoningBank (Long-term Memory)
+**`scider/rbank/`** - ReasoningBank (Long-term Memory)
 - `memo.py` - Persistent memory with embeddings for similarity search
 - `subgraph/` - Memory consolidation subgraph
 - Three memory tiers: short-term (session), long-term (cross-project), project-specific
@@ -186,7 +186,7 @@ State is passed through node functions and updated via returns.
 
 ### Adding New Tools
 
-1. Create tool in `scievo/tools/` directory
+1. Create tool in `scider/tools/` directory
 2. Inherit from `Tool` base class
 3. Define `json_schema` property
 4. Implement tool logic
@@ -208,11 +208,11 @@ State is passed through node functions and updated via returns.
 
 ## File Locations
 
-- Workflow implementations: `scievo/workflows/`
-- Agent logic: `scievo/agents/{agent_name}/`
-- Tool definitions: `scievo/tools/`
-- Prompts: `scievo/prompts/` (YAML files) + `prompt_data.py` (dataclasses)
-- Core infrastructure: `scievo/core/`
+- Workflow implementations: `scider/workflows/`
+- Agent logic: `scider/agents/{agent_name}/`
+- Tool definitions: `scider/tools/`
+- Prompts: `scider/prompts/` (YAML files) + `prompt_data.py` (dataclasses)
+- Core infrastructure: `scider/core/`
 - Memory: Configured via `BRAIN_DIR`, `MEM_LONG_TERM_DIR`, `MEM_PROJECT_DIR`
 - Generated outputs: Within workspace directory specified in CLI
 
@@ -240,10 +240,10 @@ LOG_SYSTEM_PROMPT=false     # Show system prompts
 Use mode-specific commands for testing individual components:
 ```bash
 # Test only data analysis
-python -m scievo.run_workflow data test_data/sample.csv ./debug_workspace
+python -m scider.run_workflow data test_data/sample.csv ./debug_workspace
 
 # Test experiment with existing analysis
-python -m scievo.run_workflow experiment ./debug_workspace "Test query"
+python -m scider.run_workflow experiment ./debug_workspace "Test query"
 ```
 
 ## Important Notes
@@ -251,7 +251,7 @@ python -m scievo.run_workflow experiment ./debug_workspace "Test query"
 - **Python Version**: Requires Python >=3.13 (see `pyproject.toml`)
 - **Package Manager**: Uses `uv` for dependency management
 - **PyTorch**: Platform-specific installation via custom indices (see `pyproject.toml` [tool.uv.sources])
-- **Optional Dependencies**: OpenHands (`openhands-sdk`, `openhands-tools`) - enable via `SCIEVO_ENABLE_OPENHANDS`
+- **Optional Dependencies**: OpenHands (`openhands-sdk`, `openhands-tools`) - enable via `SCIDER_ENABLE_OPENHANDS`
 - **Pre-commit Hooks**: Always run before committing to maintain code style
 - **Temporary Files**: `tmp_*` directories and notebooks are for development, not production
 - **Brain Directory**: Session state persists in `BRAIN_DIR` - can accumulate over time

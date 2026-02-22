@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick start script for SciEvo Streamlit Interface
+# Quick start script for SciDER Streamlit Interface
 
 # Check if streamlit is installed
 if ! command -v streamlit &> /dev/null
@@ -16,7 +16,7 @@ if [ ! -f "../.env" ]; then
     read -p "Press enter to continue anyway or Ctrl+C to exit..."
 fi
 
-echo "🚀 Starting SciEvo Streamlit Interface..."
+echo "🚀 Starting SciDER Streamlit Interface..."
 echo ""
 echo "Choose version:"
 echo "1) Enhanced (recommended) - Real-time progress tracking"

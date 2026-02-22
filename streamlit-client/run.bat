@@ -1,5 +1,5 @@
 @echo off
-REM Quick start script for SciEvo Streamlit Interface (Windows)
+REM Quick start script for SciDER Streamlit Interface (Windows)
 
 REM Check if streamlit is installed
 where streamlit >nul 2>nul
@@ -16,7 +16,7 @@ if not exist "..\\.env" (
     pause
 )
 
-echo Starting SciEvo Streamlit Interface...
+echo Starting SciDER Streamlit Interface...
 echo.
 echo Choose version:
 echo 1) Enhanced (recommended) - Real-time progress tracking

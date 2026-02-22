@@ -22,7 +22,7 @@ attrs==25.4.0
     #   jsonschema
     #   referencing
 beautifulsoup4==4.14.2
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 brotli==1.1.0
     # via httpx
 certifi==2025.10.5
@@ -33,28 +33,28 @@ certifi==2025.10.5
 charset-normalizer==3.4.4
     # via requests
 claude-agent-sdk==0.1.34
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 click==8.3.0
     # via
     #   ddgs
     #   litellm
     #   uvicorn
 ddgs==9.6.1
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 dill==0.4.0
     # via pyfunctional
 distro==1.9.0
     # via openai
 epam-indigo==1.35.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 fastuuid==0.14.0
     # via litellm
 feedparser==6.0.12
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 filelock==3.20.0
     # via huggingface-hub
 filetype==1.2.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 frozenlist==1.8.0
     # via
     #   aiohttp
@@ -97,14 +97,14 @@ importlib-metadata==8.7.0
     # via litellm
 jinja2==3.1.6
     # via
-    #   scievo (pyproject.toml)
+    #   scider (pyproject.toml)
     #   litellm
 jiter==0.11.1
     # via openai
 joblib==1.5.3
     # via scikit-learn
 json-repair==0.53.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.0.0
@@ -122,9 +122,9 @@ langchain-core==1.2.12
     #   langgraph-checkpoint
     #   langgraph-prebuilt
 langchain-text-splitters==1.1.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 langgraph==1.0.2
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 langgraph-checkpoint==3.0.0
     # via
     #   langgraph
@@ -136,9 +136,9 @@ langgraph-sdk==0.2.9
 langsmith==0.4.38
     # via langchain-core
 litellm==1.79.3
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 loguru==0.7.3
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 lxml==6.0.2
     # via ddgs
 markdown-it-py==4.0.0
@@ -155,7 +155,7 @@ multidict==6.7.0
     #   yarl
 numpy==2.3.4
     # via
-    #   scievo (pyproject.toml)
+    #   scider (pyproject.toml)
     #   pandas
     #   scikit-learn
     #   scipy
@@ -173,11 +173,11 @@ packaging==25.0
     #   langchain-core
     #   langsmith
 pandas==2.3.3
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 pexpect==4.9.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 pillow==12.0.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 primp==0.15.0
     # via ddgs
 propcache==0.4.1
@@ -188,7 +188,7 @@ ptyprocess==0.7.0
     # via pexpect
 pydantic==2.12.3
     # via
-    #   scievo (pyproject.toml)
+    #   scider (pyproject.toml)
     #   langchain-core
     #   langgraph
     #   langsmith
@@ -201,7 +201,7 @@ pydantic-core==2.41.4
 pydantic-settings==2.11.0
     # via mcp
 pyfunctional==1.5.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 pygments==2.19.2
     # via rich
 python-dateutil==2.9.0.post0
@@ -213,12 +213,12 @@ python-dotenv==1.2.1
 python-multipart==0.0.20
     # via mcp
 python-toon==0.1.2
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 pytz==2025.2
     # via pandas
 pyyaml==6.0.3
     # via
-    #   scievo (pyproject.toml)
+    #   scider (pyproject.toml)
     #   huggingface-hub
     #   langchain-core
 referencing==0.36.2
@@ -236,13 +236,13 @@ requests==2.32.5
 requests-toolbelt==1.0.0
     # via langsmith
 rich==14.2.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 rpds-py==0.28.0
     # via
     #   jsonschema
     #   referencing
 scikit-learn==1.8.0
-    # via scievo (pyproject.toml)
+    # via scider (pyproject.toml)
 scipy==1.16.3
     # via scikit-learn
 sgmllib3k==1.0.0
@@ -269,7 +269,7 @@ threadpoolctl==3.6.0
     # via scikit-learn
 tiktoken==0.12.0
     # via
-    #   scievo (pyproject.toml)
+    #   scider (pyproject.toml)
     #   litellm
 tokenizers==0.22.1
     # via litellm

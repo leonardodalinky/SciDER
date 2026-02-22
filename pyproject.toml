@@ -3,9 +3,14 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scievo"
+name = "scider"
 version = "0.1.0"
-description = "Scientific research assistant powered by LLMs"
+description = "Scientific Data-centric End-to-end Researcher"
+keywords = ["scientific research", "data-centric", "end-to-end", "AI assistant", "autonomous research"]
+authors = [
+    { name = "Ke Lin", email = "leonard.keilin@gmail.com" },
+    { name = "Yilin Lu", email = "lu000661@umn.edu" }
+]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -58,7 +63,10 @@ openhands = [
 ]
 
 [tool.setuptools]
-packages = { find = { include = ["scievo", "scievo.*"] } }
+packages = { find = { include = ["scider", "scider.*"] } }
+
+[tool.setuptools.package-data]
+"scider" = ["**/*.yaml"]
 
 [tool.uv]
 conflicts = [

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from pydantic import BaseModel
 
-from scievo.core.llms import ModelRegistry
+from scider.core.llms import ModelRegistry
 
 LOW_COST_MODEL = "gpt-5-nano"
 MEDIUM_COST_MODEL = "gpt-5-mini"

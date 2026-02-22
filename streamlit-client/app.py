@@ -12,19 +12,19 @@ from pathlib import Path
 import streamlit as st
 
 os.environ["CODING_AGENT_VERSION"] = "v3"
-os.environ.setdefault("SCIEVO_ENABLE_OPENHANDS", "0")
+os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scievo.agents import ideation_agent
-from scievo.agents.ideation_agent.state import IdeationAgentState
-from scievo.core.brain import Brain
-from scievo.core.llms import ModelRegistry
-from scievo.workflows.data_workflow import DataWorkflow
-from scievo.workflows.experiment_workflow import ExperimentWorkflow
-from scievo.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
+from scider.agents import ideation_agent
+from scider.agents.ideation_agent.state import IdeationAgentState
+from scider.core.brain import Brain
+from scider.core.llms import ModelRegistry
+from scider.workflows.data_workflow import DataWorkflow
+from scider.workflows.experiment_workflow import ExperimentWorkflow
+from scider.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
 
-st.set_page_config(page_title="SciEvo Chat", layout="centered")
+st.set_page_config(page_title="SciDER Chat", layout="centered")
 
 st.markdown(
     """
@@ -50,7 +50,7 @@ def register_all_models(user_api_key=None, user_model=None):
     if not api_key:
         return False
 
-    default_model = user_model or os.getenv("SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite")
+    default_model = user_model or os.getenv("SCIDER_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite")
     openai_api_key = (
         user_api_key
         if user_api_key and "openai" in default_model.lower()
@@ -216,7 +216,7 @@ def run_full(cfg):
 
 def get_upload_temp_dir() -> Path:
     """Return temp directory for uploaded files. Clean old dirs on startup."""
-    base = Path(tempfile.gettempdir()) / "scievo_uploads"
+    base = Path(tempfile.gettempdir()) / "scider_uploads"
     base.mkdir(parents=True, exist_ok=True)
     # Clean dirs older than 1 hour (handles closed sessions)
     now = time.time()
@@ -261,11 +261,11 @@ def find_data_analysis_file(extract_dir: Path) -> Path | None:
 
 
 def _rm_upload_root(p: Path):
-    """Remove the scievo_uploads session dir (go up to find it)."""
+    """Remove the scider_uploads session dir (go up to find it)."""
     cur = Path(p).resolve().parent if Path(p).resolve().is_file() else Path(p).resolve()
     while cur != cur.parent:
         parent = cur.parent
-        if parent.name == "scievo_uploads":
+        if parent.name == "scider_uploads":
             try:
                 shutil.rmtree(cur)
             except OSError:
@@ -339,13 +339,13 @@ if "anthropic_api_key" not in st.session_state:
     st.session_state.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY") or ""
 if "default_model" not in st.session_state:
     st.session_state.default_model = os.getenv(
-        "SCIEVO_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite"
+        "SCIDER_DEFAULT_MODEL", "gemini/gemini-2.5-flash-lite"
     )
 
 if not st.session_state.api_key:
-    st.title("SciEvo Research Assistant")
+    st.title("SciDER Research Assistant")
     st.warning("API Key Required")
-    st.markdown("Please provide API keys to use the SciEvo Research Assistant.")
+    st.markdown("Please provide API keys to use the SciDER Research Assistant.")
 
     # Model provider selection
     col1, col2 = st.columns(2)
@@ -395,7 +395,7 @@ if not st.session_state.api_key:
 
 col_title, col_reset = st.columns([5, 1])
 with col_title:
-    st.title("SciEvo Research Assistant")
+    st.title("SciDER Research Assistant")
 with col_reset:
     if st.button("🔄 Reset", help="Clear all chat history", type="secondary"):
         cleanup_uploaded_data()
@@ -463,7 +463,7 @@ if "default_workspace_path" not in st.session_state:
     st.session_state.default_workspace_path = Path.cwd() / "workspace"
 # If workspace_path points to expired temp upload dir, restore to default
 _ws = st.session_state.workspace_path
-if isinstance(_ws, (str, Path)) and "scievo_uploads" in str(_ws) and not Path(_ws).exists():
+if isinstance(_ws, (str, Path)) and "scider_uploads" in str(_ws) and not Path(_ws).exists():
     cleanup_uploaded_data()
 
 if "selected_workflow" not in st.session_state:
