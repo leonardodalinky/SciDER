@@ -113,7 +113,7 @@ python -m scider.run_workflow experiment ./workspace "Train model" ./my_analysis
 **`scider/tools/`** - 20+ tool integrations
 - Core: `fs_tool`, `shell_tool`, `exec_tool`
 - Search: `arxiv_tool`, `dataset_search_tool`, `metric_search_tool`, `web_tool`
-- Code: `coder_tool`, `cursor_tool`, `claude_code_tool`, `claude_agent_sdk_tool`, `openhands_tool`
+- Code: `claude_code_tool`, `claude_agent_sdk_tool`, `openhands_tool`
 - Other: `github_tool`, `ideation_tool`, `history_tool`, `state_tool`, `todo_tool`, `env_tool`
 - Registry: `Tool` base class with JSON schemas, `ToolRegistry` singleton
 
@@ -233,17 +233,6 @@ Control verbosity via `.env`:
 LOGURU_LEVEL=DEBUG          # or INFO
 LOG_MEM_SUBGRAPH=true       # Memory consolidation logs
 LOG_SYSTEM_PROMPT=false     # Show system prompts
-```
-
-### Running Partial Workflows
-
-Use mode-specific commands for testing individual components:
-```bash
-# Test only data analysis
-python -m scider.run_workflow data test_data/sample.csv ./debug_workspace
-
-# Test experiment with existing analysis
-python -m scider.run_workflow experiment ./debug_workspace "Test query"
 ```
 
 ## Important Notes

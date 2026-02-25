@@ -1,5 +1,9 @@
 # Benchmark for AI Idea Bench
 
+> [!NOTE]
+> This benchmark has a terrible coding quality, and most of the code seems to be written in a hurry. If you do need to run this benchmark, you may encounter endless bugs and issues. Please be mentally prepared for that. Though I have tried my best to fix the bugs, some metrics like MCQ still cannot work.
+> If you encounter similar issues, please feel free to contact the me or the authors of the benchmark.
+
 We assume all commands are run from the same dir as this README file.
 
 First, create a new uv env:
@@ -49,17 +53,11 @@ python AI_Idea_Bench/AI-Scientist/generate_ideas_fron_papers_scider.py
 Grading:
 
 ```bash
-# Multiple-choice evaluation
-pushd AI_Idea_Bench; python Make_MCQ.py; python MCQ.py; popd
-
 # Idea-to-idea matching
 pushd AI_Idea_Bench; python idea_gt_idea.py; popd
 
 # Idea-to-topic matching
 pushd AI_Idea_Bench; python idea_gt_topic.py; popd
-
-# Competition among baselines
-pushd AI_Idea_Bench; python competition.py; popd
 
 # Novelty assessment
 pushd AI_Idea_Bench; python find_paper_by_kewords.py; python extract_hd_cd_paper.py; python Novelty.py; popd

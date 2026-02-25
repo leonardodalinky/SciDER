@@ -68,3 +68,9 @@ uv sync --extra mac
 # for gpu
 uv sync --extra cu128
 ```
+
+## Feedback and Contributions
+
+We welcome contributions to improve SciDER. Please open an issue or submit a pull request on our GitHub repository.
+
+Also, any feedback on the project is greatly appreciated. You can fill the [feedback form](https://forms.gle/Vz4K55J8ePTEs6TU8) to rate this app and help to improve the project.

@@ -103,9 +103,3 @@ explicit = true
 name = "pytorch-mac"
 url = "https://pypi.org/simple"
 explicit = true
-
-[tool.uv.workspace]
-members = [
-    "benchmarks/datascibench",
-    "benchmarks/scicodebench",
-]

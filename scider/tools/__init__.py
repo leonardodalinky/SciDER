@@ -5,8 +5,6 @@ from . import (  # noqa: F401
     arxiv_tool,
     claude_agent_sdk_tool,
     claude_code_tool,
-    coder_tool,
-    cursor_tool,
     dataset_search_tool,
     env_tool,
     exec_tool,
