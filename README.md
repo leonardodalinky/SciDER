@@ -1,4 +1,8 @@
-# SciDER: Scientific Data-centric End-to-end Researcher
+<div align="center">
+  <img src="./static/images/scider_logo.webp" width="400" />
+  <h1 align="center">SciDER: Scientific Data-centric End-to-end Researcher
+ </h1>
+</div>
 
 <div align="center">
     <a href="https://harryluumn.github.io/scider-proj-page/"><img src="https://img.shields.io/badge/Project Page-blue?style=for-the-badge&color=1a1a2e&logo=homepage&logoColor=orange" alt="Project Page"></a>
