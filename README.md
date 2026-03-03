@@ -8,7 +8,7 @@
     <a href="https://harryluumn.github.io/scider-proj-page/"><img src="https://img.shields.io/badge/Project Page-blue?style=for-the-badge&color=1a1a2e&logo=homepage&logoColor=orange" alt="Project Page"></a>
     <a href="https://huggingface.co/spaces/AI4Research/scider"><img src="https://img.shields.io/badge/Live DEMO-1a1a2e?logo=huggingface&style=for-the-badge" alt="Live Demo"></a>
     <br/>
-    <a href="TODO"><img src="https://img.shields.io/badge/arXiv-TODO.TODO-brightred?color=B31B1B&logo=arXiv&style=for-the-badge" alt="ArXiv"></a>
+    <a href="https://arxiv.org/abs/2603.01421"><img src="https://img.shields.io/badge/arXiv-2603.01421-brightred?color=B31B1B&logo=arXiv&style=for-the-badge" alt="ArXiv"></a>
     <br/>
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%E2%89%A53.12-blue?logo=python&style=for-the-badge" alt="Python 3.12">
     </a>
@@ -16,7 +16,18 @@
     </a>
 </div>
 
-## Installation
+## Table of Contents
+
+- [📦 Installation](#-installation)
+- [⚙️ Configuration](#-configuration)
+- [🌐 Web UI](#-web-ui)
+- [🤖 Coding Framework](#-coding-framework)
+  - [Optional: Claude Agent SDK](#optional-recommended-install-claude-agent-sdk-for-claude_agent_sdk-toolset)
+- [🛠️ Development Guide](#-development-guide)
+- [📊 Benchmarks](#-benchmarks)
+- [💬 Feedback and Contributions](#-feedback-and-contributions)
+
+## 📦 Installation
 
 You can install the project using `pip`:
 
@@ -27,13 +38,31 @@ pip install git+https://github.com/leonardodalinky/SciDER
 pip install -e .
 ```
 
-## Configuration
+Example Usage:
+
+```python
+from scider.default.models import register_gemini_medium_high_models
+from scider.workflows import run_full_workflow
+
+# 1. Register the models you want to use
+register_gemini_medium_high_models()
+# 2. Run the full workflow
+wf = run_full_workflow(
+    data_path="/path/to/data/",
+    workspace_path="/path/to/workspace/",
+    user_query="Discover insights about RAG",
+)
+# 3. The final state after the workflow
+print(wf.final_summary)
+```
+
+## ⚙️ Configuration
 
 The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference.
 
 Also, you can set environment variables directly in your shell or terminal session.
 
-## UI Deployment
+## 🌐 Web UI
 
 The web UI is a Streamlit application. Deploy it using the `Dockerfile` at the project root.
 
@@ -57,9 +86,23 @@ docker run -d \
 
 4. Access the UI at `http://localhost:7860`.
 
-## Coding framework
+## 🤖 Coding Framework
 
 Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
+
+### Optional (Recommended): install Claude Agent SDK (for `claude_agent_sdk` toolset):
+
+- Docs: `https://platform.claude.com/docs/en/agent-sdk/overview`
+- Install:
+
+```shell
+pip install claude-agent-sdk
+export ANTHROPIC_API_KEY="..."
+```
+
+<details>
+
+<summary>Optional: install OpenHands (for `openhands` toolset):</summary>
 
 ### Optional: install Claude Code (for `claude_code` toolset):
 
@@ -70,17 +113,10 @@ Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recomme
 export CLAUDE_CODE_CMD="claude"
 ```
 
-Optional: install Claude Agent SDK (for `claude_agent_sdk` toolset):
+</details>
 
-- Docs: `https://platform.claude.com/docs/en/agent-sdk/overview`
-- Install:
 
-```shell
-pip install claude-agent-sdk
-export ANTHROPIC_API_KEY="..."
-```
-
-## Development Guide
+## 🛠️ Development Guide
 
 First, install `pre-commit`:
 ```shell
@@ -106,11 +142,11 @@ uv sync --extra mac
 uv sync --extra cu128
 ```
 
-## Benchmarks
+## 📊 Benchmarks
 
 See [BENCHMARKS](./benchmarks) for details on the benchmarks we have conducted to evaluate SciDER's performance.
 
-## Feedback and Contributions
+## 💬 Feedback and Contributions
 
 We welcome contributions to improve SciDER. Please open an issue or submit a pull request on our GitHub repository.
 
