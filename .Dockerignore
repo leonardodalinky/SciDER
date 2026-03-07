@@ -1,0 +1,35 @@
+.git
+.github
+.venv
+env
+venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local/temporary workspaces and artifacts (keep Docker build context small)
+tmp_*
+rsync_tmp_*
+workspace/
+# case-study-memory/ - include for Case Study mode to show preloaded memos
+tmp_brain/
+tmp_ml/
+tmp_ml2/
+tmp_test/
+tmp_test_data/
+tmp_workspace/
+tmp_workspace_full/
+tmp_workflow_workspace/
+
+# Not needed for the Space runtime; reduces context size substantially
+software-agent-sdk/
+bench/
+case-studies/
+
+# Notebooks
+*.ipynb

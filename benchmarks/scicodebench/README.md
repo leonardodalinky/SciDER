@@ -22,18 +22,18 @@ Download the [numeric test results](https://drive.google.com/drive/folders/1W5GZ
 Run the evaluation script:
 
 ```bash
-export SCIEVO_DIR=/path/to/SciEvo
+export SCIDER_DIR=/path/to/SciDER
 # w/o background
-pushd SciCode/; python eval/scripts/gencode_scievo.py --model scievo; popd
+pushd SciCode/; python eval/scripts/gencode_scider.py --model scider; popd
 # with background
-pushd SciCode/; python eval/scripts/gencode_scievo.py --model scievo --with-background; popd
+pushd SciCode/; python eval/scripts/gencode_scider.py --model scider --with-background; popd
 ```
 
 Grading script:
 
 ```bash
 # w/o background
-python eval/scripts/test_generated_code.py --model scievo
+python eval/scripts/test_generated_code.py --model scider
 # with background
-python eval/scripts/test_generated_code.py --model scievo --with-background
+python eval/scripts/test_generated_code.py --model scider --with-background
 ```

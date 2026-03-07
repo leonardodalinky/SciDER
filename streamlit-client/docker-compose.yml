@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: streamlit-client/Dockerfile
-    container_name: scievo-streamlit
+    container_name: scider-streamlit
     ports:
       - "8501:8501"
     volumes:

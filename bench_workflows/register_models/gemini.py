@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from pydantic import BaseModel
 
-from scievo.core.llms import ModelRegistry
+from scider.core.llms import ModelRegistry
 
 LOW_COST_MODEL = "gemini/gemini-2.5-flash-lite"
 MEDIUM_COST_MODEL = "gemini/gemini-2.5-flash"

@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy project files
 COPY pyproject.toml /app/
-COPY scievo/ /app/scievo/
+COPY scider/ /app/scider/
 COPY streamlit-client/ /app/streamlit-client/
 
 # Install Python dependencies

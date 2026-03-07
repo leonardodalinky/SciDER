@@ -1,26 +1,104 @@
-# SciEvo
+<div align="center">
+  <img src="./static/images/scider_logo.webp" width="400" />
+  <h1 align="center">SciDER: Scientific Data-centric End-to-end Researcher
+ </h1>
+</div>
+
+<div align="center">
+    <a href="https://harryluumn.github.io/scider-proj-page/"><img src="https://img.shields.io/badge/Project Page-blue?style=for-the-badge&color=1a1a2e&logo=homepage&logoColor=orange" alt="Project Page"></a>
+    <a href="https://huggingface.co/spaces/AI4Research/scider"><img src="https://img.shields.io/badge/Live DEMO-1a1a2e?logo=huggingface&style=for-the-badge" alt="Live Demo"></a>
+    <br/>
+    <a href="https://arxiv.org/abs/2603.01421"><img src="https://img.shields.io/badge/arXiv-2603.01421-brightred?color=B31B1B&logo=arXiv&style=for-the-badge" alt="ArXiv"></a>
+    <br/>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%E2%89%A53.12-blue?logo=python&style=for-the-badge" alt="Python 3.12">
+    </a>
+    <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&style=for-the-badge" alt="pre-commit">
+    </a>
+</div>
+
+## Table of Contents
+
+- [📦 Installation](#-installation)
+- [⚙️ Configuration](#-configuration)
+- [🌐 Web UI](#-web-ui)
+- [🤖 Coding Framework](#-coding-framework)
+  - [Optional: Claude Agent SDK](#optional-recommended-install-claude-agent-sdk-for-claude_agent_sdk-toolset)
+- [🛠️ Development Guide](#-development-guide)
+- [📊 Benchmarks](#-benchmarks)
+- [💬 Feedback and Contributions](#-feedback-and-contributions)
+
+## 📦 Installation
+
+You can install the project using `pip`:
 
 ```shell
-# for cpu
-uv sync --extra cpu
-
-# for mac
-uv sync --extra mac
-
-# for gpu
-uv sync --extra cu128
+# from git
+pip install git+https://github.com/leonardodalinky/SciDER
+# locally
+pip install -e .
 ```
 
-Optional: install Claude Code (for `claude_code` toolset):
+Example Usage:
 
-- Ensure the `claude` CLI is installed and authenticated on your machine.
-- If your `claude` command needs extra flags, set `CLAUDE_CODE_CMD`, e.g.:
+```python
+from scider.default.models import register_gemini_medium_high_models
+from scider.workflows import run_full_workflow
+
+# 1. Register the models you want to use
+register_gemini_medium_high_models()
+# 2. Run the full workflow
+wf = run_full_workflow(
+    data_path="/path/to/data/",
+    workspace_path="/path/to/workspace/",
+    user_query="Discover insights about RAG",
+)
+# 3. The final state after the workflow
+print(wf.final_summary)
+```
+
+## ⚙️ Configuration
+
+The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference.
+
+Also, you can set environment variables directly in your shell or terminal session.
+
+## 🌐 Web UI
+
+The web UI is a Streamlit application. Deploy it using the `Dockerfile` at the project root.
+
+1. Create a `.env` file at the project root (copy from `.env.template`) and fill in your API keys.
+
+2. Build the image:
 
 ```shell
-export CLAUDE_CODE_CMD="claude"
+docker build -t scider:latest .
 ```
 
-Optional: install Claude Agent SDK (for `claude_agent_sdk` toolset):
+3. Run the container:
+
+```shell
+docker run -d \
+  --name scider \
+  -p 7860:7860 \
+  --env-file .env \
+  scider:latest
+```
+
+4. Access the UI at `http://localhost:7860`.
+
+**Select workflow type and get started:**
+
+![Launch Workflow](launchWorkflow.gif)
+
+**Case study selection and full workflow example:**
+
+![Case Study](CaseStudy.gif)
+
+## 🤖 Coding Framework
+
+Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
+
+### Optional (Recommended): install Claude Agent SDK (for `claude_agent_sdk` toolset):
 
 - Docs: `https://platform.claude.com/docs/en/agent-sdk/overview`
 - Install:
@@ -30,23 +108,22 @@ pip install claude-agent-sdk
 export ANTHROPIC_API_KEY="..."
 ```
 
-## Web UI
+<details>
 
-The web UI is a Streamlit application. Deploy it using the Dockerfile at the project root, or run locally from the `streamlit-client` directory.
+<summary>Optional: install OpenHands (for `openhands` toolset):</summary>
 
-**Select workflow type and get started:**
+### Optional: install Claude Code (for `claude_code` toolset):
 
-![Launch Workflow](launchWorkflow.gif)
+- Ensure the `claude` CLI is installed and authenticated on your machine.
+- If your `claude` command needs extra flags, set `CLAUDE_CODE_CMD`, e.g.:
 
-Web interface of the SciDER Research Assistant showing the workflow selection panel. Users can initiate different research workflows—Ideation, Data Analysis, Experiment, or a Full Workflow—through a set of interactive buttons, enabling the system to support various stages of the scientific research process from idea generation to experimental execution.
+```shell
+export CLAUDE_CODE_CMD="claude"
+```
 
-**Case study selection and full workflow example:**
+</details>
 
-![Case Study](CaseStudy.gif)
-
-Web interface of the SciDER Research Assistant demonstrating the selection of a case study for a full research workflow. In this example, the system loads a Kepler Exoplanet dataset task, where the agent autonomously conducts ideation, feature hypothesis generation, model training, and experimental evaluation to detect exoplanet transit signals from stellar light curves.
-
-## Development Guide
+## 🛠️ Development Guide
 
 First, install `pre-commit`:
 ```shell
@@ -59,7 +136,25 @@ pre-commit install
 ```
 
 Then, copy `.env.template` to `.env` and fill in the necessary values.
+
+Finally, run the following command to sync dependencies:
+```shell
+# for cpu
+uv sync --extra cpu
+
+# for mac
+uv sync --extra mac
+
+# for gpu
+uv sync --extra cu128
 ```
-OPENAI_API_KEY=<your_openai_api_key>
-GEMINI_API_KEY=<your_gemini_api_key>
-```
+
+## 📊 Benchmarks
+
+See [BENCHMARKS](./benchmarks) for details on the benchmarks we have conducted to evaluate SciDER's performance.
+
+## 💬 Feedback and Contributions
+
+We welcome contributions to improve SciDER. Please open an issue or submit a pull request on our GitHub repository.
+
+Also, any feedback on the project is greatly appreciated. You can fill the [feedback form](https://forms.gle/Vz4K55J8ePTEs6TU8) to rate this app and help to improve the project.

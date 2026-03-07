@@ -1,0 +1,4 @@
+requests==2.32.5
+requests-toolbelt==1.0.0
+streamlit==1.53.0
+watchdog>=3.0.0
