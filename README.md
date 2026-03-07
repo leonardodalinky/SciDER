@@ -86,6 +86,14 @@ docker run -d \
 
 4. Access the UI at `http://localhost:7860`.
 
+**Select workflow type and get started:**
+
+![Launch Workflow](launchWorkflow.gif)
+
+**Case study selection and full workflow example:**
+
+![Case Study](CaseStudy.gif)
+
 ## 🤖 Coding Framework
 
 Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
@@ -114,7 +122,6 @@ export CLAUDE_CODE_CMD="claude"
 ```
 
 </details>
-
 
 ## 🛠️ Development Guide
 

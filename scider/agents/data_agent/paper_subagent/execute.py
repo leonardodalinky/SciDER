@@ -12,7 +12,6 @@ from loguru import logger
 
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
-from scider.core.utils import unwrap_dict_from_toon
 from scider.prompts.prompt_data import PROMPTS
 from scider.tools.arxiv_tool import search_papers
 from scider.tools.dataset_search_tool import search_datasets
