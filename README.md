@@ -86,13 +86,18 @@ docker run -d \
 
 4. Access the UI at `http://localhost:7860`.
 
-**Select workflow type and get started:**
+**UI Example**:
 
-![Launch Workflow](launchWorkflow.gif)
-
-**Case study selection and full workflow example:**
-
-![Case Study](CaseStudy.gif)
+<table>
+  <tr>
+    <td><img src="static/images/launchWorkflow.gif" alt="Launch Workflow" /></td>
+    <td><img src="static/images/CaseStudy.gif" alt="Case Study" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Select workflow type and Get started</b></td>
+    <td align="center"><b>Case study selection and Full workflow</b></td>
+  </tr>
+</table>
 
 ## 🤖 Coding Framework
 
