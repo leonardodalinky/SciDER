@@ -2,7 +2,6 @@ import os
 
 # import tools to register them
 from . import (  # noqa: F401
-    arxiv_tool,
     claude_agent_sdk_tool,
     claude_code_tool,
     dataset_search_tool,
@@ -12,6 +11,7 @@ from . import (  # noqa: F401
     github_tool,
     history_tool,
     metric_search_tool,
+    paper_search_tool,
     shell_tool,
     state_tool,
     todo_tool,

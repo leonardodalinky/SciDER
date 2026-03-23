@@ -15,8 +15,8 @@ from scider.core.llms import ModelRegistry
 from scider.core.types import Message
 from scider.core.utils import parse_json_from_text
 from scider.prompts.prompt_data import PROMPTS
-from scider.tools.arxiv_tool import search_papers
 from scider.tools.ideation_tool import analyze_papers_for_ideas
+from scider.tools.paper_search_tool import search_papers
 from scider.tools.registry import ToolRegistry
 
 from .state import IdeationAgentState
@@ -133,7 +133,6 @@ def literature_search_node(agent_state: IdeationAgentState) -> IdeationAgentStat
             result = json.loads(
                 search_papers(
                     query=kw,
-                    sources=["arxiv"],
                     max_results=2,
                 )
             )

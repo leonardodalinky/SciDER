@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import urllib.parse
 from dataclasses import dataclass
@@ -100,62 +101,6 @@ class ArXivRepository(PaperRepository):
             raise Exception(f"Error searching arXiv: {e}")
 
 
-class BioRxivRepository(PaperRepository):
-    def search(self, query: str, max_results: int = 10) -> List[Paper]:
-        try:
-            base_url = "https://api.biorxiv.org/details/biorxiv/"
-            params = {"query": query, "limit": max_results, "format": "json"}
-
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-            papers = []
-            for item in data.get("collection", [])[:max_results]:
-                paper = Paper(
-                    title=item.get("title", ""),
-                    authors=item.get("authors", "").split("; "),
-                    published=item.get("date", ""),
-                    summary=item.get("abstract", ""),
-                    url=f"https://doi.org/{item.get('doi', '')}",
-                    pdf_url=item.get("jatsxml", "").replace(".article-meta.xml", ".full.pdf"),
-                    source="bioRxiv",
-                )
-                papers.append(paper)
-
-            return papers
-        except Exception as e:
-            raise Exception(f"Error searching bioRxiv: {e}")
-
-
-class MedRxivRepository(PaperRepository):
-    def search(self, query: str, max_results: int = 10) -> List[Paper]:
-        try:
-            base_url = "https://api.medrxiv.org/details/medrxiv/"
-            params = {"query": query, "limit": max_results, "format": "json"}
-
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-            papers = []
-            for item in data.get("collection", [])[:max_results]:
-                paper = Paper(
-                    title=item.get("title", ""),
-                    authors=item.get("authors", "").split("; "),
-                    published=item.get("date", ""),
-                    summary=item.get("abstract", ""),
-                    url=f"https://doi.org/{item.get('doi', '')}",
-                    pdf_url=item.get("jatsxml", "").replace(".article-meta.xml", ".full.pdf"),
-                    source="medRxiv",
-                )
-                papers.append(paper)
-
-            return papers
-        except Exception as e:
-            raise Exception(f"Error searching medRxiv: {e}")
-
-
 class SemanticScholarRepository(PaperRepository):
     def search(self, query: str, max_results: int = 10) -> List[Paper]:
         try:
@@ -167,6 +112,9 @@ class SemanticScholarRepository(PaperRepository):
             }
 
             headers = {"Accept": "application/json"}
+            s2_api_key = os.getenv("S2_API_KEY")
+            if s2_api_key:
+                headers["x-api-key"] = s2_api_key
 
             response = requests.get(base_url, params=params, headers=headers)
 
@@ -213,14 +161,20 @@ class PaperSearch:
     def __init__(self):
         self.repositories = {
             "arxiv": ArXivRepository(),
-            "biorxiv": BioRxivRepository(),
-            "medrxiv": MedRxivRepository(),
             "semanticscholar": SemanticScholarRepository(),
         }
 
+    @staticmethod
+    def default_sources() -> List[str]:
+        """Return default sources: arxiv always, semanticscholar if S2_API_KEY is set."""
+        sources = ["arxiv"]
+        if os.getenv("S2_API_KEY"):
+            sources.append("semanticscholar")
+        return sources
+
     def search(self, query: str, sources: List[str] = None, max_results: int = 10) -> List[Paper]:
         if sources is None:
-            sources = ["arxiv"]  # Default to arXiv if no sources specified
+            sources = self.default_sources()
 
         all_papers = []
         for source in sources:
@@ -257,10 +211,10 @@ class PaperSearch:
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["arxiv", "biorxiv", "medrxiv", "semanticscholar"],
-                            "description": "List of repositories to search (arxiv, biorxiv, medrxiv, semanticscholar)",
+                            "enum": ["arxiv", "semanticscholar"],
+                            "description": "List of repositories to search (arxiv, semanticscholar)",
                         },
-                        "default": ["arxiv"],
+                        "description": "Defaults to arxiv; includes semanticscholar if S2_API_KEY is set",
                     },
                     "max_results": {
                         "type": "integer",
@@ -279,7 +233,7 @@ def search_papers(query: str, sources: List[str] = None, max_results: int = 10) 
 
     Args:
         query: Search query for paper titles/abstracts
-        sources: List of repositories to search (arxiv, biorxiv, medrxiv, semanticscholar)
+        sources: List of repositories to search (arxiv, semanticscholar). Defaults dynamically.
         max_results: Maximum number of results to return per source
 
     Returns:

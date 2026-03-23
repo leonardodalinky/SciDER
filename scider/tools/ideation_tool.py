@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from loguru import logger
 
-from .arxiv_tool import PaperSearch, search_papers
+from .paper_search_tool import PaperSearch, search_papers
 from .registry import register_tool, register_toolset_desc
 
 register_toolset_desc(
@@ -40,10 +40,9 @@ register_toolset_desc(
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["arxiv", "biorxiv", "medrxiv", "semanticscholar"],
+                            "enum": ["arxiv", "semanticscholar"],
                         },
-                        "description": "List of repositories to search",
-                        "default": ["arxiv"],
+                        "description": "List of repositories to search. Defaults to arxiv; includes semanticscholar if S2_API_KEY is set",
                     },
                     "max_results": {
                         "type": "integer",
@@ -62,7 +61,7 @@ def search_literature(query: str, sources: List[str] = None, max_results: int = 
 
     Args:
         query: Search query for finding relevant papers
-        sources: List of repositories to search (arxiv, biorxiv, medrxiv, semanticscholar)
+        sources: List of repositories to search (arxiv, semanticscholar). Defaults dynamically.
         max_results: Maximum number of papers to return
 
     Returns:

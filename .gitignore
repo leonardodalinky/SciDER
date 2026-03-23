@@ -213,3 +213,8 @@ rsync_tmp_*
 data_analysis.md
 software-agent-sdk
 env
+
+# vibe coding
+.claude/
+.agents/
+.windsurf/

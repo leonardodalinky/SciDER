@@ -13,9 +13,9 @@ from loguru import logger
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
 from scider.prompts.prompt_data import PROMPTS
-from scider.tools.arxiv_tool import search_papers
 from scider.tools.dataset_search_tool import search_datasets
 from scider.tools.metric_search_tool import extract_metrics_from_papers
+from scider.tools.paper_search_tool import search_papers
 
 from .state import PaperSearchAgentState
 
@@ -177,7 +177,6 @@ def search_node(agent_state: PaperSearchAgentState) -> PaperSearchAgentState:
         # Semantic Scholar has strict rate limits (429 errors)
         result = search_papers(
             query=query_to_use,
-            sources=["arxiv"],  # Use arxiv only to avoid rate limiting
             max_results=10,
         )
 
