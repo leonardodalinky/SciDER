@@ -5,63 +5,115 @@ Build the Experiment Agent graph.
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
+from scider.core.approval import make_approval_node
+
 from . import execute
 from .state import ExperimentAgentState
 
 
+def _format_coding_summary(state: ExperimentAgentState) -> str:
+    """Format latest coding output for user review."""
+    if not state.loop_results:
+        return "No coding output yet."
+    latest = state.loop_results[-1]
+    summary = latest.get("coding_summary", "No summary available.")
+    lines = [
+        f"Revision {state.current_revision + 1}/{state.max_revisions}",
+        f"\nCoding summary:\n{summary[:800]}",
+    ]
+    if len(summary) > 800:
+        lines.append("...")
+    return "\n".join(lines)
+
+
+def _format_analysis_summary(state: ExperimentAgentState) -> str:
+    """Format experiment analysis for user review."""
+    lines = [f"Revision {state.current_revision + 1}/{state.max_revisions}\n"]
+    if state.revision_analysis:
+        lines.append(f"Analysis:\n{state.revision_analysis[:800]}")
+        if len(state.revision_analysis) > 800:
+            lines.append("...")
+    if state.revision_summaries:
+        lines.append(f"\nLatest summary:\n{state.revision_summaries[-1][:400]}")
+    return "\n".join(lines)
+
+
+approve_code_node, approve_code_conditional = make_approval_node(
+    node_name="approve_code",
+    summary_extractor=_format_coding_summary,
+    retry_target="coding",
+    next_target="exec",
+)
+
+approve_experiment_node, approve_experiment_conditional = make_approval_node(
+    node_name="approve_experiment",
+    summary_extractor=_format_analysis_summary,
+    retry_target="coding",
+    next_target="revision_judge",
+)
+
+
 @logger.catch
 def build():
-    """Build the Experiment Agent graph with sub-agent composition."""
+    """Build the Experiment Agent graph with sub-agent composition.
+
+    Flow:
+    START -> init -> coding -> approve_code -> (coding[retry] | exec[approved])
+      -> exec -> summary -> analysis -> approve_experiment -> (coding[retry] | revision_judge[approved])
+      -> revision_judge -> (continue->coding | complete->finalize) -> END
+    """
     g = StateGraph(ExperimentAgentState)
 
     # ==================== NODES ====================
-    # Initialization node - prepares initial context
     g.add_node("init", execute.init_node)
-
-    # Sub-agent nodes - invoke compiled sub-graphs
     g.add_node("coding", execute.run_coding_subagent)
+    g.add_node("approve_code", approve_code_node)
     g.add_node("exec", execute.run_exec_subagent)
     g.add_node("summary", execute.run_summary_subagent)
-
-    # Analysis node - analyzes loop results and generates insights
     g.add_node("analysis", execute.analysis_node)
-
-    # Revision judge node - decides whether to continue or complete
+    g.add_node("approve_experiment", approve_experiment_node)
     g.add_node("revision_judge", execute.revision_judge_node)
-
-    # Finalize node - prepares final output
     g.add_node("finalize", execute.finalize_node)
 
     # ==================== EDGES ====================
-    # Start -> Init
     g.add_edge(START, "init")
-
-    # Init -> Coding
     g.add_edge("init", "coding")
 
-    # Coding -> Exec
-    g.add_edge("coding", "exec")
+    # Approval after coding
+    g.add_edge("coding", "approve_code")
+    g.add_conditional_edges(
+        "approve_code",
+        approve_code_conditional,
+        {
+            "coding": "coding",
+            "exec": "exec",
+        },
+    )
 
-    # Exec -> Summary
     g.add_edge("exec", "summary")
-
-    # Summary -> Analysis
     g.add_edge("summary", "analysis")
 
-    # Analysis -> Revision Judge
-    g.add_edge("analysis", "revision_judge")
+    # Approval after analysis
+    g.add_edge("analysis", "approve_experiment")
+    g.add_conditional_edges(
+        "approve_experiment",
+        approve_experiment_conditional,
+        {
+            "coding": "coding",
+            "revision_judge": "revision_judge",
+        },
+    )
 
-    # Revision Judge -> Conditional (Continue loop or Complete)
+    # Revision judge conditional
     g.add_conditional_edges(
         "revision_judge",
         execute.should_continue_revision,
         {
-            "continue": "coding",  # Go back to coding for next revision
-            "complete": "finalize",  # Exit the loop
+            "continue": "coding",
+            "complete": "finalize",
         },
     )
 
-    # Finalize -> END
     g.add_edge("finalize", END)
 
     return g

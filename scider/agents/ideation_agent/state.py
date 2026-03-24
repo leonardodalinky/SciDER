@@ -22,6 +22,9 @@ class IdeationAgentState(ToolsetState, HistoryState):
     # Intermediate states
     intermediate_state: list[dict] = []
 
+    # Approval status (transient, for conditional edge routing)
+    approval_status: str | None = None
+
     # Ideation output
     research_ideas: list[dict] = []  # Generated research ideas
     # Per-idea novelty assessments: each dict has "title", "novelty_score", "feedback", "breakdown"

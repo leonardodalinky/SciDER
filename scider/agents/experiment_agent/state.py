@@ -52,6 +52,9 @@ class ExperimentAgentState(ToolsetState, HistoryState):
     # Intermediate states
     intermediate_state: list[dict] = []
 
+    # Approval status (transient, for conditional edge routing)
+    approval_status: str | None = None
+
     # ==================== OUTPUT ====================
     # Final experiment result status
     final_status: Literal["success", "failed", "max_revisions_reached"] | None = None
