@@ -254,13 +254,16 @@ class ModelRegistry:
             msg.prompt_tokens = usage.prompt_tokens
             return msg
 
+    # Parameters that are only valid for completion, not embedding
+    _COMPLETION_ONLY_PARAMS = {"reasoning_effort", "reasoning", "tools", "tool_choice"}
+
     @classmethod
     def embedding(cls, name: str, texts: list[str], **kwargs) -> list[list[float]]:
         """Returns a list of embeddings for the given texts."""
         from litellm import embedding as ll_embedding
 
         model_params: dict = cls.instance().models[name]
-        params = model_params.copy()
+        params = {k: v for k, v in model_params.items() if k not in cls._COMPLETION_ONLY_PARAMS}
         params.update(kwargs)
         params.update({"input": texts})
 

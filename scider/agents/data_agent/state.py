@@ -28,6 +28,9 @@ class DataAgentState(ToolsetState, PlanState, HistoryState, RBankState):
     # Intermediate states
     intermediate_state: list[dict] = []
 
+    # Approval status (transient, for conditional edge routing)
+    approval_status: str | None = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.toolsets.append("fs")

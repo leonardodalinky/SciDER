@@ -133,14 +133,8 @@ class RAGMetricExtractor:
             logger.info("No papers provided, using fallback to suggest common metrics")
             return self._get_common_metrics(task_query)
 
-        # Step 1: Retrieve relevant papers using RAG
-        retrieved_papers = self._retrieve_relevant_papers(
-            papers, task_query, top_k=min(10, len(papers))
-        )
-
-        if not retrieved_papers:
-            logger.warning("No papers retrieved, using fallback")
-            return self._get_common_metrics(task_query)
+        # Use all papers directly (typically <=10, no need for embedding-based retrieval)
+        retrieved_papers = [(p, 1.0) for p in papers[:10]]
 
         # Step 2: Prepare context from retrieved papers (use full summary, not truncated)
         papers_text = "\n\n".join(

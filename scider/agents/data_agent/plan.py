@@ -1,5 +1,4 @@
 from loguru import logger
-from pydantic import BaseModel
 
 from scider.core import constant
 from scider.core.llms import ModelRegistry
@@ -82,95 +81,60 @@ def planner_node(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
-def replanner_node(agent_state: DataAgentState) -> DataAgentState:
-    logger.trace("replanner_node of Agent {}", AGENT_NAME)
+def advance_plan_node(agent_state: DataAgentState) -> DataAgentState:
+    """Advance to the next plan step, or set talk_mode if all steps are done.
 
-    # NOTE: when all the plans are done, go into the talk mode
+    This replaces the LLM-based replanner with a simple state machine:
+    pop current step → if more steps remain, inject next step prompt → else talk_mode.
+    """
+    logger.trace("advance_plan_node of Agent {}", AGENT_NAME)
+
     if len(agent_state.remaining_plans) == 0:
         logger.debug("All plans are done, going into talk mode")
         agent_state.talk_mode = True
-        # agent_state.remaining_plans = ["Response to users' query."]
         return agent_state
 
-    # Move current plan to past_plans
+    # Move current step to past_plans
     agent_state.past_plans.append(agent_state.remaining_plans.pop(0))
 
-    user_query = agent_state.user_query
-
-    user_msg = Message(
-        role="user",
-        content=PROMPTS.data.replanner_user_prompt.render(
-            user_query=user_query,
-            plan=agent_state.plans.steps,
-            past_steps=agent_state.past_plans,
-        ),
-        agent_sender=AGENT_NAME,
-    ).with_log()
-
-    agent_state.add_message(user_msg)
-
-    msg = ModelRegistry.completion(
-        LLM_NAME,
-        agent_state.patched_history,
-        system_prompt=(
-            Message(
-                role="system",
-                content=PROMPTS.data.planner_system_prompt.render(is_replanner=True),
-            )
-            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
-            .content
-        ),
-        agent_sender=AGENT_NAME,
-    ).with_log()
-
-    agent_state.add_message(msg)
-
-    class Replan(BaseModel):
-        continued: bool = False
-        modified: list[str] = []
-
-    # NOTE: we don't add the message to the history
-    plans = parse_json_from_llm_response(msg, Replan)
-
-    if plans.continued is True:
-        pass  # No changes to plan
-    elif plans.continued is False:
-        # plans done
-        logger.debug("Replanner indicates all plans are done, going into talk mode")
-        agent_state.talk_mode = True
-        return agent_state
-    else:
-        agent_state.plans = Plan(steps=plans.modified)
-        agent_state.remaining_plans = plans.modified
-
     if len(agent_state.remaining_plans) > 0:
+        next_step = agent_state.remaining_plans[0]
         agent_state.add_message(
             Message(
                 role="user",
                 content=PROMPTS.data.replanner_user_response.render(
-                    next_step=agent_state.remaining_plans[0],
+                    next_step=next_step,
                 ),
                 agent_sender=AGENT_NAME,
             )
         )
+        logger.debug(
+            "Advanced plan: {}/{} steps done, next: {}",
+            len(agent_state.past_plans),
+            len(agent_state.past_plans) + len(agent_state.remaining_plans),
+            next_step[:80],
+        )
     else:
-        logger.warning("No remaining plans after replan - going to talk mode")
+        logger.debug("All plan steps completed ({} total)", len(agent_state.past_plans))
         agent_state.talk_mode = True
-
-    replanner_output = msg.content if "msg" in locals() and msg.content else "No replanner output"
 
     agent_state.intermediate_state.append(
         {
-            "node_name": "replanner",
-            "output": replanner_output,
+            "node_name": "advance_plan",
+            "output": (
+                f"Steps done: {len(agent_state.past_plans)}, "
+                f"Remaining: {len(agent_state.remaining_plans)}, "
+                f"Talk mode: {agent_state.talk_mode}"
+            ),
         }
     )
 
     return agent_state
 
 
-def should_replan(agent_state: DataAgentState) -> str:
+def should_advance(agent_state: DataAgentState) -> str:
+    """Route after advance_plan: back to gateway if more steps, else approve_final."""
     if agent_state.talk_mode:
-        return "finalize"
+        return "approve_final"
     else:
         return "gateway"

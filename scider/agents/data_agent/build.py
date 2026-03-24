@@ -2,6 +2,7 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
 from scider.core import constant
+from scider.core.approval import make_approval_node
 from scider.core.types import Message
 from scider.rbank.subgraph import mem_consolidation
 
@@ -118,6 +119,49 @@ def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
     return agent_state
 
 
+def _format_plan_summary(state: DataAgentState) -> str:
+    """Extract plan steps as readable summary for user review."""
+    if state.plans and state.plans.steps:
+        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.plans.steps))
+        return f"Proposed plan:\n{steps}"
+    return "No plan generated."
+
+
+def _format_final_summary(state: DataAgentState) -> str:
+    """Format execution results for user review before finalization."""
+    past = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.past_plans))
+    # Show last few assistant messages as result preview
+    recent_msgs = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
+    result_preview = ""
+    if recent_msgs:
+        last_content = recent_msgs[-1].content or ""
+        result_preview = f"\n\nLatest result preview:\n{last_content[:500]}"
+    return f"All plan steps completed:\n{past}{result_preview}"
+
+
+approve_plan_node, approve_plan_conditional = make_approval_node(
+    node_name="approve_plan",
+    summary_extractor=_format_plan_summary,
+    retry_target="planner",
+    next_target="gateway",
+)
+
+approve_final_node, approve_final_conditional = make_approval_node(
+    node_name="approve_final",
+    summary_extractor=_format_final_summary,
+    retry_target="planner",
+    next_target="finalize",
+)
+
+
+def gateway_conditional_wrapper(agent_state: DataAgentState) -> str:
+    """Wrap gateway_conditional to route 'critic_before_replan' → 'advance_plan'."""
+    result = execute.gateway_conditional(agent_state)
+    if result == "critic_before_replan":
+        return "advance_plan"
+    return result
+
+
 @logger.catch
 def build():
     g = StateGraph(DataAgentState)
@@ -125,53 +169,63 @@ def build():
     # nodes
     g.add_node("paper_subagent", run_paper_subagent)
     g.add_node("planner", plan.planner_node)
-    g.add_node("replanner", plan.replanner_node)
+    g.add_node("approve_plan", approve_plan_node)
+    g.add_node("advance_plan", plan.advance_plan_node)
+    g.add_node("approve_final", approve_final_node)
 
     g.add_node("gateway", execute.gateway_node)
     g.add_node("llm_chat", execute.llm_chat_node)
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("mem_extraction", execute.mem_extraction_node)
     g.add_node("history_compression", execute.history_compression_node)
-    # g.add_node("critic", execute.critic_node) # not used for now
-    g.add_node("critic_before_replan", execute.critic_node)
     g.add_node("finalize", finialize_node)
     g.add_node("generate_summary", execute.generate_summary_node)
     g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
-    # edges from gateway to nodes
+    # edges
     g.add_edge(START, "paper_subagent")
     g.add_edge("paper_subagent", "planner")
-    g.add_edge("planner", "gateway")
+    g.add_edge("planner", "approve_plan")
+    g.add_conditional_edges(
+        "approve_plan",
+        approve_plan_conditional,
+        ["planner", "gateway"],
+    )
+
+    # gateway routes to execution nodes or advance_plan (when step is done)
     g.add_conditional_edges(
         "gateway",
-        execute.gateway_conditional,
+        gateway_conditional_wrapper,
         [
             "llm_chat",
             "tool_calling",
             "mem_extraction",
             "history_compression",
-            "critic_before_replan",  # plan END
+            "advance_plan",
         ],
     )
 
-    # edges from nodes to gateway
+    # execution nodes loop back to gateway
     g.add_edge("llm_chat", "gateway")
     g.add_edge("tool_calling", "gateway")
     g.add_edge("mem_extraction", "gateway")
     g.add_edge("history_compression", "gateway")
 
-    g.add_edge("critic_before_replan", "replanner")
-
-    # edges from gateway to replanner
+    # advance_plan: if more steps → gateway, if all done → approve_final
     g.add_conditional_edges(
-        "replanner",
-        plan.should_replan,
-        [
-            "gateway",
-            "finalize",
-        ],
+        "advance_plan",
+        plan.should_advance,
+        ["gateway", "approve_final"],
     )
-    # edges from nodes to end
+
+    # approve_final: user reviews results → satisfied → finalize, unsatisfied → planner
+    g.add_conditional_edges(
+        "approve_final",
+        approve_final_conditional,
+        ["planner", "finalize"],
+    )
+
+    # finalization chain
     g.add_edge("finalize", "generate_summary")
     g.add_edge("generate_summary", "prepare_for_talk_mode")
     g.add_edge("prepare_for_talk_mode", END)
