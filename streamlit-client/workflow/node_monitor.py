@@ -15,7 +15,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from workflow_monitor import PhaseType, get_monitor
+    from workflow.monitor import PhaseType, get_monitor
 except ImportError:
     # If workflow_monitor is not available, create a dummy
     class PhaseType:

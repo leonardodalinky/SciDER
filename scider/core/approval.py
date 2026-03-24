@@ -149,6 +149,12 @@ def get_default_handler() -> ApprovalHandler:
 _default_handler: ApprovalHandler | None = None
 
 
+def set_handler(handler: ApprovalHandler) -> None:
+    """Override the default approval handler (e.g. for Streamlit integration)."""
+    global _default_handler
+    _default_handler = handler
+
+
 def _get_handler() -> ApprovalHandler:
     global _default_handler
     if _default_handler is None:

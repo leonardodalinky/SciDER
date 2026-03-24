@@ -61,6 +61,10 @@ openhands = [
     "openhands-sdk==1.3.0",
     "openhands-tools==1.3.0",
 ]
+streamlit = [
+    "streamlit>=1.30.0",
+    "watchdog>=3.0.0",
+]
 
 [tool.setuptools]
 packages = { find = { include = ["scider", "scider.*"] } }

@@ -5,7 +5,7 @@ Reusable components for displaying workflow outputs.
 """
 
 import streamlit as st
-from workflow_monitor import PhaseType, ProgressUpdate
+from workflow.monitor import PhaseType, ProgressUpdate
 
 
 def display_phase_header(phase_name: str, status: str = "running", icon: str = "🔄"):
@@ -229,3 +229,52 @@ def display_final_results(workflow):
 
 
 import time
+
+from scider.core.approval import ApprovalResponse, ApprovalResult
+
+
+def render_live_intermediate(items: list[dict]) -> None:
+    """Render intermediate state items as they arrive (real-time)."""
+    if not items:
+        return
+    for item in items:
+        node = item.get("node_name", "unknown")
+        output = item.get("output", "")
+        with st.status(f"Node: {node}", state="complete"):
+            st.markdown(output[:800] if output else "(no output)")
+
+
+def render_approval_ui(handler) -> None:
+    """Render approval buttons + feedback input for a pending approval request."""
+    pending = handler.get_pending()
+    if not pending:
+        return
+
+    st.warning(f"**Approval required: `{pending['node_name']}`**")
+    st.markdown(pending["summary"])
+
+    feedback_text = st.text_input(
+        "Feedback (required for feedback option)",
+        key="approval_feedback_input",
+        placeholder="Enter your feedback here...",
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("Approve", type="primary", key="btn_approve"):
+            handler.submit_response(ApprovalResponse(ApprovalResult.APPROVED))
+            st.rerun()
+    with col2:
+        if st.button("Reject", key="btn_reject"):
+            handler.submit_response(ApprovalResponse(ApprovalResult.REJECTED))
+            st.rerun()
+    with col3:
+        if st.button(
+            "Feedback",
+            key="btn_feedback",
+            disabled=not (feedback_text and feedback_text.strip()),
+        ):
+            handler.submit_response(
+                ApprovalResponse(ApprovalResult.FEEDBACK, feedback=feedback_text.strip())
+            )
+            st.rerun()

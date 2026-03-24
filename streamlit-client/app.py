@@ -15,9 +15,15 @@ os.environ["CODING_AGENT_VERSION"] = "v3"
 os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from components.display import render_approval_ui
+from workflow.approval import StreamlitApprovalHandler
+from workflow.runner import WorkflowRunner
 
 from scider.agents import ideation_agent
 from scider.agents.ideation_agent.state import IdeationAgentState
+from scider.core import approval as approval_module
 from scider.core.brain import Brain
 from scider.core.llms import ModelRegistry
 from scider.workflows.data_workflow import DataWorkflow
@@ -687,73 +693,108 @@ elif st.session_state.selected_workflow == "full":
                 }
                 st.session_state.selected_workflow = None
 
-if workflow_config:
-    # Add user message to chat
-    if workflow_config["type"] == "ideation":
-        user_msg = f"Ideation: {workflow_config['query']}"
-    elif workflow_config["type"] == "data":
-        user_msg = f"Data Analysis: {workflow_config['path']} - {workflow_config['query']}"
-    elif workflow_config["type"] == "experiment":
-        user_msg = f"Experiment: {workflow_config['query']}"
-        if workflow_config.get("path"):
-            user_msg += f" (Data: {workflow_config['path']})"
-    else:  # full
-        user_msg = f"Full Workflow: {workflow_config['query']}"
-        if workflow_config.get("data_path"):
-            user_msg += f" (Data: {workflow_config['data_path']})"
-        if workflow_config.get("run_data"):
-            user_msg += " [Data Analysis]"
-        if workflow_config.get("run_exp"):
-            user_msg += " [Experiment]"
 
-    st.session_state.messages.append({"role": "user", "content": user_msg})
+def _build_user_msg(wc):
+    if wc["type"] == "ideation":
+        return f"Ideation: {wc['query']}"
+    elif wc["type"] == "data":
+        return f"Data Analysis: {wc['path']} - {wc['query']}"
+    elif wc["type"] == "experiment":
+        msg = f"Experiment: {wc['query']}"
+        if wc.get("path"):
+            msg += f" (Data: {wc['path']})"
+        return msg
+    else:
+        msg = f"Full Workflow: {wc['query']}"
+        if wc.get("data_path"):
+            msg += f" (Data: {wc['data_path']})"
+        if wc.get("run_data"):
+            msg += " [Data Analysis]"
+        if wc.get("run_exp"):
+            msg += " [Experiment]"
+        return msg
 
-    # Execute workflow
-    with st.chat_message("assistant"):
-        loading_placeholder = st.empty()
-        with loading_placeholder.container():
-            st.markdown("Processing your request...")
-            with st.spinner(""):
-                if workflow_config["type"] == "ideation":
-                    resp, intermediate_state = run_ideation(workflow_config.get("query"))
-                elif workflow_config["type"] == "data":
-                    resp, intermediate_state = run_data(
-                        workflow_config["path"], workflow_config["query"]
-                    )
-                elif workflow_config["type"] == "experiment":
-                    resp, intermediate_state = run_experiment(
-                        workflow_config["query"], workflow_config.get("path")
-                    )
-                elif workflow_config["type"] == "full":
-                    resp, intermediate_state = run_full(workflow_config)
-                else:
-                    resp, intermediate_state = "Unknown workflow type", []
 
-        loading_placeholder.empty()
-        stream_markdown(resp)
-        render_intermediate_state(intermediate_state)
-        st.session_state.messages.append({"role": "assistant", "content": resp})
+def _run_workflow_func(wc):
+    """Execute the appropriate workflow function (called from background thread)."""
+    wtype = wc["type"]
+    if wtype == "ideation":
+        return run_ideation(wc.get("query"))
+    elif wtype == "data":
+        return run_data(wc["path"], wc["query"])
+    elif wtype == "experiment":
+        return run_experiment(wc["query"], wc.get("path"))
+    elif wtype == "full":
+        return run_full(wc)
+    return "Unknown workflow type", []
 
-        metadata = {
-            "workflow_type": workflow_config["type"],
-            "query": workflow_config.get("query"),
-            "path": workflow_config.get("path"),
-        }
-        if workflow_config["type"] == "full":
-            metadata.update(
-                {
-                    "data_path": workflow_config.get("data_path"),
-                    "run_data": workflow_config.get("run_data"),
-                    "run_exp": workflow_config.get("run_exp"),
-                }
-            )
 
-        memo_dir = save_chat_history(
-            st.session_state.messages, workflow_type=workflow_config["type"], metadata=metadata
-        )
-        st.session_state.last_saved_memo = str(memo_dir)
+# --- Launch background workflow ---
+if workflow_config and "workflow_runner" not in st.session_state:
+    st.session_state.messages.append({"role": "user", "content": _build_user_msg(workflow_config)})
 
+    # Set up approval handler for Streamlit
+    handler = StreamlitApprovalHandler()
+    st.session_state.approval_handler = handler
+    approval_module.set_handler(handler)
+
+    runner = WorkflowRunner()
+    st.session_state.workflow_runner = runner
+    st.session_state.workflow_config_active = workflow_config
+
+    runner.start(_run_workflow_func, workflow_config)
     st.rerun()
+
+# --- Poll running workflow ---
+if "workflow_runner" in st.session_state:
+    runner = st.session_state.workflow_runner
+    handler = st.session_state.approval_handler
+
+    with st.chat_message("assistant"):
+        if handler.has_pending():
+            # Approval needed — show buttons
+            render_approval_ui(handler)
+        elif runner.is_done:
+            # Workflow finished
+            if runner.error:
+                resp = f"Workflow failed: {runner.error}"
+                intermediate_state = []
+            else:
+                resp, intermediate_state = runner.result or ("No result", [])
+
+            stream_markdown(resp)
+            render_intermediate_state(intermediate_state)
+            st.session_state.messages.append({"role": "assistant", "content": resp})
+
+            wc = st.session_state.workflow_config_active
+            metadata = {
+                "workflow_type": wc["type"],
+                "query": wc.get("query"),
+                "path": wc.get("path"),
+            }
+            if wc["type"] == "full":
+                metadata.update(
+                    {
+                        "data_path": wc.get("data_path"),
+                        "run_data": wc.get("run_data"),
+                        "run_exp": wc.get("run_exp"),
+                    }
+                )
+            memo_dir = save_chat_history(
+                st.session_state.messages, workflow_type=wc["type"], metadata=metadata
+            )
+            st.session_state.last_saved_memo = str(memo_dir)
+
+            # Clean up runner state
+            del st.session_state.workflow_runner
+            del st.session_state.workflow_config_active
+            del st.session_state.approval_handler
+            st.rerun()
+        else:
+            # Still running — auto-rerun after delay
+            st.info("Workflow is running...")
+            time.sleep(2)
+            st.rerun()
 
 
 def parse_command(prompt):

@@ -16,7 +16,7 @@ except ImportError:
     LOGURU_AVAILABLE = False
     logger = None
 
-from workflow_monitor import PhaseType, get_monitor
+from workflow.monitor import PhaseType, get_monitor
 
 
 class StreamlitLogHandler:
