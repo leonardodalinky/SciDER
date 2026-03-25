@@ -40,12 +40,13 @@ class ApprovalHandler(ABC):
     """Abstract base class for approval handlers."""
 
     @abstractmethod
-    def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
+    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         """Request user approval. Blocks until user responds.
 
         Args:
             node_name: Name of the node that produced the output.
             summary: Human-readable summary of the output to review.
+            title: Short abstract/title describing what this approval is about.
 
         Returns:
             ApprovalResponse with the user's decision and optional feedback.
@@ -53,7 +54,7 @@ class ApprovalHandler(ABC):
         ...
 
     def request_approval_with_selection(
-        self, node_name: str, summary: str, items: list[dict]
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         """Request approval with single-item selection.
 
@@ -68,16 +69,18 @@ class ApprovalHandler(ABC):
             f"  [{i + 1}] {it.get('title', 'Untitled')}" for i, it in enumerate(items)
         )
         full_summary = f"{summary}\n\nItems:\n{item_text}"
-        return self.request_approval(node_name, full_summary)
+        return self.request_approval(node_name, full_summary, title=title)
 
 
 class CLIApprovalHandler(ApprovalHandler):
     """CLI-based approval handler using input() for blocking user interaction."""
 
-    def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
+    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         separator = "=" * 60
         print(f"\n{separator}")
         print(f"  User Approval Required: [{node_name}]")
+        if title:
+            print(f"  {title}")
         print(separator)
         print(summary)
         print(separator)
@@ -105,11 +108,13 @@ class CLIApprovalHandler(ApprovalHandler):
                 print("Invalid choice. Please enter 1, 2, or 3.")
 
     def request_approval_with_selection(
-        self, node_name: str, summary: str, items: list[dict]
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         separator = "=" * 60
         print(f"\n{separator}")
         print(f"  Select & Approve: [{node_name}]")
+        if title:
+            print(f"  {title}")
         print(separator)
         print(summary)
         print(separator)
@@ -158,10 +163,15 @@ class CLIApprovalHandler(ApprovalHandler):
 class JupyterApprovalHandler(ApprovalHandler):
     """Jupyter notebook approval handler with rich display."""
 
-    def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
+    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         from IPython.display import Markdown, display
 
-        display(Markdown(f"---\n### User Approval Required: `{node_name}`\n\n{summary}\n\n---"))
+        title_line = f"\n**{title}**\n" if title else ""
+        display(
+            Markdown(
+                f"---\n### User Approval Required: `{node_name}`\n{title_line}\n{summary}\n\n---"
+            )
+        )
         print("[1] Approve and continue (default)")
         print("[2] Reject and retry")
         print("[3] Provide feedback and retry")
@@ -185,11 +195,12 @@ class JupyterApprovalHandler(ApprovalHandler):
                 print("Invalid choice. Please enter 1, 2, or 3.")
 
     def request_approval_with_selection(
-        self, node_name: str, summary: str, items: list[dict]
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         from IPython.display import Markdown, display
 
-        lines = [f"---\n### Select & Approve: `{node_name}`\n\n{summary}\n"]
+        title_line = f"\n**{title}**\n" if title else ""
+        lines = [f"---\n### Select & Approve: `{node_name}`\n{title_line}\n{summary}\n"]
         for i, it in enumerate(items):
             title = it.get("title", "Untitled")
             desc = it.get("description", "")
@@ -226,12 +237,12 @@ class JupyterApprovalHandler(ApprovalHandler):
 class AutoApprovalHandler(ApprovalHandler):
     """Auto-approval handler. Always approves without user interaction."""
 
-    def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
+    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         logger.debug("Auto-approved [{}]", node_name)
         return ApprovalResponse(result=ApprovalResult.APPROVED)
 
     def request_approval_with_selection(
-        self, node_name: str, summary: str, items: list[dict]
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         logger.debug("Auto-approved [{}], selected first item", node_name)
         return ApprovalResponse(
@@ -289,6 +300,7 @@ def make_approval_node(
     retry_target: str,
     next_target: str,
     on_retry: Callable[[Any], None] | None = None,
+    title: str = "",
 ) -> tuple[Callable, Callable]:
     """Create an approval node function and its conditional edge function.
 
@@ -298,6 +310,7 @@ def make_approval_node(
         retry_target: Node name to route to on reject/feedback (retry).
         next_target: Node name to route to on approval.
         on_retry: Optional callback invoked on rejection/feedback to reset state.
+        title: Short abstract describing what this approval is about.
 
     Returns:
         A tuple of (node_function, conditional_edge_function).
@@ -306,7 +319,7 @@ def make_approval_node(
     def approval_node(agent_state: Any) -> Any:
         handler = _get_handler()
         summary = summary_extractor(agent_state)
-        response = handler.request_approval(node_name, summary)
+        response = handler.request_approval(node_name, summary, title=title)
 
         if response.result == ApprovalResult.APPROVED:
             agent_state.approval_status = "approved"
@@ -367,6 +380,7 @@ def make_selection_approval_node(
     retry_target: str,
     next_target: str,
     on_retry: Callable[[Any], None] | None = None,
+    title: str = "",
 ) -> tuple[Callable, Callable]:
     """Create an approval node with single-item selection.
 
@@ -376,6 +390,7 @@ def make_selection_approval_node(
     Args:
         items_extractor: Extracts selectable items (list[dict]) from state.
         selection_handler: Called with ``(state, selected_index)`` on approval.
+        title: Short abstract describing what this approval is about.
     """
 
     def selection_node(agent_state: Any) -> Any:
@@ -384,9 +399,11 @@ def make_selection_approval_node(
         items = items_extractor(agent_state)
 
         if items:
-            response = handler.request_approval_with_selection(node_name, summary, items)
+            response = handler.request_approval_with_selection(
+                node_name, summary, items, title=title
+            )
         else:
-            response = handler.request_approval(node_name, summary)
+            response = handler.request_approval(node_name, summary, title=title)
 
         if response.result == ApprovalResult.APPROVED:
             agent_state.approval_status = "approved"

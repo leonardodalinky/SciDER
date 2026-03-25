@@ -29,7 +29,7 @@ def init_analysis_node(agent_state: DataAgentState) -> DataAgentState:
         Message(
             role="user",
             content=agent_state.user_query,
-            agent_sender="data_agent",
+            agent_sender="data",
         ).with_log()
     )
     agent_state.intermediate_state.append(
@@ -218,13 +218,10 @@ def _format_paper_results_summary(state: DataAgentState) -> str:
 
 def _format_final_summary(state: DataAgentState) -> str:
     """Format deep analysis results for final user review."""
-    lines = ["Are you satisfied with the data analysis output?\n"]
     recent = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
     if recent:
-        lines.append(f"Deep analysis result:\n\n{recent[-1].content}")
-    else:
-        lines.append("No deep analysis output yet.")
-    return "\n".join(lines)
+        return f"Deep analysis result:\n\n{recent[-1].content}"
+    return "No deep analysis output yet."
 
 
 def _reset_paper_search(state: DataAgentState) -> None:
@@ -242,6 +239,7 @@ approve_analysis_node, approve_analysis_conditional = make_approval_node(
     summary_extractor=_format_analysis_summary,
     retry_target="init_analysis",
     next_target="paper_subagent",
+    title="Review the initial data analysis before proceeding to paper search.",
 )
 
 approve_papers_node, approve_papers_conditional = make_approval_node(
@@ -250,6 +248,7 @@ approve_papers_node, approve_papers_conditional = make_approval_node(
     retry_target="paper_subagent",
     next_target="init_deep_analysis",
     on_retry=_reset_paper_search,
+    title="Review the papers, datasets, and metrics found. Proceed to deep analysis?",
 )
 
 approve_final_node, approve_final_conditional = make_approval_node(
@@ -257,6 +256,7 @@ approve_final_node, approve_final_conditional = make_approval_node(
     summary_extractor=_format_final_summary,
     retry_target="init_deep_analysis",
     next_target="finalize",
+    title="Are you satisfied with the data analysis output?",
 )
 
 

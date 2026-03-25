@@ -46,8 +46,8 @@ def render_form():
         )
         if st.session_state.get("uploaded_full_data_path"):
             st.info(f"Using: `{st.session_state.uploaded_full_data_path}`")
-        run_data = st.checkbox("Run Data Analysis", value=False)
-        run_exp = st.checkbox("Run Experiment", value=False)
+        run_data = st.checkbox("Run Data Analysis", value=True)
+        run_exp = st.checkbox("Run Experiment", value=True)
         submitted = st.form_submit_button("Run Full Workflow", type="primary")
         if submitted and topic:
             data_path_to_use = None

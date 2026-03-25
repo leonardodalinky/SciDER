@@ -33,7 +33,6 @@ def _format_report_summary(state: IdeationAgentState) -> str:
             lines.append(f"  - {title}: {score}/10")
         lines.append("")
     if state.output_summary:
-        lines.append("Are you satisfied with the ideation report?\n")
         lines.append(state.output_summary)
     return "\n".join(lines) if lines else "No report generated."
 
@@ -45,6 +44,7 @@ approve_ideas_node, approve_ideas_conditional = make_selection_approval_node(
     selection_handler=lambda s, idx: setattr(s, "selected_idea_index", idx),
     retry_target="generate_ideas",
     next_target="novelty_check",
+    title="Select a research idea to pursue, or reject to regenerate.",
 )
 
 approve_report_node, approve_report_conditional = make_approval_node(
@@ -52,6 +52,7 @@ approve_report_node, approve_report_conditional = make_approval_node(
     summary_extractor=_format_report_summary,
     retry_target="generate_ideas",
     next_target="end",
+    title="Are you satisfied with the ideation report?",
 )
 
 

@@ -78,12 +78,10 @@ def render_case_study_viewer():
             st.markdown(m["content"])
 
     # Show workspace files if available
+    from components.file_browser import render_file_browser, render_workspace_download
+
     case_dir = selected_path.parent
     ws_dir = case_dir / "workspace"
     browse_dir = ws_dir if ws_dir.exists() else case_dir
-    files = [f for f in browse_dir.rglob("*") if f.is_file() and f.name != "chat_history.json"]
-    if files:
-        with st.expander(f"Workspace Files ({len(files)})", expanded=False):
-            for f in sorted(files):
-                rel = f.relative_to(browse_dir)
-                st.text(str(rel))
+    render_file_browser(browse_dir, key_prefix="cs_fb")
+    render_workspace_download(browse_dir, key_prefix="cs_dl")

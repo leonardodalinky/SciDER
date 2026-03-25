@@ -167,13 +167,19 @@ def merge_mems_node(state: MemConsolidationState) -> MemConsolidationState:
 @logger.catch
 def build():
     """Build the memory consolidation subgraph."""
+    from scider.rbank.subgraph import rbank_guard_conditional, rbank_guard_node
+
     g = StateGraph(MemConsolidationState)
 
+    g.add_node("guard", rbank_guard_node)
     g.add_node("compute_embeddings", compute_embeddings_node)
     g.add_node("load_existing_mems", load_existing_mems_node)
     g.add_node("merge_mems", merge_mems_node)
 
-    g.add_edge(START, "compute_embeddings")
+    g.add_edge(START, "guard")
+    g.add_conditional_edges(
+        "guard", rbank_guard_conditional, {"continue": "compute_embeddings", "skip": END}
+    )
     g.add_edge("compute_embeddings", "load_existing_mems")
     g.add_edge("load_existing_mems", "merge_mems")
     g.add_edge("merge_mems", END)

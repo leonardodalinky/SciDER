@@ -168,12 +168,18 @@ def retrieval_node(state: MemRetrievalState) -> MemRetrievalState:
 @logger.catch
 def build():
     """Build the memory retrieval subgraph."""
+    from scider.rbank.subgraph import rbank_guard_conditional, rbank_guard_node
+
     g = StateGraph(MemRetrievalState)
 
+    g.add_node("guard", rbank_guard_node)
     g.add_node("embedding", embedding_node)
     g.add_node("retrieval", retrieval_node)
 
-    g.add_edge(START, "embedding")
+    g.add_edge(START, "guard")
+    g.add_conditional_edges(
+        "guard", rbank_guard_conditional, {"continue": "embedding", "skip": END}
+    )
     g.add_edge("embedding", "retrieval")
     g.add_edge("retrieval", END)
 

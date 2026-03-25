@@ -263,35 +263,32 @@ def render_approval_ui(handler) -> None:
 
     summary = pending["summary"]
     node_name = pending["node_name"]
+    title = pending.get("title", "")
 
-    # Extract leading prompt line (e.g. "Are you satisfied with...") if present
-    prompt_line = ""
-    body = summary
-    if summary.startswith("Are you"):
-        first_newline = summary.find("\n")
-        if first_newline > 0:
-            prompt_line = summary[:first_newline].strip()
-            body = summary[first_newline:].strip()
-
-    # Highlighted header
+    # Highlighted header with title
+    title_html = (
+        f"<br><span style='font-size: 16px; font-weight: 600; color: #856404;'>{title}</span>"
+        if title
+        else ""
+    )
     st.markdown(
         f"""<div style="background: #fff3cd; border-left: 4px solid #ffc107;
         padding: 12px 16px; border-radius: 6px; margin-bottom: 8px;">
         <span style="font-size: 18px; font-weight: 700;">⚠️ Approval required: {node_name}</span>
-        {"<br><span style='font-size: 16px; font-weight: 600; color: #856404;'>" + prompt_line + "</span>" if prompt_line else ""}
+        {title_html}
         </div>""",
         unsafe_allow_html=True,
     )
 
     # Approval content in a bordered container, collapsible if long
-    if len(body) > _APPROVAL_CONTENT_TRUNCATE:
-        preview_lines = body[:200].split("\n")
+    if len(summary) > _APPROVAL_CONTENT_TRUNCATE:
+        preview_lines = summary[:200].split("\n")
         label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
         with st.expander(f"{label}...", expanded=True):
-            st.markdown(body)
+            st.markdown(summary)
     else:
         with st.container(border=True):
-            st.markdown(body)
+            st.markdown(summary)
 
     # Selection UI (radio buttons for single select)
     selected_index = None

@@ -62,12 +62,36 @@ st.markdown(
 _TRUNCATE_LEN = 800
 
 _AGENT_LABELS = {
-    "ideation": "\U0001f4a1 Ideation Agent",
-    "data": "\U0001f4ca Data Agent",
-    "experiment": "\U0001f9ea Experiment Agent",
-    "critic": "\U0001f9d0 Critic Agent",
-    "paper_search": "\U0001f4d6 Paper Search",
-    "metric_search": "\U0001f4cf Metric Search",
+    # Ideation
+    "ideation": "💡 Ideation Agent",
+    # Data
+    "data": "📊 Data Agent",
+    "data_agent": "📊 Data Agent",
+    "data_planner": "📋 Data Planner",
+    "paper_search": "📖 Paper Search",
+    "metric_search": "📏 Metric Search",
+    "metric_extractor": "📏 Metric Extractor",
+    "dataset_search": "🗃️ Dataset Search",
+    # Experiment
+    "experiment_agent": "🧪 Experiment Agent",
+    "experiment_coding": "💻 Coding Agent",
+    "experiment_exec": "▶️ Execution Agent",
+    "experiment_summary": "📝 Summary Agent",
+    "experiment_monitor": "👁️ Monitor Agent",
+    # Coding backends
+    "claude_agent_sdk": "🤖 Claude Agent SDK",
+    "claude_code": "🤖 Claude Code",
+    "openhands": "🤖 OpenHands",
+    "summary_node": "📝 Summary",
+    # Critic & system
+    "critic": "🧐 Critic Agent",
+    "history": "🗜️ History Compression",
+    "user_approval": "👤 User Approval",
+    # Memory
+    "mem_extraction": "🧠 Memory Extraction",
+    "mem_retrieval": "🧠 Memory Retrieval",
+    "mem_consolidation": "🧠 Memory Consolidation",
+    "mem_persistence": "🧠 Memory Persistence",
 }
 
 
@@ -154,6 +178,12 @@ def register_all_models(settings: dict):
         "critic",
         "mem",
     ]
+    # For v3 coding agent, set CLAUDE_MODEL env var from saved setting
+    coding_version = os.getenv("CODING_AGENT_VERSION", "v3")
+    coding_model = role_models.get("experiment_coding", "")
+    if coding_version == "v3" and coding_model:
+        os.environ["CLAUDE_MODEL"] = coding_model
+
     for role in all_roles:
         model = role_models.get(role)
         if not model:
@@ -184,18 +214,26 @@ try:
 except Exception:
     pass
 
+# --- Case study view mode (before settings gates so it works without API keys) ---
+if st.session_state.get("view_mode") == "case_study":
+    render_case_study_viewer()
+    if st.button("⬅️ Back", key="case_study_back"):
+        st.session_state.view_mode = None
+        st.rerun()
+    st.stop()
+
 # --- First visit: show settings page ---
 if not has_settings():
     st.title("SciDER Research Assistant")
-    st.info("Welcome! Please configure your API keys to get started.")
+    st.markdown("Browse saved case studies without API keys:")
+    if st.button("📚 Browse Case Studies", key="case_study_from_setup"):
+        st.session_state.view_mode = "case_study"
+        st.rerun()
+    st.divider()
+    st.info("Configure your API keys to get started.")
     new_settings = render_settings_form()
     if new_settings:
         save_settings(new_settings)
-        st.rerun()
-    st.divider()
-    st.markdown("Or browse saved case studies without API keys:")
-    if st.button("\U0001f4da Browse Case Studies", key="case_study_from_setup"):
-        st.session_state.view_mode = "case_study"
         st.rerun()
     st.stop()
 
@@ -205,7 +243,7 @@ _settings = load_settings()
 # --- Settings page (when user clicks Settings button) ---
 if st.session_state.get("show_settings"):
     st.title("SciDER Research Assistant — Settings")
-    if st.button("\U0001f4da Browse Case Studies", key="case_study_from_settings"):
+    if st.button("📚 Browse Case Studies", key="case_study_from_settings"):
         st.session_state.show_settings = False
         st.session_state.view_mode = "case_study"
         st.rerun()
@@ -220,12 +258,12 @@ if st.session_state.get("show_settings"):
         st.rerun()
     col_cancel, col_reset = st.columns(2)
     with col_cancel:
-        if st.button("\u2b05\ufe0f Cancel", key="btn_cancel_settings", use_container_width=True):
+        if st.button("⬅️ Cancel", key="btn_cancel_settings", use_container_width=True):
             st.session_state.show_settings = False
             st.rerun()
     with col_reset:
         if st.button(
-            "\U0001f5d1\ufe0f Reset All Settings",
+            "🗑️ Reset All Settings",
             key="btn_clear_settings",
             use_container_width=True,
         ):
@@ -235,15 +273,6 @@ if st.session_state.get("show_settings"):
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
             st.rerun()
-    st.stop()
-
-
-# --- Case study view mode ---
-if st.session_state.get("view_mode") == "case_study":
-    render_case_study_viewer()
-    if st.button("\u2b05\ufe0f Back", key="case_study_back"):
-        st.session_state.view_mode = None
-        st.rerun()
     st.stop()
 
 
@@ -272,6 +301,7 @@ with col_reset:
         ]
         if "selected_workflow" in st.session_state:
             st.session_state.selected_workflow = None
+        st.session_state.show_workspace_result = False
         st.rerun()
 
 # --- One-time initialization ---
@@ -280,10 +310,14 @@ if "initialized" not in st.session_state:
         os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
 
     # Memory: only enable if user toggled on AND has OpenAI key
+    from scider.core import constant as _constant
+
     if _settings.get("memory_enabled") and _settings.get("openai_api_key"):
         os.environ["REASONING_BANK_ENABLED"] = "true"
+        _constant.REASONING_BANK_ENABLED = True
     else:
         os.environ["REASONING_BANK_ENABLED"] = "false"
+        _constant.REASONING_BANK_ENABLED = False
 
     Brain()
     if register_all_models(_settings):
@@ -340,6 +374,17 @@ st.divider()
 # --- Chat history (skip if workflow is running — polling loop handles rendering) ---
 if "workflow_runner" not in st.session_state:
     render_chat_messages(st.session_state.messages)
+
+    # Show workspace files after experiment/full workflow completion
+    if st.session_state.get("show_workspace_result"):
+        from components.file_browser import render_file_browser, render_workspace_download
+
+        _ws_result = st.session_state.workspace_path
+        if _ws_result and Path(_ws_result).exists():
+            st.divider()
+            st.subheader("📁 Workspace Output")
+            render_file_browser(Path(_ws_result), key_prefix="wf_fb")
+            render_workspace_download(Path(_ws_result), key_prefix="wf_dl")
 
 
 # ==================== Workflow forms ====================
@@ -399,6 +444,7 @@ def _run_workflow_func(wc, ideation_graph, workspace_path):
 
 # --- Launch background workflow ---
 if workflow_config and "workflow_runner" not in st.session_state:
+    st.session_state.show_workspace_result = False
     st.session_state.messages.append({"role": "user", "content": _build_user_msg(workflow_config)})
 
     _graph = st.session_state.ideation_graph
@@ -465,6 +511,10 @@ if "workflow_runner" in st.session_state:
             st.session_state.messages, workflow_type=wc["type"], metadata=metadata
         )
         st.session_state.last_saved_memo = str(memo_dir)
+
+        # Show workspace browser for experiment/full workflows
+        if wc["type"] in ("experiment", "full"):
+            st.session_state.show_workspace_result = True
 
         set_on_message_callback(None)
         del st.session_state.workflow_runner

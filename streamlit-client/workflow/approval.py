@@ -27,9 +27,9 @@ class StreamlitApprovalHandler(ApprovalHandler):
 
     # -- called from background (workflow) thread --
 
-    def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
+    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         with self._lock:
-            self._pending = {"node_name": node_name, "summary": summary}
+            self._pending = {"node_name": node_name, "summary": summary, "title": title}
             self._event.clear()
             self._response = None
         self._event.wait()  # blocks until UI calls submit_response
@@ -46,12 +46,13 @@ class StreamlitApprovalHandler(ApprovalHandler):
             return self._pending
 
     def request_approval_with_selection(
-        self, node_name: str, summary: str, items: list[dict]
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         with self._lock:
             self._pending = {
                 "node_name": node_name,
                 "summary": summary,
+                "title": title,
                 "items": items,
                 "has_selection": True,
             }

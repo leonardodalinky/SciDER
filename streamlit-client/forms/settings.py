@@ -1,5 +1,7 @@
 """Settings form for API key and model configuration."""
 
+import os
+
 import streamlit as st
 
 # Available models per provider
@@ -23,7 +25,16 @@ OPENAI_MODELS = [
     "o4-mini",
 ]
 
-# Model roles grouped by category
+# Claude models for coding agent v3
+CLAUDE_MODELS = [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-sonnet-4-5",
+    "claude-opus-4-6",
+    "claude-opus-4-5",
+]
+
+# Model roles grouped by category (experiment_coding excluded — handled separately)
 MODEL_ROLE_GROUPS = {
     "Ideation": {
         "ideation": "Idea generation",
@@ -37,7 +48,6 @@ MODEL_ROLE_GROUPS = {
     },
     "Experiment": {
         "experiment_agent": "Experiment orchestration",
-        "experiment_coding": "Code generation",
         "experiment_execute": "Code execution",
         "experiment_monitor": "Execution monitoring",
         "experiment_summary": "Result summarization",
@@ -59,7 +69,6 @@ GEMINI_ROLE_DEFAULTS = {
     "mem": "gemini/gemini-2.5-flash-lite",
     "history": "gemini/gemini-2.5-flash-lite",
     "experiment_agent": "gemini/gemini-2.5-flash",
-    "experiment_coding": "gemini/gemini-2.5-flash",
     "experiment_execute": "gemini/gemini-2.5-flash",
     "experiment_monitor": "gemini/gemini-2.5-flash-lite",
     "experiment_summary": "gemini/gemini-2.5-flash-lite",
@@ -75,7 +84,6 @@ OPENAI_ROLE_DEFAULTS = {
     "mem": "gpt-5-nano",
     "history": "gpt-5-nano",
     "experiment_agent": "gpt-5-mini",
-    "experiment_coding": "gpt-5-mini",
     "experiment_execute": "gpt-5-mini",
     "experiment_monitor": "gpt-5-nano",
     "experiment_summary": "gpt-5-nano",
@@ -113,11 +121,9 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             f"{model_provider} API Key",
             type="password",
             placeholder=f"Enter your {model_provider} API key",
-            value="",
+            value=current.get("api_key", ""),
             help="Required.",
         )
-        if current.get("api_key"):
-            st.caption("A key is already saved. Leave blank to keep it.")
 
         st.divider()
 
@@ -125,19 +131,15 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             "Anthropic (Claude) API Key",
             type="password",
             placeholder="Optional — needed for Claude coding agent",
-            value="",
+            value=current.get("anthropic_api_key", ""),
         )
-        if current.get("anthropic_api_key"):
-            st.caption("A key is already saved. Leave blank to keep it.")
 
         openai_api_key = st.text_input(
             "OpenAI API Key (for embeddings)",
             type="password",
             placeholder="Optional — needed for memory/embedding features",
-            value="",
+            value=current.get("openai_api_key", ""),
         )
-        if current.get("openai_api_key"):
-            st.caption("A key is already saved. Leave blank to keep it.")
         st.caption(
             "Embedding model (text-embedding-3-small) requires an OpenAI key. "
             "Without it, memory features will be disabled."
@@ -151,6 +153,46 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             value=current.get("memory_enabled", False),
             help="Requires OpenAI API key for embeddings. Extracts and retrieves "
             "long-term memory from conversations.",
+        )
+
+        # --- Coding Agent ---
+        st.divider()
+        st.markdown("#### Coding Agent")
+
+        coding_version = os.getenv("CODING_AGENT_VERSION", "v3")
+        version_label = "v3 — Claude Agent SDK" if coding_version == "v3" else "v2 — OpenHands"
+        st.text_input(
+            "Coding Agent Backend",
+            value=version_label,
+            disabled=True,
+            key="coding_agent_version_display",
+        )
+        st.caption(
+            "To change the coding agent backend, set the `CODING_AGENT_VERSION` "
+            "environment variable (`v3` for Claude, `v2` for OpenHands) in `.env`."
+        )
+
+        if coding_version == "v3":
+            coding_models = CLAUDE_MODELS
+            coding_default = current_roles.get("experiment_coding", "claude-haiku-4-5")
+        else:
+            coding_models = GEMINI_MODELS if model_provider == "Gemini" else OPENAI_MODELS
+            fallback_defaults = (
+                GEMINI_ROLE_DEFAULTS if model_provider == "Gemini" else OPENAI_ROLE_DEFAULTS
+            )
+            coding_default = current_roles.get(
+                "experiment_coding", fallback_defaults.get("experiment_coding", coding_models[0])
+            )
+
+        if coding_default not in coding_models:
+            coding_default = coding_models[0]
+        coding_idx = coding_models.index(coding_default)
+
+        coding_model = st.selectbox(
+            "Code generation model",
+            coding_models,
+            index=coding_idx,
+            key="model_role_experiment_coding",
         )
 
         # --- Per-role model selection ---
@@ -183,13 +225,16 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
                             key=f"model_role_{role}",
                         )
 
+        # Include coding model in role_selections
+        role_selections["experiment_coding"] = coding_model
+
         # --- Submit ---
         submitted = st.form_submit_button("Save Settings", type="primary")
 
         if submitted:
-            final_api_key = api_key.strip() or current.get("api_key", "")
-            final_anthropic = anthropic_api_key.strip() or current.get("anthropic_api_key", "")
-            final_openai = openai_api_key.strip() or current.get("openai_api_key", "")
+            final_api_key = api_key.strip()
+            final_anthropic = anthropic_api_key.strip()
+            final_openai = openai_api_key.strip()
 
             if not final_api_key:
                 st.error("API key is required.")

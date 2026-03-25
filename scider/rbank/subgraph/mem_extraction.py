@@ -166,12 +166,18 @@ def persistence_node(state: MemExtractionState) -> MemExtractionState:
 
 @logger.catch
 def build():
+    from scider.rbank.subgraph import rbank_guard_conditional, rbank_guard_node
+
     g = StateGraph(MemExtractionState)
 
+    g.add_node("guard", rbank_guard_node)
     g.add_node("mem_extraction", mem_extraction_node)
     g.add_node("persistence", persistence_node)
 
-    g.add_edge(START, "mem_extraction")
+    g.add_edge(START, "guard")
+    g.add_conditional_edges(
+        "guard", rbank_guard_conditional, {"continue": "mem_extraction", "skip": END}
+    )
     g.add_edge("mem_extraction", "persistence")
     g.add_edge("persistence", END)
     return g

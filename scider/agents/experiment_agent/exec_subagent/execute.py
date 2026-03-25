@@ -211,26 +211,54 @@ def monitoring_node(agent_state: ExecAgentState) -> ExecAgentState:
     )
     history.append(monitoring_user_msg)
 
-    # Ask monitoring LLM to decide
-    msg = ModelRegistry.completion(
-        LLM_MONITOR_NAME,
-        history,
-        system_prompt=(
-            Message(
-                role="system",
-                content=PROMPTS.experiment_exec.monitoring_system_prompt.render(),
-            )
-            .with_log(cond=constant.LOG_SYSTEM_PROMPT)
-            .content
-        ),
-        agent_sender=AGENT_NAME,
-        tools=None,
-    ).with_log()
-
+    # Ask monitoring LLM to decide (retry up to 3 times on JSON parse failure)
     class MonitorDecisionModel(BaseModel):
         action: str
 
-    r = parse_json_from_llm_response(msg, MonitorDecisionModel)  # just to validate JSON format
+    _MAX_MONITOR_RETRIES = 3
+    r = None
+    for _attempt in range(_MAX_MONITOR_RETRIES):
+        msg = ModelRegistry.completion(
+            LLM_MONITOR_NAME,
+            history,
+            system_prompt=(
+                Message(
+                    role="system",
+                    content=PROMPTS.experiment_exec.monitoring_system_prompt.render(),
+                )
+                .with_log(cond=constant.LOG_SYSTEM_PROMPT)
+                .content
+            ),
+            agent_sender=AGENT_NAME,
+            tools=None,
+        ).with_log()
+
+        try:
+            r = parse_json_from_llm_response(msg, MonitorDecisionModel)
+            break
+        except (ValueError, Exception) as e:
+            logger.warning(
+                "Monitoring JSON parse failed (attempt {}/{}): {}",
+                _attempt + 1,
+                _MAX_MONITOR_RETRIES,
+                e,
+            )
+            if _attempt + 1 < _MAX_MONITOR_RETRIES:
+                history.append(msg)
+                history.append(
+                    Message(
+                        role="user",
+                        content=f"Your response was not valid JSON. Error: {e}\n"
+                        'Please respond with valid JSON: {{"action": "wait"}} or {{"action": "ctrlc"}}',
+                        agent_sender=AGENT_NAME,
+                    )
+                )
+    if r is None:
+        logger.warning(
+            "Monitoring JSON parse failed after {} retries, defaulting to wait",
+            _MAX_MONITOR_RETRIES,
+        )
+        r = MonitorDecisionModel(action="wait")
 
     if "wait" in r.action.lower():
         logger.debug("Monitoring decision: continue waiting for the command to complete.")

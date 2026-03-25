@@ -35,6 +35,7 @@ approve_results_node, approve_results_conditional = make_approval_node(
     retry_target="optimize_query",
     next_target="summary",
     on_retry=_reset_paper_search,
+    title="Review paper search results. Approve to continue or reject to refine the search.",
 )
 
 
