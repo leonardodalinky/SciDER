@@ -19,6 +19,7 @@ from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
 from scider.core.brain import Brain
+from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 from scider.workflows.ideation_workflow import IdeationWorkflow
@@ -85,6 +86,8 @@ class FullWorkflowWithIdeation(BaseModel):
     # Ideation results
     ideation_summary: str = ""
     ideation_papers: list[dict] = []
+    research_ideas: list[dict] = []  # All generated ideas
+    selected_idea_index: int | None = None  # User-selected idea (single selection)
     idea_novelty_assessments: list[dict] = []  # Per-idea novelty assessments
     novelty_score: float | None = None  # Average novelty score
     novelty_feedback: str | None = None  # Aggregated feedback summary
@@ -200,6 +203,8 @@ class FullWorkflowWithIdeation(BaseModel):
             if self._ideation_workflow.final_status == "success":
                 self.ideation_summary = self._ideation_workflow.ideation_summary
                 self.ideation_papers = self._ideation_workflow.ideation_papers
+                self.research_ideas = self._ideation_workflow.research_ideas
+                self.selected_idea_index = self._ideation_workflow.selected_idea_index
                 self.idea_novelty_assessments = self._ideation_workflow.idea_novelty_assessments
                 self.novelty_score = self._ideation_workflow.novelty_score
                 self.novelty_feedback = self._ideation_workflow.novelty_feedback
@@ -270,9 +275,16 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Phase 3: Running ExperimentWorkflow")
         self.current_phase = "experiment"
 
+        # Use selected idea as experiment query if available
+        experiment_query = self.user_query
+        if self.research_ideas and self.selected_idea_index is not None:
+            idea = self.research_ideas[self.selected_idea_index]
+            experiment_query = self._format_experiment_query(idea)
+            logger.info(f"Using selected idea for experiment: {idea.get('title', '')}")
+
         self._experiment_workflow = ExperimentWorkflow(
             workspace_path=self.workspace_path,
-            user_query=self.user_query,
+            user_query=experiment_query,
             data_summary=self.data_summary,
             repo_source=self.repo_source,
             max_revisions=self.max_revisions,
@@ -301,6 +313,19 @@ class FullWorkflowWithIdeation(BaseModel):
             self.current_phase = "failed"
             self.final_status = "failed"
             return False
+
+    @staticmethod
+    def _format_experiment_query(idea: dict) -> str:
+        """Format a selected research idea into an experiment query."""
+        parts = [f"# Research Idea: {idea.get('title', 'Untitled')}"]
+        if idea.get("description"):
+            parts.append(f"\n## Description\n{idea['description']}")
+        if idea.get("rationale"):
+            parts.append(f"\n## Rationale\n{idea['rationale']}")
+        if idea.get("experiment"):
+            parts.append(f"\n## Experiment Plan\n{idea['experiment']}")
+        parts.append("\nPlease implement and execute the experiment described above.")
+        return "\n".join(parts)
 
     def _compose_summary(self) -> str:
         """Compose the final summary."""
@@ -406,6 +431,7 @@ def run_full_workflow_with_ideation(
     experiment_agent_recursion_limit: int = 100,
     session_name: str | None = None,
     data_desc: str | None = None,
+    user_approval_enabled: bool = False,
 ) -> FullWorkflowWithIdeation:
     """
     Convenience function to run the full SciDER workflow with ideation.
@@ -463,7 +489,8 @@ def run_full_workflow_with_ideation(
         session_name=session_name,
         data_desc=data_desc,
     )
-    return workflow.run()
+    with override_user_approval(user_approval_enabled):
+        return workflow.run()
 
 
 if __name__ == "__main__":

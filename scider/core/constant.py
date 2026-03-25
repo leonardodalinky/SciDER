@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 
@@ -45,3 +46,20 @@ HISTORY_AUTO_COMPRESSION_KEEP_RATIO = float(os.getenv("HISTORY_AUTO_COMPRESSION_
 
 # User Approval
 USER_APPROVAL_ENABLED = str_to_bool(os.getenv("USER_APPROVAL_ENABLED", True))
+
+
+@contextlib.contextmanager
+def override_user_approval(enabled: bool):
+    """Temporarily override USER_APPROVAL_ENABLED and reset the approval handler cache."""
+    import scider.core.approval as _approval
+    import scider.core.constant as _self
+
+    old_val = _self.USER_APPROVAL_ENABLED
+    old_handler = _approval._default_handler
+    _self.USER_APPROVAL_ENABLED = enabled
+    _approval._default_handler = None  # force re-detection
+    try:
+        yield
+    finally:
+        _self.USER_APPROVAL_ENABLED = old_val
+        _approval._default_handler = old_handler

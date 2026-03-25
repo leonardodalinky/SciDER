@@ -18,6 +18,7 @@ from pydantic import BaseModel, PrivateAttr
 from scider.agents import ideation_agent
 from scider.agents.ideation_agent.state import IdeationAgentState
 from scider.core.brain import Brain
+from scider.core.constant import override_user_approval
 from scider.core.llms import ModelRegistry
 from scider.workflows.utils import get_separator
 
@@ -59,6 +60,7 @@ class IdeationWorkflow(BaseModel):
     ideation_summary: str = ""
     ideation_papers: list[dict] = []
     research_ideas: list[dict] = []
+    selected_idea_index: int | None = None  # User-selected idea (single selection)
     idea_novelty_assessments: list[dict] = []  # Per-idea novelty assessments
     novelty_score: float | None = None  # Average novelty score
     novelty_feedback: str | None = None  # Aggregated feedback summary
@@ -176,6 +178,7 @@ class IdeationWorkflow(BaseModel):
             self.ideation_summary = result_state.output_summary or ""
             self.ideation_papers = result_state.papers
             self.research_ideas = result_state.research_ideas
+            self.selected_idea_index = result_state.selected_idea_index
             self.idea_novelty_assessments = result_state.idea_novelty_assessments
             self.novelty_score = result_state.novelty_score
             self.novelty_feedback = result_state.novelty_feedback
@@ -260,6 +263,7 @@ def run_ideation_workflow(
     research_domain: str | None = None,
     recursion_limit: int = 50,
     session_name: str | None = None,
+    user_approval_enabled: bool = False,
 ) -> IdeationWorkflow:
     """
     Convenience function to run the ideation workflow.
@@ -289,7 +293,8 @@ def run_ideation_workflow(
         recursion_limit=recursion_limit,
         session_name=session_name,
     )
-    return workflow.run()
+    with override_user_approval(user_approval_enabled):
+        return workflow.run()
 
 
 if __name__ == "__main__":

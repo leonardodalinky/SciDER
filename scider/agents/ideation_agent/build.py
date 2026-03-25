@@ -1,7 +1,7 @@
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
-from scider.core.approval import make_approval_node
+from scider.core.approval import make_approval_node, make_selection_approval_node
 
 from . import execute
 from .state import IdeationAgentState
@@ -41,9 +41,11 @@ def _format_report_summary(state: IdeationAgentState) -> str:
     return "\n".join(lines) if lines else "No report generated."
 
 
-approve_ideas_node, approve_ideas_conditional = make_approval_node(
+approve_ideas_node, approve_ideas_conditional = make_selection_approval_node(
     node_name="approve_ideas",
     summary_extractor=_format_ideas_summary,
+    items_extractor=lambda s: s.research_ideas,
+    selection_handler=lambda s, idx: setattr(s, "selected_idea_index", idx),
     retry_target="generate_ideas",
     next_target="novelty_check",
 )

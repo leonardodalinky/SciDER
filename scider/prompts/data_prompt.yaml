@@ -18,18 +18,13 @@ system_prompt: |
 
   {{ memory_text }}
   {% endif %}
-  {% if current_plan %}
-  ## Current Plan
-
-  {{ current_plan }}
-  {% endif %}
   ## Instructions
 
   ### Guidelines
 
-  - Follow the current plan and try to find a solution.
-  - Before each tool call, you should first explain why you call the tool.
-  - If you find that the current plan is not working, you should stop the conversation by calling no tool. The replanner will be called to come up with a new plan.
+  - Analyze the data thoroughly using the available tools.
+  - Before each tool call, explain why you are calling it.
+  - When you have completed your analysis, present your findings clearly without calling any more tools.
 
   ### Data Schema
 

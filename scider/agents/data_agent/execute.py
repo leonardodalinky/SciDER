@@ -75,7 +75,7 @@ def gateway_conditional(agent_state: DataAgentState) -> str:
         case "user" | "tool":
             return "llm_chat"
         case "assistant":
-            return "critic_before_replan"
+            return "check_phase"
         case _:
             raise ValueError(f"Unknown message role: {last_msg.role}")
 
@@ -132,9 +132,7 @@ def llm_chat_node(agent_state: DataAgentState) -> DataAgentState:
         state_text=wrap_text_with_block(json.dumps(selected_state, indent=2), "json"),
         toolsets_desc=ToolRegistry.get_toolsets_desc(BUILTIN_TOOLSETS + ALLOWED_TOOLSETS),
         memory_text=wrap_text_with_block(memory_text, "markdown"),
-        current_plan=(
-            agent_state.remaining_plans[0] if len(agent_state.remaining_plans) > 0 else None
-        ),
+        current_plan=None,
     )
 
     # construct tools

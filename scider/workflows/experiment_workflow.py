@@ -16,6 +16,7 @@ from pydantic import BaseModel, PrivateAttr
 from scider.agents import experiment_agent
 from scider.agents.experiment_agent.state import ExperimentAgentState
 from scider.core.code_env import LocalEnv
+from scider.core.constant import override_user_approval
 from scider.workflows.utils import get_separator
 
 
@@ -237,6 +238,7 @@ def run_experiment_workflow(
     repo_source: str | None = None,
     max_revisions: int = 5,
     recursion_limit: int = 100,
+    user_approval_enabled: bool = False,
 ) -> ExperimentWorkflow:
     """
     Convenience function to run the experiment workflow.
@@ -287,7 +289,8 @@ def run_experiment_workflow(
             recursion_limit=recursion_limit,
         )
 
-    return workflow.run()
+    with override_user_approval(user_approval_enabled):
+        return workflow.run()
 
 
 if __name__ == "__main__":

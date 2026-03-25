@@ -1,0 +1,76 @@
+# Gemini Low-Medium cost model configuration
+# key_source: which API key to use ("gemini" or "openai")
+# Extra params (reasoning_effort, temperature, top_p) are passed to ModelRegistry.register()
+
+models:
+  ideation:
+    model: gemini/gemini-2.5-flash
+    key_source: gemini
+    reasoning_effort: low
+
+  paper_search:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    reasoning_effort: low
+
+  metric_search:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    reasoning_effort: low
+
+  data:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    reasoning_effort: low
+
+  plan:
+    model: gemini/gemini-2.5-flash
+    key_source: gemini
+    reasoning_effort: low
+    temperature: 0.3
+    top_p: 0.9
+
+  critic:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    reasoning_effort: low
+    temperature: 0.3
+    top_p: 0.9
+
+  mem:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+
+  embed:
+    model: text-embedding-3-small
+    key_source: openai
+
+  history:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+
+  experiment_agent:
+    model: gemini/gemini-2.5-flash
+    key_source: gemini
+    reasoning_effort: low
+
+  experiment_coding:
+    model: gemini/gemini-2.5-flash
+    key_source: gemini
+    reasoning_effort: low
+
+  experiment_execute:
+    model: gemini/gemini-2.5-flash
+    key_source: gemini
+    reasoning_effort: low
+
+  experiment_monitor:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    temperature: 0.3
+    top_p: 0.9
+
+  experiment_summary:
+    model: gemini/gemini-2.5-flash-lite
+    key_source: gemini
+    reasoning_effort: low

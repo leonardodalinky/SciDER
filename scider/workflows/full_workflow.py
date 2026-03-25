@@ -18,6 +18,7 @@ from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
 from scider.core.brain import Brain
+from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 from scider.workflows.utils import get_separator
@@ -282,6 +283,7 @@ def run_full_workflow(
     experiment_agent_recursion_limit: int = 100,
     session_name: str | None = None,
     data_desc: str | None = None,
+    user_approval_enabled: bool = False,
 ) -> FullWorkflow:
     """
     Convenience function to run the full SciDER workflow.
@@ -327,7 +329,8 @@ def run_full_workflow(
         session_name=session_name,
         data_desc=data_desc,
     )
-    return workflow.run()
+    with override_user_approval(user_approval_enabled):
+        return workflow.run()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from scider.core.approval import make_approval_node
 from scider.core.types import Message
 from scider.rbank.subgraph import mem_consolidation
 
-from . import execute, plan
+from . import execute
 from .paper_subagent import build as paper_subagent_build
 from .paper_subagent.state import PaperSearchAgentState
 from .state import DataAgentState
@@ -18,24 +18,81 @@ paper_subagent_graph = paper_subagent_build()
 paper_subagent_graph_compiled = paper_subagent_graph.compile()
 
 
-def finialize_node(agent_state: DataAgentState) -> DataAgentState:
-    """A finalization node to do any final processing before ending the graph."""
+# ==================== Node functions ====================
+
+
+def init_analysis_node(agent_state: DataAgentState) -> DataAgentState:
+    """Inject the initial data analysis prompt into history."""
+    agent_state.phase = "analysis"
+    agent_state.talk_mode = False
+    agent_state.add_message(
+        Message(
+            role="user",
+            content=agent_state.user_query,
+            agent_sender="data_agent",
+        ).with_log()
+    )
+    agent_state.intermediate_state.append(
+        {"node_name": "init_analysis", "output": "Starting data analysis phase."}
+    )
+    return agent_state
+
+
+def init_deep_analysis_node(agent_state: DataAgentState) -> DataAgentState:
+    """Inject deep analysis prompt with paper/dataset context."""
+    agent_state.phase = "deep_analysis"
+    agent_state.talk_mode = False
+
+    paper_context = _format_paper_context(agent_state)
+    prompt = (
+        "Now deepen your analysis using these related research findings:\n\n"
+        f"{paper_context}\n\n"
+        "Combine these insights with your earlier data analysis. "
+        "Identify connections between the data patterns you found and the research literature. "
+        "Provide a more comprehensive and contextualized conclusion."
+    )
+    agent_state.add_message(
+        Message(role="user", content=prompt, agent_sender="data_agent").with_log()
+    )
+    agent_state.intermediate_state.append(
+        {"node_name": "init_deep_analysis", "output": "Starting deep analysis with paper context."}
+    )
+    return agent_state
+
+
+def check_phase_node(agent_state: DataAgentState) -> DataAgentState:
+    """Mark gateway loop as done for the current phase."""
+    agent_state.talk_mode = True
     agent_state.intermediate_state.append(
         {
-            "node_name": "finalize",
-            "output": f"Finalization complete. Plans completed: {len(agent_state.past_plans)}, Remaining: {len(agent_state.remaining_plans)}",
+            "node_name": "check_phase",
+            "output": f"Phase '{agent_state.phase}' analysis complete.",
         }
     )
     return agent_state
+
+
+def check_phase_conditional(agent_state: DataAgentState) -> str:
+    if agent_state.phase == "analysis":
+        return "approve_analysis"
+    else:
+        return "approve_final"
 
 
 def run_paper_subagent(agent_state: DataAgentState) -> DataAgentState:
     """Run paper subagent to search for relevant papers, datasets, and metrics."""
     logger.debug("run_paper_subagent of Agent data")
 
+    # Use analysis output as data_summary for better search relevance
+    data_summary = agent_state.data_desc or ""
+    for msg in reversed(agent_state.patched_history):
+        if msg.role == "assistant" and msg.content:
+            data_summary = msg.content[:2000]
+            break
+
     paper_state = PaperSearchAgentState(
         user_query=agent_state.user_query,
-        data_summary=agent_state.data_desc,
+        data_summary=data_summary,
     )
 
     try:
@@ -50,7 +107,11 @@ def run_paper_subagent(agent_state: DataAgentState) -> DataAgentState:
         agent_state.intermediate_state.append(
             {
                 "node_name": "paper_subagent",
-                "output": f"Paper subagent completed. Found {len(result_state.papers)} papers, {len(result_state.datasets)} datasets, {len(result_state.metrics)} metrics.\n\nSummary: {result_state.output_summary or 'No summary'}",
+                "output": (
+                    f"Paper subagent completed. Found {len(result_state.papers)} papers, "
+                    f"{len(result_state.datasets)} datasets, {len(result_state.metrics)} metrics."
+                    f"\n\nSummary: {result_state.output_summary or 'No summary'}"
+                ),
             }
         )
 
@@ -66,28 +127,25 @@ def run_paper_subagent(agent_state: DataAgentState) -> DataAgentState:
         logger.exception("paper_subagent_error")
         error_msg = f"Paper subagent error: {e}"
         agent_state.add_message(
-            Message(
-                role="assistant",
-                content=error_msg,
-                agent="paper_subagent",
-            ).with_log()
+            Message(role="assistant", content=error_msg, agent="paper_subagent").with_log()
         )
-        agent_state.intermediate_state.append(
-            {
-                "node_name": "paper_subagent",
-                "output": error_msg,
-            }
-        )
+        agent_state.intermediate_state.append({"node_name": "paper_subagent", "output": error_msg})
 
+    return agent_state
+
+
+def finalize_node(agent_state: DataAgentState) -> DataAgentState:
+    """Final processing before summary generation."""
+    agent_state.intermediate_state.append(
+        {"node_name": "finalize", "output": "Finalization complete."}
+    )
     return agent_state
 
 
 def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
     assert agent_state.talk_mode
-    agent_state.remaining_plans = ["Response to users' query."]
 
     mem_output = "Memory consolidation skipped"
-    # consolidate mems
     if constant.REASONING_BANK_ENABLED:
         try:
             mem_consolidation_subgraph_compiled.invoke(
@@ -101,132 +159,208 @@ def prepare_for_talk_mode(agent_state: DataAgentState) -> DataAgentState:
         except Exception as e:
             error_msg = f"mem_consolidation_error: {e}"
             agent_state.add_message(
-                Message(
-                    role="assistant",
-                    content=error_msg,
-                    agent="noname",
-                ).with_log()
+                Message(role="assistant", content=error_msg, agent="noname").with_log()
             )
             mem_output = error_msg
 
     agent_state.intermediate_state.append(
-        {
-            "node_name": "prepare_for_talk_mode",
-            "output": mem_output,
-        }
+        {"node_name": "prepare_for_talk_mode", "output": mem_output}
     )
-
     return agent_state
 
 
-def _format_plan_summary(state: DataAgentState) -> str:
-    """Extract plan steps as readable summary for user review."""
-    if state.plans and state.plans.steps:
-        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.plans.steps))
-        return f"Proposed plan:\n{steps}"
-    return "No plan generated."
+# ==================== Summary extractors for approval ====================
+
+
+def _format_paper_context(state: DataAgentState) -> str:
+    """Format papers/datasets/metrics as context for deep analysis."""
+    lines = []
+    if state.papers:
+        lines.append(f"### Related Papers ({len(state.papers)})")
+        for p in state.papers[:10]:
+            lines.append(f"- **{p.get('title', 'Untitled')}**")
+            if p.get("summary"):
+                lines.append(f"  {p['summary'][:200]}")
+    if state.datasets:
+        lines.append(f"\n### Related Datasets ({len(state.datasets)})")
+        for d in state.datasets[:5]:
+            lines.append(f"- {d.get('name', 'Unknown')}: {d.get('description', '')[:100]}")
+    if state.metrics:
+        lines.append(f"\n### Evaluation Metrics ({len(state.metrics)})")
+        for m in state.metrics[:5]:
+            lines.append(f"- {m.get('name', 'Unknown')}: {m.get('description', '')[:100]}")
+    if state.paper_search_summary:
+        lines.append(f"\n### Search Summary\n{state.paper_search_summary[:500]}")
+    return "\n".join(lines) if lines else "No related research found."
+
+
+def _format_analysis_summary(state: DataAgentState) -> str:
+    """Format initial data analysis results for user review."""
+    recent = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
+    if recent:
+        return f"Data analysis result:\n\n{recent[-1].content[:800]}"
+    return "No analysis output yet."
+
+
+def _format_paper_results_summary(state: DataAgentState) -> str:
+    """Format paper search results for user review."""
+    lines = [f"Papers found: {len(state.papers)}"]
+    for p in state.papers[:5]:
+        lines.append(f"  - {p.get('title', 'Unknown')}")
+    if len(state.papers) > 5:
+        lines.append(f"  ... and {len(state.papers) - 5} more")
+    lines.append(f"\nDatasets found: {len(state.datasets)}")
+    lines.append(f"Metrics extracted: {len(state.metrics)}")
+    return "\n".join(lines)
 
 
 def _format_final_summary(state: DataAgentState) -> str:
-    """Format execution results for user review before finalization."""
-    past = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.past_plans))
-    # Show last few assistant messages as result preview
-    recent_msgs = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
-    result_preview = ""
-    if recent_msgs:
-        last_content = recent_msgs[-1].content or ""
-        result_preview = f"\n\nLatest result preview:\n{last_content[:500]}"
-    return f"All plan steps completed:\n{past}{result_preview}"
+    """Format deep analysis results for user review."""
+    recent = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
+    if recent:
+        return f"Deep analysis result:\n\n{recent[-1].content[:800]}"
+    return "No deep analysis output yet."
 
 
-approve_plan_node, approve_plan_conditional = make_approval_node(
-    node_name="approve_plan",
-    summary_extractor=_format_plan_summary,
-    retry_target="planner",
-    next_target="gateway",
+def _reset_paper_search(state: DataAgentState) -> None:
+    """Reset paper search state for retry."""
+    state.papers = []
+    state.datasets = []
+    state.metrics = []
+    state.paper_search_summary = None
+
+
+# ==================== Approval nodes ====================
+
+approve_analysis_node, approve_analysis_conditional = make_approval_node(
+    node_name="approve_analysis",
+    summary_extractor=_format_analysis_summary,
+    retry_target="init_analysis",
+    next_target="paper_subagent",
+)
+
+approve_papers_node, approve_papers_conditional = make_approval_node(
+    node_name="approve_papers",
+    summary_extractor=_format_paper_results_summary,
+    retry_target="paper_subagent",
+    next_target="init_deep_analysis",
+    on_retry=_reset_paper_search,
 )
 
 approve_final_node, approve_final_conditional = make_approval_node(
     node_name="approve_final",
     summary_extractor=_format_final_summary,
-    retry_target="planner",
+    retry_target="init_deep_analysis",
     next_target="finalize",
 )
 
 
-def gateway_conditional_wrapper(agent_state: DataAgentState) -> str:
-    """Wrap gateway_conditional to route 'critic_before_replan' → 'advance_plan'."""
+# ==================== Gateway conditional (no plan routing) ====================
+
+
+def gateway_conditional_new(agent_state: DataAgentState) -> str:
+    """Route from gateway — same as original but routes assistant → check_phase."""
     result = execute.gateway_conditional(agent_state)
-    if result == "critic_before_replan":
-        return "advance_plan"
+    # gateway_conditional now returns "check_phase" for assistant messages
     return result
+
+
+# ==================== Build graph ====================
 
 
 @logger.catch
 def build():
+    """Build the data agent graph.
+
+    Flow:
+    START → init_analysis → gateway loop → check_phase → approve_analysis
+      → paper_subagent → approve_papers → init_deep_analysis → gateway loop
+      → check_phase → approve_final → finalize → generate_summary
+      → prepare_for_talk_mode → END
+    """
     g = StateGraph(DataAgentState)
 
-    # nodes
-    g.add_node("paper_subagent", run_paper_subagent)
-    g.add_node("planner", plan.planner_node)
-    g.add_node("approve_plan", approve_plan_node)
-    g.add_node("advance_plan", plan.advance_plan_node)
-    g.add_node("approve_final", approve_final_node)
-
+    # Phase 1: Initial data analysis
+    g.add_node("init_analysis", init_analysis_node)
     g.add_node("gateway", execute.gateway_node)
     g.add_node("llm_chat", execute.llm_chat_node)
     g.add_node("tool_calling", execute.tool_calling_node)
     g.add_node("mem_extraction", execute.mem_extraction_node)
     g.add_node("history_compression", execute.history_compression_node)
-    g.add_node("finalize", finialize_node)
+    g.add_node("check_phase", check_phase_node)
+    g.add_node("approve_analysis", approve_analysis_node)
+
+    # Paper search
+    g.add_node("paper_subagent", run_paper_subagent)
+    g.add_node("approve_papers", approve_papers_node)
+
+    # Phase 2: Deep analysis with paper context
+    g.add_node("init_deep_analysis", init_deep_analysis_node)
+    g.add_node("approve_final", approve_final_node)
+
+    # Finalization
+    g.add_node("finalize", finalize_node)
     g.add_node("generate_summary", execute.generate_summary_node)
     g.add_node("prepare_for_talk_mode", prepare_for_talk_mode)
 
-    # edges
-    g.add_edge(START, "paper_subagent")
-    g.add_edge("paper_subagent", "planner")
-    g.add_edge("planner", "approve_plan")
-    g.add_conditional_edges(
-        "approve_plan",
-        approve_plan_conditional,
-        ["planner", "gateway"],
-    )
+    # --- Edges ---
 
-    # gateway routes to execution nodes or advance_plan (when step is done)
+    # Phase 1 start
+    g.add_edge(START, "init_analysis")
+    g.add_edge("init_analysis", "gateway")
+
+    # Gateway loop (shared by both phases)
     g.add_conditional_edges(
         "gateway",
-        gateway_conditional_wrapper,
+        gateway_conditional_new,
         [
             "llm_chat",
             "tool_calling",
             "mem_extraction",
             "history_compression",
-            "advance_plan",
+            "check_phase",
         ],
     )
-
-    # execution nodes loop back to gateway
     g.add_edge("llm_chat", "gateway")
     g.add_edge("tool_calling", "gateway")
     g.add_edge("mem_extraction", "gateway")
     g.add_edge("history_compression", "gateway")
 
-    # advance_plan: if more steps → gateway, if all done → approve_final
+    # When analysis done → route based on phase
     g.add_conditional_edges(
-        "advance_plan",
-        plan.should_advance,
-        ["gateway", "approve_final"],
+        "check_phase",
+        check_phase_conditional,
+        ["approve_analysis", "approve_final"],
     )
 
-    # approve_final: user reviews results → satisfied → finalize, unsatisfied → planner
+    # Phase 1 approval → paper search
+    g.add_conditional_edges(
+        "approve_analysis",
+        approve_analysis_conditional,
+        ["init_analysis", "paper_subagent"],
+    )
+
+    # Paper search → approval
+    g.add_edge("paper_subagent", "approve_papers")
+    g.add_conditional_edges(
+        "approve_papers",
+        approve_papers_conditional,
+        ["paper_subagent", "init_deep_analysis"],
+    )
+
+    # Phase 2: deep analysis reuses gateway loop
+    g.add_edge("init_deep_analysis", "gateway")
+
+    # Phase 2 approval → finalize
     g.add_conditional_edges(
         "approve_final",
         approve_final_conditional,
-        ["planner", "finalize"],
+        ["init_deep_analysis", "finalize"],
     )
 
-    # finalization chain
+    # Finalization chain
     g.add_edge("finalize", "generate_summary")
     g.add_edge("generate_summary", "prepare_for_talk_mode")
     g.add_edge("prepare_for_talk_mode", END)
+
     return g

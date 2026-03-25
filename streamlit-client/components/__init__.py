@@ -1,1 +1,1 @@
-from components.display import render_approval_ui, render_intermediate_state
+from components.display import render_approval_ui

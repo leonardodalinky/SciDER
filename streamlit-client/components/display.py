@@ -253,6 +253,19 @@ def render_approval_ui(handler) -> None:
     st.warning(f"**Approval required: `{pending['node_name']}`**")
     st.markdown(pending["summary"])
 
+    # Selection UI (radio buttons for single select)
+    selected_index = None
+    if pending.get("has_selection") and pending.get("items"):
+        items = pending["items"]
+        options = [f"{it.get('title', f'Item {i + 1}')}" for i, it in enumerate(items)]
+        selected_label = st.radio("Select an idea:", options, key="idea_selection")
+        selected_index = options.index(selected_label)
+
+        # Show description of selected item
+        selected_item = items[selected_index]
+        if selected_item.get("description"):
+            st.caption(selected_item["description"][:300])
+
     feedback_text = st.text_input(
         "Feedback (required for feedback option)",
         key="approval_feedback_input",
@@ -261,8 +274,11 @@ def render_approval_ui(handler) -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("Approve", type="primary", key="btn_approve"):
-            handler.submit_response(ApprovalResponse(ApprovalResult.APPROVED))
+        approve_label = "Approve selected" if selected_index is not None else "Approve"
+        if st.button(approve_label, type="primary", key="btn_approve"):
+            handler.submit_response(
+                ApprovalResponse(ApprovalResult.APPROVED, selected_index=selected_index)
+            )
             st.rerun()
     with col2:
         if st.button("Reject", key="btn_reject"):

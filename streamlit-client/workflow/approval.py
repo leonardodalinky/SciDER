@@ -44,6 +44,21 @@ class StreamlitApprovalHandler(ApprovalHandler):
         with self._lock:
             return self._pending
 
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict]
+    ) -> ApprovalResponse:
+        with self._lock:
+            self._pending = {
+                "node_name": node_name,
+                "summary": summary,
+                "items": items,
+                "has_selection": True,
+            }
+            self._event.clear()
+            self._response = None
+        self._event.wait()
+        return self._response
+
     def submit_response(self, response: ApprovalResponse) -> None:
         with self._lock:
             self._response = response

@@ -16,6 +16,7 @@ from scider.agents import data_agent
 from scider.agents.data_agent.state import DataAgentState
 from scider.core.brain import Brain
 from scider.core.code_env import LocalEnv
+from scider.core.constant import override_user_approval
 from scider.prompts import PROMPTS
 from scider.workflows.utils import get_separator
 
@@ -214,6 +215,7 @@ def run_data_workflow(
     long_term_mem_dir: str | Path | None = None,
     project_mem_dir: str | Path | None = None,
     data_desc: str | None = None,
+    user_approval_enabled: bool = False,
 ) -> DataWorkflow:
     """
     Convenience function to run the data analysis workflow.
@@ -264,7 +266,8 @@ def run_data_workflow(
         session_name=session_name,
         data_desc=data_desc,
     )
-    return workflow.run()
+    with override_user_approval(user_approval_enabled):
+        return workflow.run()
 
 
 if __name__ == "__main__":

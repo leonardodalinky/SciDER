@@ -25,9 +25,15 @@ class ApprovalResult(Enum):
 class ApprovalResponse:
     """Response from user approval request."""
 
-    def __init__(self, result: ApprovalResult, feedback: str | None = None):
+    def __init__(
+        self,
+        result: ApprovalResult,
+        feedback: str | None = None,
+        selected_index: int | None = None,
+    ):
         self.result = result
         self.feedback = feedback
+        self.selected_index = selected_index  # For single-item selection approvals
 
 
 class ApprovalHandler(ABC):
@@ -45,6 +51,24 @@ class ApprovalHandler(ABC):
             ApprovalResponse with the user's decision and optional feedback.
         """
         ...
+
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict]
+    ) -> ApprovalResponse:
+        """Request approval with single-item selection.
+
+        Default implementation formats items into the summary and delegates to
+        ``request_approval``.  Subclasses may override for richer UI
+        (radio buttons, numbered input, etc.).
+
+        Args:
+            items: Selectable items, each with at least a ``title`` key.
+        """
+        item_text = "\n".join(
+            f"  [{i + 1}] {it.get('title', 'Untitled')}" for i, it in enumerate(items)
+        )
+        full_summary = f"{summary}\n\nItems:\n{item_text}"
+        return self.request_approval(node_name, full_summary)
 
 
 class CLIApprovalHandler(ApprovalHandler):
@@ -80,6 +104,56 @@ class CLIApprovalHandler(ApprovalHandler):
             else:
                 print("Invalid choice. Please enter 1, 2, or 3.")
 
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict]
+    ) -> ApprovalResponse:
+        separator = "=" * 60
+        print(f"\n{separator}")
+        print(f"  Select & Approve: [{node_name}]")
+        print(separator)
+        print(summary)
+        print(separator)
+        for i, it in enumerate(items):
+            title = it.get("title", "Untitled")
+            desc = it.get("description", "")
+            print(f"  [{i + 1}] {title}")
+            if desc:
+                print(f"      {desc[:120]}")
+        print(separator)
+        print(f"  Enter 1-{len(items)} to select and approve")
+        print("  [r] Reject and retry")
+        print("  [f] Provide feedback and retry")
+        print(separator)
+
+        while True:
+            choice = input(f"Your choice [1-{len(items)}/r/f] (enter = 1): ").strip()
+            if choice == "":
+                choice = "1"
+            if choice.lower() == "r":
+                logger.info("User rejected [{}]", node_name)
+                return ApprovalResponse(result=ApprovalResult.REJECTED)
+            elif choice.lower() == "f":
+                feedback = input("Your feedback (enter = cancel): ").strip()
+                if not feedback:
+                    print("Feedback cancelled, returning to choices.")
+                    continue
+                logger.info("User provided feedback for [{}]: {}", node_name, feedback)
+                return ApprovalResponse(result=ApprovalResult.FEEDBACK, feedback=feedback)
+            elif choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(items):
+                    logger.info(
+                        "User selected item {} for [{}]: {}",
+                        idx,
+                        node_name,
+                        items[idx].get("title", ""),
+                    )
+                    return ApprovalResponse(result=ApprovalResult.APPROVED, selected_index=idx)
+                else:
+                    print(f"Invalid number. Please enter 1-{len(items)}.")
+            else:
+                print(f"Invalid choice. Enter 1-{len(items)}, r, or f.")
+
 
 class JupyterApprovalHandler(ApprovalHandler):
     """Jupyter notebook approval handler with rich display."""
@@ -110,6 +184,44 @@ class JupyterApprovalHandler(ApprovalHandler):
             else:
                 print("Invalid choice. Please enter 1, 2, or 3.")
 
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict]
+    ) -> ApprovalResponse:
+        from IPython.display import Markdown, display
+
+        lines = [f"---\n### Select & Approve: `{node_name}`\n\n{summary}\n"]
+        for i, it in enumerate(items):
+            title = it.get("title", "Untitled")
+            desc = it.get("description", "")
+            lines.append(f"**[{i + 1}]** {title}")
+            if desc:
+                lines.append(f"> {desc[:200]}\n")
+        lines.append("---")
+        display(Markdown("\n".join(lines)))
+
+        print(f"Enter 1-{len(items)} to select, [r] reject, [f] feedback")
+        while True:
+            choice = input(f"Your choice [1-{len(items)}/r/f] (enter = 1): ").strip()
+            if choice == "":
+                choice = "1"
+            if choice.lower() == "r":
+                return ApprovalResponse(result=ApprovalResult.REJECTED)
+            elif choice.lower() == "f":
+                feedback = input("Your feedback (enter = cancel): ").strip()
+                if not feedback:
+                    print("Feedback cancelled.")
+                    continue
+                return ApprovalResponse(result=ApprovalResult.FEEDBACK, feedback=feedback)
+            elif choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(items):
+                    logger.info("User selected item {} for [{}]", idx, node_name)
+                    return ApprovalResponse(result=ApprovalResult.APPROVED, selected_index=idx)
+                else:
+                    print(f"Invalid. Enter 1-{len(items)}.")
+            else:
+                print(f"Invalid. Enter 1-{len(items)}, r, or f.")
+
 
 class AutoApprovalHandler(ApprovalHandler):
     """Auto-approval handler. Always approves without user interaction."""
@@ -117,6 +229,15 @@ class AutoApprovalHandler(ApprovalHandler):
     def request_approval(self, node_name: str, summary: str) -> ApprovalResponse:
         logger.debug("Auto-approved [{}]", node_name)
         return ApprovalResponse(result=ApprovalResult.APPROVED)
+
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict]
+    ) -> ApprovalResponse:
+        logger.debug("Auto-approved [{}], selected first item", node_name)
+        return ApprovalResponse(
+            result=ApprovalResult.APPROVED,
+            selected_index=0 if items else None,
+        )
 
 
 def _is_jupyter() -> bool:
@@ -236,3 +357,90 @@ def make_approval_node(
             return retry_target
 
     return approval_node, approval_conditional
+
+
+def make_selection_approval_node(
+    node_name: str,
+    summary_extractor: Callable[[Any], str],
+    items_extractor: Callable[[Any], list[dict]],
+    selection_handler: Callable[[Any, int], None],
+    retry_target: str,
+    next_target: str,
+    on_retry: Callable[[Any], None] | None = None,
+) -> tuple[Callable, Callable]:
+    """Create an approval node with single-item selection.
+
+    Like ``make_approval_node`` but additionally presents selectable items.
+    If items list is empty, falls back to a regular approval prompt.
+
+    Args:
+        items_extractor: Extracts selectable items (list[dict]) from state.
+        selection_handler: Called with ``(state, selected_index)`` on approval.
+    """
+
+    def selection_node(agent_state: Any) -> Any:
+        handler = _get_handler()
+        summary = summary_extractor(agent_state)
+        items = items_extractor(agent_state)
+
+        if items:
+            response = handler.request_approval_with_selection(node_name, summary, items)
+        else:
+            response = handler.request_approval(node_name, summary)
+
+        if response.result == ApprovalResult.APPROVED:
+            agent_state.approval_status = "approved"
+            if response.selected_index is not None:
+                selection_handler(agent_state, response.selected_index)
+        elif response.result == ApprovalResult.REJECTED:
+            agent_state.approval_status = "retry"
+            agent_state.add_message(
+                Message(
+                    role="user",
+                    content=(
+                        f"[User Feedback on {node_name}]\n"
+                        "The user rejected the current output. "
+                        "Please try again with a different approach."
+                    ),
+                    agent_sender="user_approval",
+                ).with_log()
+            )
+            if on_retry is not None:
+                on_retry(agent_state)
+        elif response.result == ApprovalResult.FEEDBACK:
+            agent_state.approval_status = "retry"
+            agent_state.add_message(
+                Message(
+                    role="user",
+                    content=(
+                        f"[User Feedback on {node_name}]\n"
+                        f"{response.feedback}\n\n"
+                        "Please revise accordingly."
+                    ),
+                    agent_sender="user_approval",
+                ).with_log()
+            )
+            if on_retry is not None:
+                on_retry(agent_state)
+
+        agent_state.intermediate_state.append(
+            {
+                "node_name": node_name,
+                "output": f"Approval status: {agent_state.approval_status}"
+                + (
+                    f", selected: {response.selected_index}"
+                    if response.selected_index is not None
+                    else ""
+                ),
+            }
+        )
+
+        return agent_state
+
+    def selection_conditional(agent_state: Any) -> str:
+        if agent_state.approval_status == "approved":
+            return next_target
+        else:
+            return retry_target
+
+    return selection_node, selection_conditional

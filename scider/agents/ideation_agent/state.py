@@ -25,6 +25,9 @@ class IdeationAgentState(ToolsetState, HistoryState):
     # Approval status (transient, for conditional edge routing)
     approval_status: str | None = None
 
+    # User-selected idea index (single selection from approve_ideas)
+    selected_idea_index: int | None = None
+
     # Ideation output
     research_ideas: list[dict] = []  # Generated research ideas
     # Per-idea novelty assessments: each dict has "title", "novelty_score", "feedback", "breakdown"
