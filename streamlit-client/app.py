@@ -224,9 +224,11 @@ if st.session_state.get("view_mode") == "case_study":
 
 # --- First visit: show settings page ---
 if not has_settings():
+    _logo = Path(__file__).parent.parent / "static" / "images" / "scider_logo.webp"
+    if _logo.exists():
+        st.image(str(_logo), width=300)
     st.title("SciDER Research Assistant")
-    st.markdown("Browse saved case studies without API keys:")
-    if st.button("📚 Browse Case Studies", key="case_study_from_setup"):
+    if st.button("📂 Browse Case Studies", key="case_study_from_setup"):
         st.session_state.view_mode = "case_study"
         st.rerun()
     st.divider()
@@ -243,7 +245,7 @@ _settings = load_settings()
 # --- Settings page (when user clicks Settings button) ---
 if st.session_state.get("show_settings"):
     st.title("SciDER Research Assistant — Settings")
-    if st.button("📚 Browse Case Studies", key="case_study_from_settings"):
+    if st.button("📂 Browse Case Studies", key="case_study_from_settings"):
         st.session_state.show_settings = False
         st.session_state.view_mode = "case_study"
         st.rerun()
