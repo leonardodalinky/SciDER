@@ -1,11 +1,11 @@
----
+<!-- ---
 title: SciDER
 emoji: 🍎
 colorFrom: indigo
 colorTo: purple
 sdk: docker
 pinned: false
----
+--- -->
 
 <div align="center">
   <img src="./static/images/scider_logo.webp" width="400" />
