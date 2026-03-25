@@ -226,7 +226,9 @@ if st.session_state.get("view_mode") == "case_study":
 if not has_settings():
     _logo = Path(__file__).parent.parent / "static" / "images" / "scider_logo.webp"
     if _logo.exists():
-        st.image(str(_logo), width=300)
+        _col_l, _col_c, _col_r = st.columns([1, 2, 1])
+        with _col_c:
+            st.image(str(_logo), width=300)
     st.title("SciDER Research Assistant")
     if st.button("📂 Browse Case Studies", key="case_study_from_setup"):
         st.session_state.view_mode = "case_study"
