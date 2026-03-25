@@ -27,7 +27,7 @@ COPY streamlit-client/ /app/streamlit-client/
 # Copy case studies for Case Study mode (browse saved chats without API)
 COPY case-study-memory/ /app/streamlit-client/case-study-memory/
 
-WORKDIR /app/streamlit-client
+WORKDIR /app
 
 # Runtime writable dirs (ensure exist even if case-study-memory is empty)
 RUN mkdir -p case-study-memory workspace tmp_brain
@@ -37,4 +37,6 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl --fail http://localhost:7860/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "app.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableXsrfProtection=false", "--browser.gatherUsageStats=false"]
+CMD ["streamlit", "run", "streamlit-client/app.py", \
+     "--server.port=7860", "--server.address=0.0.0.0", "--server.headless=true", \
+     "--server.enableXsrfProtection=false", "--browser.gatherUsageStats=false"]

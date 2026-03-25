@@ -24,12 +24,7 @@ from forms.ideation import render_form as ideation_form
 from forms.ideation import run_ideation
 from forms.settings import render_settings_form
 from settings import has_settings, load_settings, save_settings
-from utils import (
-    cleanup_uploaded_data,
-    render_intermediate_state,
-    save_chat_history,
-    stream_markdown,
-)
+from utils import cleanup_uploaded_data, save_chat_history
 from workflow.approval import StreamlitApprovalHandler
 from workflow.runner import WorkflowRunner
 
@@ -37,6 +32,7 @@ from scider.agents import ideation_agent
 from scider.core import approval as approval_module
 from scider.core.brain import Brain
 from scider.core.llms import ModelRegistry
+from scider.core.types import set_on_message_callback
 
 # ==================== Page config ====================
 
@@ -51,10 +47,85 @@ st.markdown(
     [data-testid="stChatMessage"] h5, [data-testid="stChatMessage"] h6 {
         color: inherit !important;
     }
+    .chat-bubble {
+        padding: 10px 16px;
+        border-radius: 12px;
+        margin: 6px 0;
+        max-width: 85%;
+        word-wrap: break-word;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+    .chat-bubble-user {
+        background-color: #d4edda;
+        color: #1a1a1a;
+        margin-left: auto;
+        text-align: right;
+    }
+    .chat-bubble-assistant {
+        background-color: #f8f9fa;
+        color: #1a1a1a;
+    }
+    .chat-bubble-tool {
+        background-color: #e8d5f5;
+        color: #1a1a1a;
+        font-family: monospace;
+        font-size: 13px;
+    }
+    .chat-row-right {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .chat-row-left {
+        display: flex;
+        justify-content: flex-start;
+    }
+    .chat-bubble details summary {
+        cursor: pointer;
+        color: #666;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+    .chat-bubble details summary:hover {
+        color: #333;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+_TRUNCATE_LEN = 300
+
+
+def render_chat_message(role: str, content: str):
+    """Render a chat message with colored bubble. Long messages are truncated."""
+    import html as _html
+
+    if role == "user":
+        css_class = "chat-bubble chat-bubble-user"
+        row_class = "chat-row-right"
+    elif role == "tool":
+        css_class = "chat-bubble chat-bubble-tool"
+        row_class = "chat-row-left"
+    else:
+        css_class = "chat-bubble chat-bubble-assistant"
+        row_class = "chat-row-left"
+
+    escaped = _html.escape(content)
+
+    if len(content) > _TRUNCATE_LEN:
+        preview = _html.escape(content[:_TRUNCATE_LEN]).replace("\n", "<br>")
+        full = escaped.replace("\n", "<br>")
+        body = (
+            f"{preview}..." f"<details><summary>Show more</summary>" f"<div>{full}</div></details>"
+        )
+    else:
+        body = escaped.replace("\n", "<br>")
+
+    st.markdown(
+        f'<div class="{row_class}"><div class="{css_class}">{body}</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ==================== Model registration ====================
@@ -234,10 +305,10 @@ with col4:
 
 st.divider()
 
-# --- Chat history ---
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+# --- Chat history (skip if workflow is running — polling loop handles rendering) ---
+if "workflow_runner" not in st.session_state:
+    for m in st.session_state.messages:
+        render_chat_message(m["role"], m["content"])
 
 
 # ==================== Workflow forms ====================
@@ -306,6 +377,13 @@ if workflow_config and "workflow_runner" not in st.session_state:
     st.session_state.approval_handler = handler
     approval_module.set_handler(handler)
 
+    # Hook every add_message() call to push to UI
+    def _on_msg(msg):
+        if msg.content:
+            handler.push_message(msg.role or "assistant", msg.content)
+
+    set_on_message_callback(_on_msg)
+
     runner = WorkflowRunner()
     st.session_state.workflow_runner = runner
     st.session_state.workflow_config_active = workflow_config
@@ -318,44 +396,50 @@ if "workflow_runner" in st.session_state:
     runner = st.session_state.workflow_runner
     handler = st.session_state.approval_handler
 
-    with st.chat_message("assistant"):
-        if handler.has_pending():
-            render_approval_ui(handler)
-        elif runner.is_done:
-            if runner.error:
-                resp = f"Workflow failed: {runner.error}"
-                intermediate_state = []
-            else:
-                resp, intermediate_state = runner.result or ("No result", [])
+    # Drain live messages from background thread → chat history
+    for msg in handler.drain_messages():
+        st.session_state.messages.append(msg)
 
-            stream_markdown(resp)
-            render_intermediate_state(intermediate_state)
-            st.session_state.messages.append({"role": "assistant", "content": resp})
+    # Re-render all messages (including newly drained ones)
+    for m in st.session_state.messages:
+        render_chat_message(m["role"], m["content"])
 
-            wc = st.session_state.workflow_config_active
-            metadata = {
-                "workflow_type": wc["type"],
-                "query": wc.get("query"),
-                "path": wc.get("path"),
-            }
-            if wc["type"] == "full":
-                metadata.update(
-                    {
-                        "data_path": wc.get("data_path"),
-                        "run_data": wc.get("run_data"),
-                        "run_exp": wc.get("run_exp"),
-                    }
-                )
-            memo_dir = save_chat_history(
-                st.session_state.messages, workflow_type=wc["type"], metadata=metadata
-            )
-            st.session_state.last_saved_memo = str(memo_dir)
-
-            del st.session_state.workflow_runner
-            del st.session_state.workflow_config_active
-            del st.session_state.approval_handler
-            st.rerun()
+    if handler.has_pending():
+        render_approval_ui(handler)
+    elif runner.is_done:
+        if runner.error:
+            resp = f"Workflow failed: {runner.error}"
         else:
-            st.info("Workflow is running...")
-            time.sleep(2)
-            st.rerun()
+            resp, _ = runner.result or ("No result", [])
+
+        st.session_state.messages.append({"role": "assistant", "content": resp})
+        render_chat_message("assistant", resp)
+
+        wc = st.session_state.workflow_config_active
+        metadata = {
+            "workflow_type": wc["type"],
+            "query": wc.get("query"),
+            "path": wc.get("path"),
+        }
+        if wc["type"] == "full":
+            metadata.update(
+                {
+                    "data_path": wc.get("data_path"),
+                    "run_data": wc.get("run_data"),
+                    "run_exp": wc.get("run_exp"),
+                }
+            )
+        memo_dir = save_chat_history(
+            st.session_state.messages, workflow_type=wc["type"], metadata=metadata
+        )
+        st.session_state.last_saved_memo = str(memo_dir)
+
+        set_on_message_callback(None)
+        del st.session_state.workflow_runner
+        del st.session_state.workflow_config_active
+        del st.session_state.approval_handler
+        st.rerun()
+    else:
+        render_chat_message("assistant", "Workflow is running...")
+        time.sleep(2)
+        st.rerun()

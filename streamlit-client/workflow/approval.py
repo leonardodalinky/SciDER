@@ -23,6 +23,7 @@ class StreamlitApprovalHandler(ApprovalHandler):
         self._response: ApprovalResponse | None = None
         self._pending: dict | None = None
         self._lock = threading.Lock()
+        self._live_messages: list[dict] = []
 
     # -- called from background (workflow) thread --
 
@@ -58,6 +59,18 @@ class StreamlitApprovalHandler(ApprovalHandler):
             self._response = None
         self._event.wait()
         return self._response
+
+    def push_message(self, role: str, content: str) -> None:
+        """Push a message for the UI thread to display (thread-safe)."""
+        with self._lock:
+            self._live_messages.append({"role": role, "content": content})
+
+    def drain_messages(self) -> list[dict]:
+        """Drain all queued messages (called from UI thread)."""
+        with self._lock:
+            msgs = list(self._live_messages)
+            self._live_messages.clear()
+            return msgs
 
     def submit_response(self, response: ApprovalResponse) -> None:
         with self._lock:

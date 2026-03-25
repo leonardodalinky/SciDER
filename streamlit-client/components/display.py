@@ -244,6 +244,14 @@ def render_live_intermediate(items: list[dict]) -> None:
             st.markdown(output[:800] if output else "(no output)")
 
 
+def _shorten_summary(text: str, max_line_len: int = 1024) -> str:
+    """Shorten each line in the summary to max_line_len characters."""
+    import textwrap
+
+    lines = text.split("\n")
+    return "\n".join(textwrap.shorten(line, max_line_len, placeholder="...") for line in lines)
+
+
 def render_approval_ui(handler) -> None:
     """Render approval buttons + feedback input for a pending approval request."""
     pending = handler.get_pending()
@@ -251,7 +259,7 @@ def render_approval_ui(handler) -> None:
         return
 
     st.warning(f"**Approval required: `{pending['node_name']}`**")
-    st.markdown(pending["summary"])
+    st.markdown(_shorten_summary(pending["summary"]))
 
     # Selection UI (radio buttons for single select)
     selected_index = None
@@ -272,24 +280,38 @@ def render_approval_ui(handler) -> None:
         placeholder="Enter your feedback here...",
     )
 
+    node_name = pending["node_name"]
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        approve_label = "Approve selected" if selected_index is not None else "Approve"
-        if st.button(approve_label, type="primary", key="btn_approve"):
+        label = "Approve selected" if selected_index is not None else "Approve"
+        if st.button(f"✅ {label}", key="btn_approve"):
+            st.session_state.messages.append(
+                {"role": "user", "content": f"✅ Approved [{node_name}]"}
+            )
             handler.submit_response(
                 ApprovalResponse(ApprovalResult.APPROVED, selected_index=selected_index)
             )
             st.rerun()
     with col2:
-        if st.button("Reject", key="btn_reject"):
+        if st.button("❌ Reject", key="btn_reject"):
+            st.session_state.messages.append(
+                {"role": "user", "content": f"❌ Rejected [{node_name}]"}
+            )
             handler.submit_response(ApprovalResponse(ApprovalResult.REJECTED))
             st.rerun()
     with col3:
         if st.button(
-            "Feedback",
+            "💬 Feedback",
             key="btn_feedback",
             disabled=not (feedback_text and feedback_text.strip()),
         ):
+            st.session_state.messages.append(
+                {
+                    "role": "user",
+                    "content": f"💬 Feedback [{node_name}]: {feedback_text.strip()}",
+                }
+            )
             handler.submit_response(
                 ApprovalResponse(ApprovalResult.FEEDBACK, feedback=feedback_text.strip())
             )

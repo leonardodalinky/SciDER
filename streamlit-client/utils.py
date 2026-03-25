@@ -132,7 +132,7 @@ def get_next_memo_number(memory_dir: Path) -> int:
 
 
 def save_chat_history(messages: list, workflow_type: str, metadata: dict = None):
-    base_dir = Path(__file__).parent / "case-study-memory"
+    base_dir = Path(__file__).parent / "saved_chats"
     base_dir.mkdir(parents=True, exist_ok=True)
     memo_number = get_next_memo_number(base_dir)
     memo_dir = base_dir / f"memo_{memo_number}"

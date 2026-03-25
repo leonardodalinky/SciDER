@@ -1,7 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
+from typing import Callable, Self
+
+# Global callback invoked on every HistoryState.add_message() call.
+# Set by the UI layer (e.g. Streamlit) to receive real-time message updates.
+_on_message_callback: Callable[[Message], None] | None = None
+
+
+def set_on_message_callback(callback: Callable[[Message], None] | None) -> None:
+    """Set a global callback for real-time message notifications."""
+    global _on_message_callback
+    _on_message_callback = callback
+
 
 import tiktoken
 from functional import seq
@@ -308,6 +319,11 @@ class HistoryState(BaseModel):
     def add_message(self, message: Message) -> None:
         """Add a new message to the history."""
         self.history.append(message)
+        if _on_message_callback is not None:
+            try:
+                _on_message_callback(message)
+            except Exception:
+                pass
 
     def get_patch_by_id(self, patch_id: int) -> HistoryState.HistoryPatch | None:
         """

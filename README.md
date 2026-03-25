@@ -1,3 +1,12 @@
+---
+title: SciDER
+emoji: 🍎
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 <div align="center">
   <img src="./static/images/scider_logo.webp" width="400" />
   <h1 align="center">SciDER: Scientific Data-centric End-to-end Researcher
@@ -18,12 +27,14 @@
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [📦 Installation](#-installation)
-- [⚙️ Configuration](#-configuration)
+- [⚙️ Configuration](#️-configuration)
 - [🌐 Web UI](#-web-ui)
 - [🤖 Coding Framework](#-coding-framework)
-  - [Optional: Claude Agent SDK](#optional-recommended-install-claude-agent-sdk-for-claude_agent_sdk-toolset)
-- [🛠️ Development Guide](#-development-guide)
+  - [Optional (Recommended): install Claude Agent SDK (for `claude_agent_sdk` toolset):](#optional-recommended-install-claude-agent-sdk-for-claude_agent_sdk-toolset)
+  - [Optional: install Claude Code (for `claude_code` toolset):](#optional-install-claude-code-for-claude_code-toolset)
+- [🛠️ Development Guide](#️-development-guide)
 - [📊 Benchmarks](#-benchmarks)
 - [💬 Feedback and Contributions](#-feedback-and-contributions)
 

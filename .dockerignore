@@ -14,8 +14,6 @@ venv/
 ENV/
 env/
 *.log
-case-study-memory/
-tmp_brain/
 workspace/
 .pytest_cache/
 .coverage
@@ -24,3 +22,10 @@ htmlcov/
 *.swp
 *.swo
 *~
+.git/
+.github/
+.claude/
+benchmarks/
+tmp_*
+rsync_tmp_*
+*.ipynb
