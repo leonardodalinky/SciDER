@@ -7,12 +7,20 @@ GEMINI_MODELS = [
     "gemini/gemini-2.5-flash-lite",
     "gemini/gemini-2.5-flash",
     "gemini/gemini-2.5-pro",
+    "gemini/gemini-3-flash-preview",
+    "gemini/gemini-3-pro-preview",
 ]
 
 OPENAI_MODELS = [
     "gpt-5-nano",
     "gpt-5-mini",
-    "gpt-5.2",
+    "gpt-5",
+    "gpt-5-pro",
+    "gpt-5-chat",
+    "o1-mini",
+    "o3-mini",
+    "o3",
+    "o4-mini",
 ]
 
 # Model roles grouped by category

@@ -16,7 +16,7 @@ def _format_ideas_summary(state: IdeationAgentState) -> str:
         lines.append(f"{i}. **{idea.get('title', 'Untitled')}**")
         desc = idea.get("description", "")
         if desc:
-            lines.append(f"   {desc[:200]}")
+            lines.append(f"   {desc}")
         lines.append("")
     return "\n".join(lines)
 
@@ -33,11 +33,8 @@ def _format_report_summary(state: IdeationAgentState) -> str:
             lines.append(f"  - {title}: {score}/10")
         lines.append("")
     if state.output_summary:
-        # Show first 500 chars of the report
-        lines.append("Report preview:")
-        lines.append(state.output_summary[:500])
-        if len(state.output_summary) > 500:
-            lines.append("...")
+        lines.append("Are you satisfied with the ideation report?\n")
+        lines.append(state.output_summary)
     return "\n".join(lines) if lines else "No report generated."
 
 

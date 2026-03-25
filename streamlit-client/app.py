@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from components.display import render_approval_ui
+from forms.case_study import render_case_study_viewer
 from forms.data import render_form as data_form
 from forms.data import run_data
 from forms.experiment import render_form as experiment_form
@@ -47,85 +48,83 @@ st.markdown(
     [data-testid="stChatMessage"] h5, [data-testid="stChatMessage"] h6 {
         color: inherit !important;
     }
-    .chat-bubble {
-        padding: 10px 16px;
-        border-radius: 12px;
-        margin: 6px 0;
-        max-width: 85%;
-        word-wrap: break-word;
-        line-height: 1.5;
-        font-size: 14px;
-    }
-    .chat-bubble-user {
-        background-color: #d4edda;
-        color: #1a1a1a;
-        margin-left: auto;
-        text-align: right;
-    }
-    .chat-bubble-assistant {
-        background-color: #f8f9fa;
-        color: #1a1a1a;
-    }
-    .chat-bubble-tool {
-        background-color: #e8d5f5;
-        color: #1a1a1a;
-        font-family: monospace;
-        font-size: 13px;
-    }
-    .chat-row-right {
-        display: flex;
-        justify-content: flex-end;
-    }
-    .chat-row-left {
-        display: flex;
-        justify-content: flex-start;
-    }
-    .chat-bubble details summary {
-        cursor: pointer;
-        color: #666;
+    .chat-agent-badge {
         font-size: 12px;
-        margin-top: 4px;
-    }
-    .chat-bubble details summary:hover {
-        color: #333;
+        color: #777;
+        margin-bottom: 2px;
+        font-weight: 600;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-_TRUNCATE_LEN = 300
+_TRUNCATE_LEN = 800
+
+_AGENT_LABELS = {
+    "ideation": "\U0001f4a1 Ideation Agent",
+    "data": "\U0001f4ca Data Agent",
+    "experiment": "\U0001f9ea Experiment Agent",
+    "critic": "\U0001f9d0 Critic Agent",
+    "paper_search": "\U0001f4d6 Paper Search",
+    "metric_search": "\U0001f4cf Metric Search",
+}
 
 
-def render_chat_message(role: str, content: str):
-    """Render a chat message with colored bubble. Long messages are truncated."""
-    import html as _html
+def _agent_label(agent: str | None) -> str:
+    if not agent:
+        return ""
+    return _AGENT_LABELS.get(agent, agent)
 
-    if role == "user":
-        css_class = "chat-bubble chat-bubble-user"
-        row_class = "chat-row-right"
-    elif role == "tool":
-        css_class = "chat-bubble chat-bubble-tool"
-        row_class = "chat-row-left"
-    else:
-        css_class = "chat-bubble chat-bubble-assistant"
-        row_class = "chat-row-left"
 
-    escaped = _html.escape(content)
+def render_chat_message(role: str, content: str, agent: str | None = None):
+    """Render a single chat message as a Streamlit chat_message with markdown."""
+    with st.chat_message(role):
+        if agent:
+            label = _agent_label(agent)
+            st.markdown(f"<div class='chat-agent-badge'>{label}</div>", unsafe_allow_html=True)
+        if len(content) > _TRUNCATE_LEN:
+            # Show first few lines as expander label (up to 200 chars)
+            preview_lines = content[:200].split("\n")
+            label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
+            with st.expander(f"{label}...", expanded=False):
+                st.markdown(content)
+        else:
+            st.markdown(content)
 
-    if len(content) > _TRUNCATE_LEN:
-        preview = _html.escape(content[:_TRUNCATE_LEN]).replace("\n", "<br>")
-        full = escaped.replace("\n", "<br>")
-        body = (
-            f"{preview}..." f"<details><summary>Show more</summary>" f"<div>{full}</div></details>"
-        )
-    else:
-        body = escaped.replace("\n", "<br>")
 
-    st.markdown(
-        f'<div class="{row_class}"><div class="{css_class}">{body}</div></div>',
-        unsafe_allow_html=True,
-    )
+def render_chat_messages(messages: list[dict]):
+    """Render messages, grouping consecutive messages from the same agent."""
+    if not messages:
+        return
+
+    groups: list[list[dict]] = []
+    for m in messages:
+        agent = m.get("agent")
+        role = m["role"]
+        # Group consecutive assistant messages from the same agent (non-None)
+        if (
+            groups
+            and agent
+            and role == "assistant"
+            and groups[-1][0]["role"] == "assistant"
+            and groups[-1][0].get("agent") == agent
+        ):
+            groups[-1].append(m)
+        else:
+            groups.append([m])
+
+    for group in groups:
+        if len(group) == 1:
+            m = group[0]
+            render_chat_message(m["role"], m["content"], m.get("agent"))
+        else:
+            # Multiple consecutive messages from same agent — collapse
+            agent = group[0].get("agent")
+            label = _agent_label(agent) or "Assistant"
+            with st.expander(f"{label} ({len(group)} messages)", expanded=True):
+                for m in group:
+                    render_chat_message(m["role"], m["content"])
 
 
 # ==================== Model registration ====================
@@ -193,6 +192,11 @@ if not has_settings():
     if new_settings:
         save_settings(new_settings)
         st.rerun()
+    st.divider()
+    st.markdown("Or browse saved case studies without API keys:")
+    if st.button("\U0001f4da Browse Case Studies", key="case_study_from_setup"):
+        st.session_state.view_mode = "case_study"
+        st.rerun()
     st.stop()
 
 # --- Load saved settings ---
@@ -201,6 +205,11 @@ _settings = load_settings()
 # --- Settings page (when user clicks Settings button) ---
 if st.session_state.get("show_settings"):
     st.title("SciDER Research Assistant — Settings")
+    if st.button("\U0001f4da Browse Case Studies", key="case_study_from_settings"):
+        st.session_state.show_settings = False
+        st.session_state.view_mode = "case_study"
+        st.rerun()
+    st.divider()
     new_settings = render_settings_form(current_settings=_settings)
     if new_settings:
         save_settings(new_settings)
@@ -209,8 +218,31 @@ if st.session_state.get("show_settings"):
         if "initialized" in st.session_state:
             del st.session_state.initialized
         st.rerun()
-    if st.button("Cancel"):
-        st.session_state.show_settings = False
+    col_cancel, col_reset = st.columns(2)
+    with col_cancel:
+        if st.button("\u2b05\ufe0f Cancel", key="btn_cancel_settings", use_container_width=True):
+            st.session_state.show_settings = False
+            st.rerun()
+    with col_reset:
+        if st.button(
+            "\U0001f5d1\ufe0f Reset All Settings",
+            key="btn_clear_settings",
+            use_container_width=True,
+        ):
+            from settings import clear_settings
+
+            clear_settings()
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            st.rerun()
+    st.stop()
+
+
+# --- Case study view mode ---
+if st.session_state.get("view_mode") == "case_study":
+    render_case_study_viewer()
+    if st.button("\u2b05\ufe0f Back", key="case_study_back"):
+        st.session_state.view_mode = None
         st.rerun()
     st.stop()
 
@@ -222,15 +254,15 @@ if _settings.get("anthropic_api_key"):
     os.environ["ANTHROPIC_API_KEY"] = _settings["anthropic_api_key"]
 
 # --- Title bar ---
-col_title, col_settings, col_reset = st.columns([5, 1, 1])
+col_title, col_settings, col_reset = st.columns([4, 1.2, 1])
 with col_title:
     st.title("SciDER Research Assistant")
 with col_settings:
-    if st.button("Settings", key="btn_settings"):
+    if st.button("\u2699\ufe0f Settings", key="btn_settings"):
         st.session_state.show_settings = True
         st.rerun()
 with col_reset:
-    if st.button("Reset", help="Clear chat history", key="btn_reset"):
+    if st.button("\U0001f504 Reset", help="Clear chat history", key="btn_reset"):
         cleanup_uploaded_data()
         st.session_state.messages = [
             {
@@ -287,19 +319,19 @@ st.subheader("Select Workflow Type")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("Ideation", use_container_width=True, key="btn_ideation"):
+    if st.button("\U0001f4a1 Ideation", use_container_width=True, key="btn_ideation"):
         st.session_state.selected_workflow = "ideation"
         st.rerun()
 with col2:
-    if st.button("Data Analysis", use_container_width=True, key="btn_data"):
+    if st.button("\U0001f4ca Data Analysis", use_container_width=True, key="btn_data"):
         st.session_state.selected_workflow = "data"
         st.rerun()
 with col3:
-    if st.button("Experiment", use_container_width=True, key="btn_experiment"):
+    if st.button("\U0001f9ea Experiment", use_container_width=True, key="btn_experiment"):
         st.session_state.selected_workflow = "experiment"
         st.rerun()
 with col4:
-    if st.button("Full Workflow", use_container_width=True, key="btn_full"):
+    if st.button("\U0001f680 Full Workflow", use_container_width=True, key="btn_full"):
         st.session_state.selected_workflow = "full"
         st.rerun()
 
@@ -307,8 +339,7 @@ st.divider()
 
 # --- Chat history (skip if workflow is running — polling loop handles rendering) ---
 if "workflow_runner" not in st.session_state:
-    for m in st.session_state.messages:
-        render_chat_message(m["role"], m["content"])
+    render_chat_messages(st.session_state.messages)
 
 
 # ==================== Workflow forms ====================
@@ -380,7 +411,9 @@ if workflow_config and "workflow_runner" not in st.session_state:
     # Hook every add_message() call to push to UI
     def _on_msg(msg):
         if msg.content:
-            handler.push_message(msg.role or "assistant", msg.content)
+            handler.push_message(
+                msg.role or "assistant", msg.content, getattr(msg, "agent_sender", None)
+            )
 
     set_on_message_callback(_on_msg)
 
@@ -401,8 +434,7 @@ if "workflow_runner" in st.session_state:
         st.session_state.messages.append(msg)
 
     # Re-render all messages (including newly drained ones)
-    for m in st.session_state.messages:
-        render_chat_message(m["role"], m["content"])
+    render_chat_messages(st.session_state.messages)
 
     if handler.has_pending():
         render_approval_ui(handler)
@@ -413,7 +445,7 @@ if "workflow_runner" in st.session_state:
             resp, _ = runner.result or ("No result", [])
 
         st.session_state.messages.append({"role": "assistant", "content": resp})
-        render_chat_message("assistant", resp)
+        render_chat_message("assistant", resp, None)
 
         wc = st.session_state.workflow_config_active
         metadata = {
@@ -440,6 +472,6 @@ if "workflow_runner" in st.session_state:
         del st.session_state.approval_handler
         st.rerun()
     else:
-        render_chat_message("assistant", "Workflow is running...")
+        render_chat_message("assistant", "Workflow is running...", None)
         time.sleep(2)
         st.rerun()

@@ -10,17 +10,13 @@ from .state import PaperSearchAgentState
 def _format_paper_results_summary(state: PaperSearchAgentState) -> str:
     """Format papers/datasets/metrics summary for user review."""
     lines = [f"Papers found: {len(state.papers)}"]
-    for p in state.papers[:5]:
+    for p in state.papers:
         lines.append(f"  - {p.get('title', 'Unknown')}")
-    if len(state.papers) > 5:
-        lines.append(f"  ... and {len(state.papers) - 5} more")
     lines.append(f"\nDatasets found: {len(state.datasets)}")
-    for d in state.datasets[:3]:
+    for d in state.datasets:
         lines.append(f"  - {d.get('name', 'Unknown')}")
-    if len(state.datasets) > 3:
-        lines.append(f"  ... and {len(state.datasets) - 3} more")
     lines.append(f"\nMetrics extracted: {len(state.metrics)}")
-    for m in state.metrics[:3]:
+    for m in state.metrics:
         lines.append(f"  - {m.get('name', 'Unknown')}")
     return "\n".join(lines)
 

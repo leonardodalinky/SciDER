@@ -19,22 +19,21 @@ def _format_coding_summary(state: ExperimentAgentState) -> str:
     summary = latest.get("coding_summary", "No summary available.")
     lines = [
         f"Revision {state.current_revision + 1}/{state.max_revisions}",
-        f"\nCoding summary:\n{summary[:800]}",
+        f"\nCoding summary:\n{summary}",
     ]
-    if len(summary) > 800:
-        lines.append("...")
     return "\n".join(lines)
 
 
 def _format_analysis_summary(state: ExperimentAgentState) -> str:
     """Format experiment analysis for user review."""
-    lines = [f"Revision {state.current_revision + 1}/{state.max_revisions}\n"]
+    lines = [
+        "Are you satisfied with the experiment results?\n",
+        f"Revision {state.current_revision + 1}/{state.max_revisions}\n",
+    ]
     if state.revision_analysis:
-        lines.append(f"Analysis:\n{state.revision_analysis[:800]}")
-        if len(state.revision_analysis) > 800:
-            lines.append("...")
+        lines.append(f"Analysis:\n{state.revision_analysis}")
     if state.revision_summaries:
-        lines.append(f"\nLatest summary:\n{state.revision_summaries[-1][:400]}")
+        lines.append(f"\nLatest summary:\n{state.revision_summaries[-1]}")
     return "\n".join(lines)
 
 

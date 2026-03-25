@@ -163,6 +163,9 @@ uv sync --extra mac
 
 # for gpu
 uv sync --extra cu128
+
+# streamlit client
+uv sync --extra streamlit
 ```
 
 ## 📊 Benchmarks

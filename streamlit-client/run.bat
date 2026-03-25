@@ -15,4 +15,4 @@ REM Sync streamlit dependency
 uv sync --extra streamlit
 
 echo Starting SciDER Streamlit Interface...
-uv run python -m streamlit run streamlit-client/app.py --server.port 7860
+uv run python -m streamlit run streamlit-client/app.py --server.port 7860 --server.headless=true

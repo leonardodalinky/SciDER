@@ -2,7 +2,7 @@
 
 models:
   ideation:
-    model: gpt-5.2
+    model: gpt-5
     key_source: openai
     reasoning:
       effort: low
@@ -27,7 +27,7 @@ models:
       summary: detailed
 
   plan:
-    model: gpt-5.2
+    model: gpt-5
     key_source: openai
     reasoning:
       effort: low
@@ -55,19 +55,19 @@ models:
       effort: minimal
 
   experiment_agent:
-    model: gpt-5.2
+    model: gpt-5
     key_source: openai
     reasoning:
       effort: low
 
   experiment_coding:
-    model: gpt-5.2
+    model: gpt-5
     key_source: openai
     reasoning:
       effort: low
 
   experiment_execute:
-    model: gpt-5.2
+    model: gpt-5
     key_source: openai
     reasoning:
       effort: low

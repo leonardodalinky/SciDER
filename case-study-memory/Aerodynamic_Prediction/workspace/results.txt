@@ -1,0 +1,47 @@
+======================================================================
+AIRFOIL SELF-NOISE NEURAL NETWORK REGRESSION - DETAILED RESULTS
+======================================================================
+
+Dataset Information:
+- Total samples: 1503
+- Training samples: 1202
+- Test samples: 301
+- Features: 5
+- Target: Sound Pressure Level (dB)
+
+Training Configuration:
+- Epochs: 50
+- Learning rate: 0.001
+- Batch size: 32
+- Optimizer: Adam
+- Loss function: MSE
+
+======================================================================
+Model Comparison
+======================================================================
+
+Model 1 - Simple NN:
+  MSE:        9.106337
+  RMSE:       3.017671
+  MAE:        2.290891
+  R² Score:   0.818232
+  Train Time: 0.37s
+
+Model 2 - Deep NN:
+  MSE:        3.797730
+  RMSE:       1.948777
+  MAE:        1.424361
+  R² Score:   0.924195
+  Train Time: 0.70s
+
+Model 3 - Wide NN:
+  MSE:        6.347190
+  RMSE:       2.519363
+  MAE:        1.868294
+  R² Score:   0.873306
+  Train Time: 2.07s
+
+======================================================================
+Best Model: Model 2 - Deep NN
+Best RMSE: 1.948777
+======================================================================

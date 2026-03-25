@@ -215,6 +215,7 @@ software-agent-sdk
 env
 
 streamlit-client/case-study-memory/
+saved_chats/
 
 # vibe coding
 .claude/

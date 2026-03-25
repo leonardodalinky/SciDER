@@ -9,7 +9,7 @@ from scider.core.llms import ModelRegistry
 
 LOW_COST_MODEL = "gpt-5-nano"
 MEDIUM_COST_MODEL = "gpt-5-mini"
-HIGH_COST_MODEL = "gpt-5.2"
+HIGH_COST_MODEL = "gpt-5"
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 

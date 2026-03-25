@@ -177,20 +177,20 @@ def _format_paper_context(state: DataAgentState) -> str:
     lines = []
     if state.papers:
         lines.append(f"### Related Papers ({len(state.papers)})")
-        for p in state.papers[:10]:
+        for p in state.papers:
             lines.append(f"- **{p.get('title', 'Untitled')}**")
             if p.get("summary"):
-                lines.append(f"  {p['summary'][:200]}")
+                lines.append(f"  {p['summary']}")
     if state.datasets:
         lines.append(f"\n### Related Datasets ({len(state.datasets)})")
-        for d in state.datasets[:5]:
-            lines.append(f"- {d.get('name', 'Unknown')}: {d.get('description', '')[:100]}")
+        for d in state.datasets:
+            lines.append(f"- {d.get('name', 'Unknown')}: {d.get('description', '')}")
     if state.metrics:
         lines.append(f"\n### Evaluation Metrics ({len(state.metrics)})")
-        for m in state.metrics[:5]:
-            lines.append(f"- {m.get('name', 'Unknown')}: {m.get('description', '')[:100]}")
+        for m in state.metrics:
+            lines.append(f"- {m.get('name', 'Unknown')}: {m.get('description', '')}")
     if state.paper_search_summary:
-        lines.append(f"\n### Search Summary\n{state.paper_search_summary[:500]}")
+        lines.append(f"\n### Search Summary\n{state.paper_search_summary}")
     return "\n".join(lines) if lines else "No related research found."
 
 
@@ -198,28 +198,33 @@ def _format_analysis_summary(state: DataAgentState) -> str:
     """Format initial data analysis results for user review."""
     recent = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
     if recent:
-        return f"Data analysis result:\n\n{recent[-1].content[:800]}"
+        return f"Data analysis result:\n\n{recent[-1].content}"
     return "No analysis output yet."
 
 
 def _format_paper_results_summary(state: DataAgentState) -> str:
     """Format paper search results for user review."""
     lines = [f"Papers found: {len(state.papers)}"]
-    for p in state.papers[:5]:
+    for p in state.papers:
         lines.append(f"  - {p.get('title', 'Unknown')}")
-    if len(state.papers) > 5:
-        lines.append(f"  ... and {len(state.papers) - 5} more")
     lines.append(f"\nDatasets found: {len(state.datasets)}")
-    lines.append(f"Metrics extracted: {len(state.metrics)}")
+    for d in state.datasets:
+        lines.append(f"  - {d.get('name', 'Unknown')}")
+    lines.append(f"\nMetrics extracted: {len(state.metrics)}")
+    for m in state.metrics:
+        lines.append(f"  - {m.get('name', 'Unknown')}")
     return "\n".join(lines)
 
 
 def _format_final_summary(state: DataAgentState) -> str:
-    """Format deep analysis results for user review."""
+    """Format deep analysis results for final user review."""
+    lines = ["Are you satisfied with the data analysis output?\n"]
     recent = [m for m in state.patched_history[-6:] if m.role == "assistant" and m.content]
     if recent:
-        return f"Deep analysis result:\n\n{recent[-1].content[:800]}"
-    return "No deep analysis output yet."
+        lines.append(f"Deep analysis result:\n\n{recent[-1].content}")
+    else:
+        lines.append("No deep analysis output yet.")
+    return "\n".join(lines)
 
 
 def _reset_paper_search(state: DataAgentState) -> None:

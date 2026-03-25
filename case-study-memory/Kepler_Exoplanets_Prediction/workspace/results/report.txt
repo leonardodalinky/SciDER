@@ -1,0 +1,44 @@
+============================================================
+KEPLER KOI EXOPLANET DETECTION - EXPERIMENT REPORT
+============================================================
+
+MODEL COMPARISON (5-fold CV):
+----------------------------------------
+  Logistic Regression:
+    F1=0.9938  Acc=0.9939  Prec=0.9988  Rec=0.9890  AUC=0.9989
+  Random Forest:
+    F1=0.9942  Acc=0.9943  Prec=0.9997  Rec=0.9888  AUC=0.9997
+  Gradient Boosting:
+    F1=0.9943  Acc=0.9944  Prec=0.9990  Rec=0.9898  AUC=0.9994
+  XGBoost:
+    F1=0.9949  Acc=0.9949  Prec=0.9978  Rec=0.9920  AUC=0.9995
+  KNN:
+    F1=0.9932  Acc=0.9933  Prec=0.9975  Rec=0.9890  AUC=0.9970
+
+BEST MODEL: XGBoost
+
+BEST CV METRICS:
+  F1:      0.9949
+  Accuracy: 0.9949
+  Precision: 0.9978
+  Recall:   0.9920
+  ROC-AUC: 0.9995
+
+BEST TEST METRICS:
+  F1:      0.9879
+  Accuracy: 0.9925
+  Precision: 0.9978
+  Recall:   0.9782
+  ROC-AUC: 0.9958
+
+TOP FEATURES (by importance):
+  koi_score: 0.8647
+  koi_fpflag_co: 0.0152
+  koi_steff_err1: 0.0143
+  koi_fpflag_nt: 0.0116
+  koi_duration_err1: 0.0113
+  koi_fpflag_ec: 0.0099
+  koi_model_snr: 0.0097
+  koi_fpflag_ss: 0.0085
+  koi_prad: 0.0077
+  koi_prad_err1: 0.0076

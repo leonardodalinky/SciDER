@@ -252,14 +252,46 @@ def _shorten_summary(text: str, max_line_len: int = 1024) -> str:
     return "\n".join(textwrap.shorten(line, max_line_len, placeholder="...") for line in lines)
 
 
+_APPROVAL_CONTENT_TRUNCATE = 800
+
+
 def render_approval_ui(handler) -> None:
     """Render approval buttons + feedback input for a pending approval request."""
     pending = handler.get_pending()
     if not pending:
         return
 
-    st.warning(f"**Approval required: `{pending['node_name']}`**")
-    st.markdown(_shorten_summary(pending["summary"]))
+    summary = pending["summary"]
+    node_name = pending["node_name"]
+
+    # Extract leading prompt line (e.g. "Are you satisfied with...") if present
+    prompt_line = ""
+    body = summary
+    if summary.startswith("Are you"):
+        first_newline = summary.find("\n")
+        if first_newline > 0:
+            prompt_line = summary[:first_newline].strip()
+            body = summary[first_newline:].strip()
+
+    # Highlighted header
+    st.markdown(
+        f"""<div style="background: #fff3cd; border-left: 4px solid #ffc107;
+        padding: 12px 16px; border-radius: 6px; margin-bottom: 8px;">
+        <span style="font-size: 18px; font-weight: 700;">⚠️ Approval required: {node_name}</span>
+        {"<br><span style='font-size: 16px; font-weight: 600; color: #856404;'>" + prompt_line + "</span>" if prompt_line else ""}
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    # Approval content in a bordered container, collapsible if long
+    if len(body) > _APPROVAL_CONTENT_TRUNCATE:
+        preview_lines = body[:200].split("\n")
+        label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
+        with st.expander(f"{label}...", expanded=True):
+            st.markdown(body)
+    else:
+        with st.container(border=True):
+            st.markdown(body)
 
     # Selection UI (radio buttons for single select)
     selected_index = None
@@ -272,7 +304,7 @@ def render_approval_ui(handler) -> None:
         # Show description of selected item
         selected_item = items[selected_index]
         if selected_item.get("description"):
-            st.caption(selected_item["description"][:300])
+            st.caption(selected_item["description"])
 
     feedback_text = st.text_input(
         "Feedback (required for feedback option)",
@@ -280,12 +312,11 @@ def render_approval_ui(handler) -> None:
         placeholder="Enter your feedback here...",
     )
 
-    node_name = pending["node_name"]
-
+    # Buttons — use_container_width for equal sizing
     col1, col2, col3 = st.columns(3)
     with col1:
         label = "Approve selected" if selected_index is not None else "Approve"
-        if st.button(f"✅ {label}", key="btn_approve"):
+        if st.button(f"✅ {label}", key="btn_approve", use_container_width=True):
             st.session_state.messages.append(
                 {"role": "user", "content": f"✅ Approved [{node_name}]"}
             )
@@ -294,7 +325,7 @@ def render_approval_ui(handler) -> None:
             )
             st.rerun()
     with col2:
-        if st.button("❌ Reject", key="btn_reject"):
+        if st.button("❌ Reject", key="btn_reject", use_container_width=True):
             st.session_state.messages.append(
                 {"role": "user", "content": f"❌ Rejected [{node_name}]"}
             )
@@ -304,6 +335,7 @@ def render_approval_ui(handler) -> None:
         if st.button(
             "💬 Feedback",
             key="btn_feedback",
+            use_container_width=True,
             disabled=not (feedback_text and feedback_text.strip()),
         ):
             st.session_state.messages.append(

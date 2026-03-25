@@ -60,10 +60,10 @@ class StreamlitApprovalHandler(ApprovalHandler):
         self._event.wait()
         return self._response
 
-    def push_message(self, role: str, content: str) -> None:
+    def push_message(self, role: str, content: str, agent: str | None = None) -> None:
         """Push a message for the UI thread to display (thread-safe)."""
         with self._lock:
-            self._live_messages.append({"role": role, "content": content})
+            self._live_messages.append({"role": role, "content": content, "agent": agent})
 
     def drain_messages(self) -> list[dict]:
         """Drain all queued messages (called from UI thread)."""
