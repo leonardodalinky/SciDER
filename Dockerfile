@@ -22,7 +22,7 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements-space.txt -v
 
 # Copy application code
-COPY scievo/ /app/scievo/
+COPY scider/ /app/scider/
 COPY streamlit-client/ /app/streamlit-client/
 COPY static/ /app/static/
 # Copy case studies for Case Study mode (browse saved chats without API)
