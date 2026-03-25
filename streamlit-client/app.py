@@ -225,10 +225,22 @@ if st.session_state.get("view_mode") == "case_study":
 # --- First visit: show settings page ---
 if not has_settings():
     _logo = Path(__file__).parent.parent / "static" / "images" / "scider_logo.webp"
+    _logo_src = None
     if _logo.exists():
+        _logo_src = str(_logo)
+    else:
+        _logo_url = "https://raw.githubusercontent.com/leonardodalinky/SciDER/main/static/images/scider_logo.webp"
+        try:
+            import urllib.request
+
+            urllib.request.urlopen(_logo_url, timeout=3)
+            _logo_src = _logo_url
+        except Exception:
+            pass
+    if _logo_src:
         _col_l, _col_c, _col_r = st.columns([1, 2, 1])
         with _col_c:
-            st.image(str(_logo), width=300)
+            st.image(_logo_src, width=300)
     st.title("SciDER Research Assistant")
     if st.button("📂 Browse Case Studies", key="case_study_from_setup"):
         st.session_state.view_mode = "case_study"
