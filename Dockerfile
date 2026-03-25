@@ -24,6 +24,7 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY scider/ /app/scider/
 COPY streamlit-client/ /app/streamlit-client/
+COPY static/ /app/static/
 # Copy case studies for Case Study mode (browse saved chats without API)
 COPY case-study-memory/ /app/streamlit-client/case-study-memory/
 
