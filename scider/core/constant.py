@@ -44,6 +44,9 @@ HISTORY_AUTO_COMPRESSION_TOKEN_THRESHOLD = int(
 )
 HISTORY_AUTO_COMPRESSION_KEEP_RATIO = float(os.getenv("HISTORY_AUTO_COMPRESSION_KEEP_RATIO", 0.4))
 
+# Semantic Scholar
+S2_API_KEY = os.getenv("S2_API_KEY", "")
+
 # User Approval
 USER_APPROVAL_ENABLED = str_to_bool(os.getenv("USER_APPROVAL_ENABLED", True))
 

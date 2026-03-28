@@ -335,6 +335,11 @@ if "initialized" not in st.session_state:
         os.environ["REASONING_BANK_ENABLED"] = "false"
         _constant.REASONING_BANK_ENABLED = False
 
+    # Semantic Scholar API key
+    if _settings.get("s2_api_key"):
+        os.environ["S2_API_KEY"] = _settings["s2_api_key"]
+        _constant.S2_API_KEY = _settings["s2_api_key"]
+
     Brain()
     if register_all_models(_settings):
         st.session_state.ideation_graph = ideation_agent.build().compile()

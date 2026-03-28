@@ -111,10 +111,11 @@ class SemanticScholarRepository(PaperRepository):
                 "fields": "title,authors,year,abstract,url,openAccessPdf,publicationDate",
             }
 
+            from scider.core import constant
+
             headers = {"Accept": "application/json"}
-            s2_api_key = os.getenv("S2_API_KEY")
-            if s2_api_key:
-                headers["x-api-key"] = s2_api_key
+            if constant.S2_API_KEY:
+                headers["x-api-key"] = constant.S2_API_KEY
 
             response = requests.get(base_url, params=params, headers=headers)
 
@@ -167,8 +168,10 @@ class PaperSearch:
     @staticmethod
     def default_sources() -> List[str]:
         """Return default sources: arxiv always, semanticscholar if S2_API_KEY is set."""
+        from scider.core import constant
+
         sources = ["arxiv"]
-        if os.getenv("S2_API_KEY"):
+        if constant.S2_API_KEY:
             sources.append("semanticscholar")
         return sources
 

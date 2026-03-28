@@ -145,6 +145,17 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             "Without it, memory features will be disabled."
         )
 
+        s2_api_key = st.text_input(
+            "Semantic Scholar API Key",
+            type="password",
+            placeholder="Optional — enables Semantic Scholar paper search",
+            value=current.get("s2_api_key", ""),
+        )
+        st.caption(
+            "Optional. If provided, paper search will also query Semantic Scholar "
+            "in addition to arXiv. Get a key at https://www.semanticscholar.org/product/api"
+        )
+
         # --- Memory toggle ---
         st.divider()
         st.markdown("#### Memory")
@@ -235,6 +246,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             final_api_key = api_key.strip()
             final_anthropic = anthropic_api_key.strip()
             final_openai = openai_api_key.strip()
+            final_s2 = s2_api_key.strip()
 
             if not final_api_key:
                 st.error("API key is required.")
@@ -249,6 +261,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
                 "model_provider": model_provider,
                 "anthropic_api_key": final_anthropic,
                 "openai_api_key": final_openai,
+                "s2_api_key": final_s2,
                 "memory_enabled": memory_enabled,
                 "model_roles": role_selections,
             }
