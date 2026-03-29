@@ -35,7 +35,7 @@ BUILTIN_TOOLSETS = [
     "history",
     "fs",
 ]
-ALLOWED_TOOLSETS = ["web"]
+ALLOWED_TOOLSETS = ["web", "subagents"]
 
 
 def gateway_node(agent_state: DataAgentState) -> DataAgentState:

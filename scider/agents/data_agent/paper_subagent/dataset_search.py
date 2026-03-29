@@ -15,12 +15,7 @@ from loguru import logger
 # Delay import of ModelRegistry to avoid circular import
 # from ..core.llms import ModelRegistry  # Moved to function level
 # Message is imported here but only used in functions that have lazy ModelRegistry import
-from ..core.types import Message
-from .registry import register_tool, register_toolset_desc
-
-register_toolset_desc(
-    "dataset_search", "Search for academic datasets across multiple repositories."
-)
+from scider.core.types import Message
 
 
 @dataclass
@@ -510,7 +505,7 @@ Return ONLY the search query text, no explanation:"""
 
     try:
         # Lazy import to avoid circular dependency
-        from ..core.llms import ModelRegistry
+        from scider.core.llms import ModelRegistry
 
         # Try to use dataset_search model, fallback to data model
         try:
@@ -599,49 +594,6 @@ class DatasetSearch:
         return all_datasets[:max_results]
 
 
-# Register the tool with the framework
-@register_tool(
-    "dataset_search",
-    {
-        "type": "function",
-        "function": {
-            "name": "search_datasets",
-            "description": "Search for academic datasets across multiple repositories",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for dataset names/descriptions (fallback if data_summary not provided)",
-                    },
-                    "data_summary": {
-                        "type": "string",
-                        "description": "Optional data analysis summary from data agent. If provided, will extract dataset features and search for similar datasets.",
-                    },
-                    "domain": {
-                        "type": "string",
-                        "description": "Optional domain filter (e.g., 'computer vision', 'NLP', 'speech')",
-                    },
-                    "sources": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "enum": ["paperswithcode", "huggingface", "uci"],
-                            "description": "List of repositories to search",
-                        },
-                        "default": ["paperswithcode", "huggingface"],
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return per source",
-                        "default": 10,
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-)
 def search_datasets(
     query: str,
     domain: Optional[str] = None,

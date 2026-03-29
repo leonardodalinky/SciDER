@@ -22,14 +22,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from ..core import constant
-from .registry import register_tool, register_toolset_desc
-
-register_toolset_desc(
-    "claude_code",
-    "Claude Code CLI toolset. Calls the local `claude` executable to apply code changes in a target folder. "
-    "Requires Claude Code to be installed and authenticated on the machine.",
-)
+from scider.core import constant
 
 
 class ClaudeCodeResult(BaseModel):
@@ -81,45 +74,6 @@ def _resolve_claude_cmd() -> list[str] | None:
     return None
 
 
-@register_tool(
-    "claude_code",
-    {
-        "type": "function",
-        "function": {
-            "name": "run_claude_code",
-            "description": (
-                "Run Claude Code (local `claude` CLI) with a natural-language instruction to modify files in a target directory. "
-                "This tool is best-effort across Claude CLI versions; it feeds the instruction via stdin and/or a temp file. "
-                "If Claude Code is not installed, it returns a helpful error."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "instruction": {
-                        "type": "string",
-                        "description": "Natural-language instruction describing the code changes to apply.",
-                    },
-                    "cwd": {
-                        "type": "string",
-                        "description": "Target working directory (defaults to agent repo_dir/local_env.working_dir).",
-                        "default": None,
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in seconds (default 600).",
-                        "default": 600,
-                    },
-                    "extra_args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Optional extra CLI args appended after the base `claude` command.",
-                    },
-                },
-                "required": ["instruction"],
-            },
-        },
-    },
-)
 def run_claude_code(
     instruction: str,
     cwd: str | None = None,

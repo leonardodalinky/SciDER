@@ -2,6 +2,7 @@ from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
 from scider.core.approval import make_approval_node
+from scider.tools.subagent_wrapper import SubagentToolWrapper, ToolParam
 
 from . import execute
 from .state import PaperSearchAgentState
@@ -90,3 +91,53 @@ def build():
     g.add_edge("summary", END)
 
     return g
+
+
+# ==================== Tool wrapper ====================
+
+_compiled_graph = build().compile()
+
+
+def _default_parent_state_injector(parent_state, kwargs):
+    """Extract data_summary from any parent state that has message history."""
+    data_summary = ""
+    if hasattr(parent_state, "patched_history"):
+        for msg in reversed(parent_state.patched_history):
+            if msg.role == "assistant" and msg.content:
+                data_summary = msg.content[:2000]
+                break
+    if not data_summary and hasattr(parent_state, "data_desc"):
+        data_summary = getattr(parent_state, "data_desc", "") or ""
+    return {"data_summary": data_summary}
+
+
+paper_search_tool = SubagentToolWrapper(
+    name="run_paper_search_agent",
+    toolset="subagents",
+    description=(
+        "Run the paper search agent to find academic papers, datasets, "
+        "and evaluation metrics related to a research query. Returns a "
+        "comprehensive summary with papers, datasets, and metrics."
+    ),
+    compiled_graph=_compiled_graph,
+    state_cls=PaperSearchAgentState,
+    tool_params={
+        "user_query": ToolParam(
+            json_type="string",
+            description="The research query to search for papers and datasets",
+        ),
+    },
+    parent_state_injector=_default_parent_state_injector,
+    result_extractor=lambda r: {
+        "papers": r.get("papers", []),
+        "datasets": r.get("datasets", []),
+        "metrics": r.get("metrics", []),
+        "summary": r.get("output_summary", ""),
+    },
+    parent_state_updater=lambda ps, res: (
+        setattr(ps, "papers", res.get("papers", [])) if hasattr(ps, "papers") else None,
+        setattr(ps, "datasets", res.get("datasets", [])) if hasattr(ps, "datasets") else None,
+        setattr(ps, "metrics", res.get("metrics", [])) if hasattr(ps, "metrics") else None,
+    ),
+)
+paper_search_tool.register()

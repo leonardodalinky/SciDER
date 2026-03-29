@@ -10,11 +10,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from loguru import logger
 
-from ..core.types import Message
-from ..rbank.utils import cosine_similarity
-from .registry import register_tool, register_toolset_desc
-
-register_toolset_desc("metric_search", "Extract evaluation metrics from academic papers.")
+from scider.core.types import Message
+from scider.rbank.utils import cosine_similarity
 
 
 @dataclass
@@ -49,7 +46,7 @@ class RAGMetricExtractor:
 
         try:
             # Lazy import to avoid circular dependency
-            from ..core.llms import ModelRegistry
+            from scider.core.llms import ModelRegistry
 
             embeddings = ModelRegistry.embedding(self.embedding_llm, [text])
             if embeddings and len(embeddings) > 0:
@@ -65,7 +62,7 @@ class RAGMetricExtractor:
         """Get embedding for the task query."""
         try:
             # Lazy import to avoid circular dependency
-            from ..core.llms import ModelRegistry
+            from scider.core.llms import ModelRegistry
 
             embeddings = ModelRegistry.embedding(self.embedding_llm, [query])
             if embeddings and len(embeddings) > 0:
@@ -184,7 +181,7 @@ Pay special attention to metrics from papers with higher relevance scores."""
 
         try:
             # Lazy import to avoid circular dependency
-            from ..core.llms import ModelRegistry
+            from scider.core.llms import ModelRegistry
 
             # Call LLM to extract metrics
             msg = ModelRegistry.completion(
@@ -340,44 +337,6 @@ Pay special attention to metrics from papers with higher relevance scores."""
         return common_metrics
 
 
-# Register the tool with the framework
-@register_tool(
-    "metric_search",
-    {
-        "type": "function",
-        "function": {
-            "name": "extract_metrics_from_papers",
-            "description": "Extract evaluation metrics from academic papers using RAG (Retrieval-Augmented Generation)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "papers": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "summary": {"type": "string"},
-                                "url": {"type": "string"},
-                            },
-                        },
-                        "description": "List of paper dictionaries with title, summary, and url",
-                    },
-                    "task_query": {
-                        "type": "string",
-                        "description": "The original task/query to filter relevant metrics",
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of metrics to return",
-                        "default": 20,
-                    },
-                },
-                "required": ["papers", "task_query"],
-            },
-        },
-    },
-)
 def extract_metrics_from_papers(papers: List[dict], task_query: str, max_results: int = 20) -> str:
     """
     Extract evaluation metrics from academic papers using RAG.

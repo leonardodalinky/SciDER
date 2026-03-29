@@ -10,55 +10,10 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from .registry import register_tool, register_toolset_desc
-
 if TYPE_CHECKING:
     from openhands.sdk import Conversation, LocalConversation
 
-register_toolset_desc(
-    "openhands",
-    "OpenHands coding toolset. This toolset provides access to an external AI coding agent "
-    "that can read, write, and modify code files using natural language instructions. "
-    "The agent maintains conversation history across calls within the same session. "
-    "Use this for complex coding tasks that require multi-turn interactions.",
-)
 
-
-@register_tool(
-    "openhands",
-    {
-        "type": "function",
-        "function": {
-            "name": "code_subagent",
-            "description": (
-                "Execute a coding task using the OpenHands external coding agent. "
-                "This agent can read, write, and modify code files based on natural language instructions. "
-                "The conversation history persists across calls, allowing for multi-turn coding sessions. "
-                "IMPORTANT: Be specific about file paths and desired changes."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "instruction": {
-                        "type": "string",
-                        "description": (
-                            "Natural language instruction for the coding agent. "
-                            "Be specific about what files to modify and what changes to make. "
-                            "Example: 'Add error handling to the load_data function in src/utils.py'"
-                        ),
-                    },
-                    "bg_info": {
-                        "type": "string",
-                        "description": (
-                            "Background information for the coding agent, such as current working directory, information about the code base, background knowledge of the task. "
-                        ),
-                    },
-                },
-                "required": ["instruction", "bg_info"],
-            },
-        },
-    },
-)
 def code_subagent(agent_state, instruction: str, bg_info: str) -> str:
     """
     Execute a coding task using the OpenHands agent.

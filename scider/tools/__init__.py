@@ -1,32 +1,24 @@
 import os
 
-# import tools to register them
+# Import tools that are actually used via LLM tool_calling
 from . import (  # noqa: F401
-    claude_agent_sdk_tool,
-    claude_code_tool,
-    dataset_search_tool,
     env_tool,
     exec_tool,
     fs_tool,
     github_tool,
     history_tool,
-    metric_search_tool,
-    paper_search_tool,
     shell_tool,
     state_tool,
     todo_tool,
     web_tool,
 )
-
-# OpenHands is intentionally optional. Avoid importing/registering it unless explicitly enabled,
-# since importing it may mutate sys.path and/or require extra dependencies.
-_ENABLE_OPENHANDS = os.getenv("SCIDER_ENABLE_OPENHANDS", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "y",
-}
-if _ENABLE_OPENHANDS:
-    from . import openhands_tool  # noqa: F401
-
 from .registry import Tool, ToolRegistry
+
+# The following were moved to their respective agent modules as internal functions:
+# - ideation_tool        -> scider.agents.ideation_agent.ideation_utils
+# - paper_search_tool    -> scider.agents.data_agent.paper_subagent.paper_search
+# - dataset_search_tool  -> scider.agents.data_agent.paper_subagent.dataset_search
+# - metric_search_tool   -> scider.agents.data_agent.paper_subagent.metric_search
+# - claude_agent_sdk_tool -> scider.agents.experiment_agent.coding_subagent_v3_claude.claude_sdk
+# - claude_code_tool     -> scider.agents.experiment_agent.coding_subagent_v3_claude.claude_code
+# - openhands_tool       -> scider.agents.experiment_agent.coding_subagent_v2.openhands_utils

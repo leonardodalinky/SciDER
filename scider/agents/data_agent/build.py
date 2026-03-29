@@ -7,15 +7,12 @@ from scider.core.types import Message
 from scider.rbank.subgraph import mem_consolidation
 
 from . import execute
-from .paper_subagent import build as paper_subagent_build
+from .paper_subagent.build import _compiled_graph as paper_subagent_graph_compiled
 from .paper_subagent.state import PaperSearchAgentState
 from .state import DataAgentState
 
 mem_consolidation_subgraph = mem_consolidation.build()
 mem_consolidation_subgraph_compiled = mem_consolidation_subgraph.compile()
-
-paper_subagent_graph = paper_subagent_build()
-paper_subagent_graph_compiled = paper_subagent_graph.compile()
 
 
 # ==================== Node functions ====================

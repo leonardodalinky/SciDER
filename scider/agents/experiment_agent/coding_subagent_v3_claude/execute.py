@@ -15,9 +15,9 @@ from scider.core import constant
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
 from scider.prompts import PROMPTS
-from scider.tools.claude_agent_sdk_tool import run_claude_agent_sdk
-from scider.tools.claude_code_tool import run_claude_code
 
+from .claude_code import run_claude_code
+from .claude_sdk import run_claude_agent_sdk
 from .state import ClaudeCodingAgentState
 
 LLM_NAME = "experiment_coding"

@@ -15,17 +15,9 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from ..core import constant
-from .registry import register_tool, register_toolset_desc
+from scider.core import constant
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
-
-
-register_toolset_desc(
-    "claude_agent_sdk",
-    "Claude Agent SDK toolset. Runs Claude Code runtime programmatically in a target folder. "
-    "Requires `claude-agent-sdk` to be installed and `ANTHROPIC_API_KEY` to be set.",
-)
 
 
 def _resolve_cwd(cwd: str | None, agent_state) -> Path:
@@ -45,49 +37,6 @@ def _resolve_cwd(cwd: str | None, agent_state) -> Path:
     return Path.cwd().resolve()
 
 
-@register_tool(
-    "claude_agent_sdk",
-    {
-        "type": "function",
-        "function": {
-            "name": "run_claude_agent_sdk",
-            "description": (
-                "Run Claude Agent SDK (Claude Code runtime as a library) to apply edits in a target directory. "
-                "This streams messages from the SDK and returns a compact summary. "
-                "Requires `pip install claude-agent-sdk` and `ANTHROPIC_API_KEY`."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "prompt": {
-                        "type": "string",
-                        "description": "The task prompt for the Claude agent (e.g. 'Find and fix the bug in auth.py').",
-                    },
-                    "cwd": {
-                        "type": "string",
-                        "description": "Working directory for the agent (defaults to repo_dir/local_env.working_dir).",
-                        "default": None,
-                    },
-                    "allowed_tools": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "Allowed tools for the Claude agent SDK. "
-                            "Common: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch."
-                        ),
-                        "default": ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
-                    },
-                    "permission_mode": {
-                        "type": "string",
-                        "description": "Claude Agent SDK permission mode (e.g. 'acceptEdits').",
-                        "default": "acceptEdits",
-                    },
-                },
-                "required": ["prompt"],
-            },
-        },
-    },
-)
 def run_claude_agent_sdk(
     prompt: str,
     cwd: str | None = None,

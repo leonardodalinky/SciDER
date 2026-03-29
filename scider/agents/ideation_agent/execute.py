@@ -11,21 +11,17 @@ import re
 from loguru import logger
 from pydantic import BaseModel, TypeAdapter
 
+from scider.agents.data_agent.paper_subagent.paper_search import search_papers
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
 from scider.core.utils import parse_json_from_text
 from scider.prompts.prompt_data import PROMPTS
-from scider.tools.ideation_tool import analyze_papers_for_ideas
-from scider.tools.paper_search_tool import search_papers
-from scider.tools.registry import ToolRegistry
 
+from .ideation_utils import analyze_papers_for_ideas
 from .state import IdeationAgentState
 
 LLM_NAME = "ideation"
 AGENT_NAME = "ideation"
-
-# Built-in toolsets for ideation agent
-BUILTIN_TOOLSETS = ["ideation", "paper_search"]
 
 
 def keyword_construct_node(agent_state: IdeationAgentState) -> IdeationAgentState:

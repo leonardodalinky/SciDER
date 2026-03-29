@@ -13,10 +13,10 @@ from loguru import logger
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
 from scider.prompts.prompt_data import PROMPTS
-from scider.tools.dataset_search_tool import search_datasets
-from scider.tools.metric_search_tool import extract_metrics_from_papers
-from scider.tools.paper_search_tool import search_papers
 
+from .dataset_search import search_datasets
+from .metric_search import extract_metrics_from_papers
+from .paper_search import search_papers
 from .state import PaperSearchAgentState
 
 LLM_NAME = "paper_search"

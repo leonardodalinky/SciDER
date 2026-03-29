@@ -9,10 +9,6 @@ import feedparser
 import requests
 from loguru import logger
 
-from .registry import register_tool, register_toolset_desc
-
-register_toolset_desc("paper_search", "Search for academic papers across multiple repositories.")
-
 
 @dataclass
 class Paper:
@@ -51,11 +47,40 @@ class ArXivRepository(PaperRepository):
 
             query_url = base_url + urllib.parse.urlencode(params)
             logger.debug(f"arXiv search URL: {query_url}")
-            response = feedparser.parse(query_url)
 
-            # Check for parsing errors
-            if hasattr(response, "bozo") and response.bozo:
-                logger.warning(f"arXiv API parsing error: {response.bozo_exception}")
+            # Retry with backoff for rate limiting
+            response = None
+            for attempt in range(3):
+                response = feedparser.parse(query_url)
+
+                # Check for rate limiting in feed content
+                raw = getattr(response, "feed", {})
+                raw_summary = raw.get("summary", "") or ""
+                _RETRY_WAIT = [10, 30, 60]
+                if "rate" in raw_summary.lower() and "exceeded" in raw_summary.lower():
+                    wait = _RETRY_WAIT[attempt]
+                    logger.warning(
+                        f"arXiv rate limit exceeded for query '{query}', "
+                        f"retrying in {wait}s (attempt {attempt + 1}/3)"
+                    )
+                    time.sleep(wait)
+                    continue
+
+                # Check for parsing errors that look like rate limits
+                if hasattr(response, "bozo") and response.bozo:
+                    bozo_str = str(response.bozo_exception)
+                    if not hasattr(response, "entries") or not response.entries:
+                        wait = _RETRY_WAIT[attempt]
+                        logger.warning(
+                            f"arXiv API error (likely rate limit): {bozo_str}, "
+                            f"retrying in {wait}s (attempt {attempt + 1}/3)"
+                        )
+                        time.sleep(wait)
+                        continue
+                    else:
+                        logger.warning(f"arXiv API parsing warning: {bozo_str}")
+
+                break  # Success or non-retryable error
 
             papers = []
 
@@ -173,6 +198,9 @@ class PaperSearch:
         sources = ["arxiv"]
         if constant.S2_API_KEY:
             sources.append("semanticscholar")
+        logger.debug(
+            f"Paper search sources: {sources} (S2_API_KEY set: {bool(constant.S2_API_KEY)})"
+        )
         return sources
 
     def search(self, query: str, sources: List[str] = None, max_results: int = 10) -> List[Paper]:
@@ -195,41 +223,6 @@ class PaperSearch:
         return all_papers[:max_results]
 
 
-# Register the tool with the framework
-@register_tool(
-    "paper_search",
-    {
-        "type": "function",
-        "function": {
-            "name": "search_papers",
-            "description": "Search for academic papers across multiple repositories",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for paper titles/abstracts",
-                    },
-                    "sources": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "enum": ["arxiv", "semanticscholar"],
-                            "description": "List of repositories to search (arxiv, semanticscholar)",
-                        },
-                        "description": "Defaults to arxiv; includes semanticscholar if S2_API_KEY is set",
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return per source",
-                        "default": 10,
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-)
 def search_papers(query: str, sources: List[str] = None, max_results: int = 10) -> str:
     """
     Search for academic papers across multiple repositories.
