@@ -166,6 +166,22 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             "long-term memory from conversations.",
         )
 
+        # --- HuggingFace Dataset Download ---
+        st.divider()
+        st.markdown("#### HuggingFace Dataset Download")
+
+        from scider.core import constant as _c
+
+        if _c.HF_DATASET_DOWNLOAD_ENABLED:
+            st.success("Enabled — you can use HuggingFace repo names as data paths.")
+        else:
+            st.info("Disabled. Set `HF_DATASET_DOWNLOAD_ENABLED=true` in `.env` to enable.")
+        st.caption(
+            "When enabled, you can enter a HuggingFace dataset repo name "
+            "(e.g. `google/fleurs`) instead of uploading a local file. "
+            "Datasets are downloaded and cached automatically."
+        )
+
         # --- Coding Agent ---
         st.divider()
         st.markdown("#### Coding Agent")

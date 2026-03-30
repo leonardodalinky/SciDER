@@ -47,6 +47,10 @@ HISTORY_AUTO_COMPRESSION_KEEP_RATIO = float(os.getenv("HISTORY_AUTO_COMPRESSION_
 # Semantic Scholar
 S2_API_KEY = os.getenv("S2_API_KEY", "")
 
+# HuggingFace Dataset Download
+HF_DATASET_DOWNLOAD_ENABLED = str_to_bool(os.getenv("HF_DATASET_DOWNLOAD_ENABLED", False))
+HF_DATASET_CACHE_DIR = os.getenv("HF_DATASET_CACHE_DIR", "tmp_hf_datasets")
+
 # User Approval
 USER_APPROVAL_ENABLED = str_to_bool(os.getenv("USER_APPROVAL_ENABLED", True))
 

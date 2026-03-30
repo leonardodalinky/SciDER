@@ -19,6 +19,7 @@ dependencies = [
     "ddgs>=9.6.1",
     "epam-indigo==1.35.0",
     "feedparser>=6.0.12",
+    "huggingface-hub>=0.32.0",
     "filetype>=1.2.0",
     "jinja2>=3.1.6",
     "json-repair>=0.53.0",

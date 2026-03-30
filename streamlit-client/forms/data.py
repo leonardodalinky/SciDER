@@ -6,19 +6,17 @@ import streamlit as st
 from loguru import logger
 from utils import cleanup_uploaded_data, save_and_extract_upload
 
+from scider.core import constant
 from scider.workflows.data_workflow import DataWorkflow
 
 
 def run_data(path, q, workspace_path):
     """Run data workflow. Called from background thread."""
-    data_path = Path(path).resolve()
-    if not data_path.exists():
-        return f"Error: Data path does not exist: {data_path}", []
-
+    data_path = Path(path) if Path(path).exists() else path  # may be HF repo name
     logger.info(f"Running data analysis on path: {data_path}")
 
     w = DataWorkflow(
-        data_path=data_path,
+        data_path=Path(path) if Path(path).exists() else Path(str(path)),
         workspace_path=workspace_path,
         recursion_limit=100,
     )
@@ -35,19 +33,50 @@ def run_data(path, q, workspace_path):
 
 def render_form():
     """Render the data analysis form. Returns workflow_config dict or None."""
+    hf_enabled = constant.HF_DATASET_DOWNLOAD_ENABLED
+
+    if hf_enabled:
+        data_source = st.radio(
+            "Data Source",
+            ["Upload local file", "HuggingFace dataset"],
+            horizontal=True,
+            key="data_source_radio",
+        )
+    else:
+        data_source = "Upload local file"
+
     with st.form("data_form", clear_on_submit=True):
         st.markdown("### Data Analysis Workflow")
-        st.caption("Upload a zip dataset or enter a path to existing data")
-        uploaded_zip = st.file_uploader(
-            "Upload ZIP dataset (optional)",
-            type=["zip"],
-            help="Upload a zip file containing your dataset. Extracted temporarily, deleted on reset.",
-        )
-        if st.session_state.get("uploaded_data_path"):
-            st.info(f"Using uploaded data: `{st.session_state.uploaded_data_path}`")
+
+        if data_source == "HuggingFace dataset":
+            hf_repo = st.text_input(
+                "HuggingFace Dataset Repo",
+                placeholder="e.g. scikit-learn/iris",
+                help="Enter a HuggingFace dataset repository name. It will be downloaded automatically.",
+            )
+        else:
+            hf_repo = None
+            st.caption("Upload a zip dataset or enter a path to existing data")
+            uploaded_zip = st.file_uploader(
+                "Upload ZIP dataset (optional)",
+                type=["zip"],
+                help="Upload a zip file containing your dataset. Extracted temporarily, deleted on reset.",
+            )
+            if st.session_state.get("uploaded_data_path"):
+                st.info(f"Using uploaded data: `{st.session_state.uploaded_data_path}`")
+
         query = st.text_input("Query", placeholder="What would you like to analyze?")
         submitted = st.form_submit_button("Run Data Analysis", type="primary")
+
         if submitted and query:
+            # HuggingFace mode
+            if data_source == "HuggingFace dataset":
+                if not hf_repo or not hf_repo.strip():
+                    st.error("Please enter a HuggingFace dataset repository name.")
+                    return None
+                return {"type": "data", "path": hf_repo.strip(), "query": query}
+
+            # Local file mode
             path_to_use = None
             if uploaded_zip:
                 cleanup_uploaded_data()

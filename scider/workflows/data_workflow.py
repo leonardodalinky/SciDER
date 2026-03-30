@@ -107,6 +107,10 @@ class DataWorkflow(BaseModel):
         Returns:
             self (for chaining)
         """
+        from scider.core.hf_dataset import resolve_data_path
+
+        self.data_path = resolve_data_path(self.data_path)
+
         self._ensure_graph()
         self._setup_directories()
 
