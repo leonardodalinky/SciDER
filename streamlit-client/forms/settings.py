@@ -173,13 +173,14 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         from scider.core import constant as _c
 
         if _c.HF_DATASET_DOWNLOAD_ENABLED:
-            st.success("Enabled — you can use HuggingFace repo names as data paths.")
+            st.success(f"Enabled — max dataset size: {_c.HF_DATASET_MAX_SIZE_MB} MB")
         else:
             st.info("Disabled. Set `HF_DATASET_DOWNLOAD_ENABLED=true` in `.env` to enable.")
         st.caption(
             "When enabled, you can enter a HuggingFace dataset repo name "
             "(e.g. `google/fleurs`) instead of uploading a local file. "
-            "Datasets are downloaded and cached automatically."
+            "Datasets are downloaded and cached automatically. "
+            "Configure size limit via `HF_DATASET_MAX_SIZE_MB` in `.env`."
         )
 
         # --- Coding Agent ---

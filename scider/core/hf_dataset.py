@@ -44,6 +44,35 @@ def resolve_data_path(data_path: str | Path) -> Path:
         logger.info(f"Using cached HF dataset: {local_dir}")
         return local_dir.resolve()
 
+    # Check dataset size before downloading
+    max_size_bytes = constant.HF_DATASET_MAX_SIZE_MB * 1024 * 1024
+    try:
+        from huggingface_hub import HfApi
+
+        api = HfApi()
+        files = api.list_repo_tree(repo_id, repo_type="dataset", recursive=True)
+        total_size = sum(getattr(f, "size", 0) or 0 for f in files)
+
+        if total_size > max_size_bytes:
+            total_mb = total_size / (1024 * 1024)
+            raise RuntimeError(
+                f"HuggingFace dataset '{repo_id}' is {total_mb:.1f} MB, "
+                f"exceeding the limit of {constant.HF_DATASET_MAX_SIZE_MB} MB. "
+                f"Adjust HF_DATASET_MAX_SIZE_MB in .env to increase the limit."
+            )
+
+        if total_size > 0:
+            logger.info(
+                f"HF dataset '{repo_id}' size: {total_size / (1024 * 1024):.1f} MB "
+                f"(limit: {constant.HF_DATASET_MAX_SIZE_MB} MB)"
+            )
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.warning(
+            f"Could not check dataset size for '{repo_id}': {e}. Proceeding with download."
+        )
+
     logger.info(f"Downloading HF dataset '{repo_id}' to {local_dir}")
     try:
         from huggingface_hub import snapshot_download
