@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from components.display import render_approval_ui
 from forms.case_study import render_case_study_viewer
 from forms.data import render_form as data_form
-from forms.data import run_data
+from forms.data import run_data, run_hypo_data
 from forms.experiment import render_form as experiment_form
 from forms.experiment import run_experiment
 from forms.full import render_form as full_form
@@ -456,6 +456,8 @@ def _run_workflow_func(wc, ideation_graph, workspace_path):
         return run_ideation(wc.get("query"), ideation_graph)
     elif wtype == "data":
         return run_data(wc["path"], wc["query"], workspace_path)
+    elif wtype == "data_hypo":
+        return run_hypo_data(wc["feature_desc"], wc["num_rows"], wc["query"], workspace_path)
     elif wtype == "experiment":
         return run_experiment(wc["query"], wc.get("path"), workspace_path)
     elif wtype == "full":

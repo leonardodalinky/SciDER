@@ -10,6 +10,7 @@ This package contains different workflow implementations:
 from .data_workflow import DataWorkflow, run_data_workflow
 from .experiment_workflow import ExperimentWorkflow, run_experiment_workflow
 from .full_workflow import FullWorkflow, run_full_workflow
+from .hypo_data_workflow import HypoDataWorkflow, run_hypo_data_workflow
 from .ideation_workflow import IdeationWorkflow, run_ideation_workflow
 
 __all__ = [
@@ -21,6 +22,8 @@ __all__ = [
     "run_ideation_workflow",
     "DataWorkflow",
     "run_data_workflow",
+    "HypoDataWorkflow",
+    "run_hypo_data_workflow",
     "ExperimentWorkflow",
     "run_experiment_workflow",
 ]

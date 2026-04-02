@@ -25,6 +25,7 @@ class Prompts:
     experiment_agent: "ExperimentAgentPrompts"
     paper_subagent: "PaperSubagentPrompts"
     ideation: "IdeationPrompts"
+    hypo_data_gen: "HypoDataGenPrompts"
 
 
 @dataclass
@@ -121,6 +122,12 @@ class PaperSubagentPrompts:
 
 
 @dataclass
+class HypoDataGenPrompts:
+    system_prompt: Template
+    user_prompt: Template
+
+
+@dataclass
 class IdeationPrompts:
     system_prompt: Template
     user_prompt: Template
@@ -180,6 +187,9 @@ def init():
         ),
         ideation=parse_yaml_as_templates(
             IdeationPrompts, os.path.join(DIR, "ideation_prompt.yaml")
+        ),
+        hypo_data_gen=parse_yaml_as_templates(
+            HypoDataGenPrompts, DIR / "hypo_data_gen_prompt.yaml"
         ),
     )
 
