@@ -44,10 +44,6 @@ class HypoDataWorkflow(BaseModel):
     recursion_limit: int = 100
 
     # Memory directories (optional)
-    sess_dir: Path | None = None
-    long_term_mem_dir: Path | None = None
-    project_mem_dir: Path | None = None
-    session_name: str | None = None
 
     # ── Internal state ──
     current_phase: Literal[
@@ -100,10 +96,6 @@ class HypoDataWorkflow(BaseModel):
                 workspace_path=self.workspace_path,
                 recursion_limit=self.recursion_limit,
                 data_desc=data_desc,
-                sess_dir=self.sess_dir,
-                long_term_mem_dir=self.long_term_mem_dir,
-                project_mem_dir=self.project_mem_dir,
-                session_name=self.session_name,
             )
             data_workflow.run()
 
@@ -173,7 +165,6 @@ def run_hypo_data_workflow(
     num_rows: int = 1000,
     user_query: str = "",
     recursion_limit: int = 100,
-    session_name: str | None = None,
     user_approval_enabled: bool = True,
 ) -> HypoDataWorkflow:
     """Convenience function to run the hypothetical data workflow."""
@@ -186,7 +177,6 @@ def run_hypo_data_workflow(
             num_rows=num_rows,
             user_query=user_query,
             recursion_limit=recursion_limit,
-            session_name=session_name,
         )
         w.run()
     return w

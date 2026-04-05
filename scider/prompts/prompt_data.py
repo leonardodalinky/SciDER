@@ -14,36 +14,41 @@ SKILLS: "Skills" = None  # type: ignore
 
 @dataclass
 class Prompts:
-    data: "DataPrompts"
-    rbank: "RBankPrompts"
-    history: "HistoryPrompts"
-    experiment_coding: "ExperimentPrompts"
-    experiment_exec: "ExperimentExecPrompts"
-    experiment_summary: "ExperimentSummaryPrompts"
-    critic: "CriticPrompts"
-    experiment_coding_v2: "ExperimentCodingV2Prompts"
+    data_agent: "DataAgentPrompts"
+    critic_agent: "CriticAgentPrompts"
+    ideation_agent: "IdeationAgentPrompts"
     experiment_agent: "ExperimentAgentPrompts"
+    history: "HistoryPrompts"
     paper_subagent: "PaperSubagentPrompts"
-    ideation: "IdeationPrompts"
     hypo_data_gen: "HypoDataGenPrompts"
 
 
 @dataclass
-class DataPrompts:
+class DataAgentPrompts:
     system_prompt: Template
-    user_prompt: Template
-    planner_system_prompt: Template
-    replanner_user_prompt: Template
-    replanner_user_response: Template
     summary_system_prompt: Template
     summary_user_prompt: Template
 
 
 @dataclass
-class RBankPrompts:
-    mem_extraction_long_term_system_prompt: Template
-    mem_extraction_project_system_prompt: Template
-    mem_extraction_user_prompt: Template
+class CriticAgentPrompts:
+    system_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
+
+
+@dataclass
+class IdeationAgentPrompts:
+    system_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
+
+
+@dataclass
+class ExperimentAgentPrompts:
+    system_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
 
 
 @dataclass
@@ -52,67 +57,6 @@ class HistoryPrompts:
     compression_user_prompt: Template
     compressed_patch_template: Template
     recall_tool_response: Template
-
-
-@dataclass
-class ExperimentPrompts:
-    planner_system_prompt: Template
-    planner_user_prompt: Template
-    replanner_system_prompt: Template
-    replanner_user_prompt: Template
-    replanner_user_response: Template
-    experiment_chat_system_prompt: Template
-    experiment_chat_user_prompt: Template
-    experiment_summary_prompt: Template
-
-
-@dataclass
-class ExperimentExecPrompts:
-    exec_system_prompt: Template
-    exec_user_prompt: Template
-    summary_system_prompt: Template
-    summary_user_prompt: Template
-    monitoring_system_prompt: Template
-    monitoring_user_prompt: Template
-    monitoring_end_user_prompt: Template
-    monitoring_ctrlc_user_prompt: Template
-
-
-@dataclass
-class ExperimentSummaryPrompts:
-    system_prompt: Template
-    user_prompt: Template
-    summary_system_prompt: Template
-    summary_prompt: Template
-
-
-@dataclass
-class CriticPrompts:
-    system_prompt: Template
-    user_prompt: Template
-    user_prompt_summary: Template
-
-
-@dataclass
-class ExperimentCodingV2Prompts:
-    system_prompt: Template
-    planner_system_prompt: Template
-    replanner_user_prompt: Template
-    replanner_user_response: Template
-    user_prompt: Template
-    summary_system_prompt: Template
-    summary_prompt: Template
-
-
-@dataclass
-class ExperimentAgentPrompts:
-    analysis_system_prompt: Template
-    judge_system_prompt: Template
-    init_prompt: Template
-    coding_subagent_query_prompt: Template
-    analysis_prompt: Template
-    judge_prompt: Template
-    revision_feedback_prompt: Template
 
 
 @dataclass
@@ -125,16 +69,6 @@ class PaperSubagentPrompts:
 class HypoDataGenPrompts:
     system_prompt: Template
     user_prompt: Template
-
-
-@dataclass
-class IdeationPrompts:
-    system_prompt: Template
-    user_prompt: Template
-    keyword_construct_system_prompt: Template
-    keyword_construct_user_prompt: Template
-    novelty_check_system_prompt: Template
-    novelty_check_user_prompt: Template
 
 
 def parse_yaml_as_templates(model_type: Type[T], path: str | Path) -> T:
@@ -161,32 +95,17 @@ def init():
     global SKILLS
 
     PROMPTS = Prompts(
-        data=parse_yaml_as_templates(DataPrompts, DIR / "data_prompt.yaml"),
-        rbank=parse_yaml_as_templates(RBankPrompts, DIR / "rbank_prompt.yaml"),
-        history=parse_yaml_as_templates(HistoryPrompts, DIR / "history_prompt.yaml"),
-        experiment_coding=parse_yaml_as_templates(
-            ExperimentPrompts, DIR / "experiment_coding_prompt.yaml"
+        data_agent=parse_yaml_as_templates(DataAgentPrompts, DIR / "data_agent_prompt.yaml"),
+        critic_agent=parse_yaml_as_templates(CriticAgentPrompts, DIR / "critic_agent_prompt.yaml"),
+        ideation_agent=parse_yaml_as_templates(
+            IdeationAgentPrompts, DIR / "ideation_agent_prompt.yaml"
         ),
-        experiment_coding_v2=parse_yaml_as_templates(
-            ExperimentCodingV2Prompts,
-            DIR / "experiment_coding_prompt_v2.yaml",
-        ),
-        experiment_exec=parse_yaml_as_templates(
-            ExperimentExecPrompts, DIR / "experiment_exec_prompt.yaml"
-        ),
-        experiment_summary=parse_yaml_as_templates(
-            ExperimentSummaryPrompts,
-            DIR / "experiment_summary_prompt.yaml",
-        ),
-        critic=parse_yaml_as_templates(CriticPrompts, DIR / "critic_prompt.yaml"),
         experiment_agent=parse_yaml_as_templates(
             ExperimentAgentPrompts, DIR / "experiment_agent_prompt.yaml"
         ),
+        history=parse_yaml_as_templates(HistoryPrompts, DIR / "history_prompt.yaml"),
         paper_subagent=parse_yaml_as_templates(
             PaperSubagentPrompts, DIR / "paper_subagent_prompt.yaml"
-        ),
-        ideation=parse_yaml_as_templates(
-            IdeationPrompts, os.path.join(DIR, "ideation_prompt.yaml")
         ),
         hypo_data_gen=parse_yaml_as_templates(
             HypoDataGenPrompts, DIR / "hypo_data_gen_prompt.yaml"

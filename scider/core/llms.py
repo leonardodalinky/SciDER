@@ -24,10 +24,10 @@ class ZeroChoiceError(Exception):
 def function_to_json_schema(func_or_name: Callable | str) -> dict:
     if isinstance(func_or_name, str):
         tool = ToolRegistry.instance().tools[func_or_name]
-        return tool.json_schema
+        return tool.get_json_schema()
     elif callable(func_or_name):
         tool = ToolRegistry.instance().tools[func_or_name.__name__]
-        return tool.json_schema
+        return tool.get_json_schema()
     else:
         raise ValueError("func must be a string or a callable")
 

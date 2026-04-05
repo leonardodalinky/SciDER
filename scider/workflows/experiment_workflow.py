@@ -154,7 +154,6 @@ class ExperimentWorkflow(BaseModel):
             data_summary=self.data_summary,
             user_query=self.user_query,
             repo_source=self.repo_source,
-            max_revisions=self.max_revisions,
         )
 
         try:
@@ -166,10 +165,8 @@ class ExperimentWorkflow(BaseModel):
 
             # Extract results
             self.final_status = result_state.final_status
-            self.execution_results = result_state.all_execution_results
-            self.current_revision = result_state.current_revision
             self.experiment_agent_intermediate_state = result_state.intermediate_state
-            self.final_summary = self._compose_summary(result_state)
+            self.final_summary = result_state.final_summary or result_state.output_summary or ""
             self.current_phase = "complete"
 
             logger.info(f"ExperimentAgent completed: {self.final_status}")

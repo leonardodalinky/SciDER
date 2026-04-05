@@ -23,8 +23,6 @@ attrs==25.4.0
     #   referencing
 beautifulsoup4==4.14.2
     # via scider (pyproject.toml)
-brotli==1.1.0
-    # via httpx
 certifi==2025.10.5
     # via
     #   httpcore
@@ -36,11 +34,8 @@ claude-agent-sdk==0.1.34
     # via scider (pyproject.toml)
 click==8.3.0
     # via
-    #   ddgs
     #   litellm
     #   uvicorn
-ddgs==9.6.1
-    # via scider (pyproject.toml)
 dill==0.4.0
     # via pyfunctional
 distro==1.9.0
@@ -65,17 +60,12 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-h2==4.3.0
-    # via httpx
 hf-xet==1.2.0
     # via huggingface-hub
-hpack==4.1.0
-    # via h2
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via
-    #   ddgs
     #   langgraph-sdk
     #   langsmith
     #   litellm
@@ -84,9 +74,9 @@ httpx==0.28.1
 httpx-sse==0.4.3
     # via mcp
 huggingface-hub==0.36.0
-    # via tokenizers
-hyperframe==6.1.0
-    # via h2
+    # via
+    #   scider (pyproject.toml)
+    #   tokenizers
 idna==3.11
     # via
     #   anyio
@@ -139,8 +129,6 @@ litellm==1.79.3
     # via scider (pyproject.toml)
 loguru==0.7.3
     # via scider (pyproject.toml)
-lxml==6.0.2
-    # via ddgs
 markdown-it-py==4.0.0
     # via rich
 markupsafe==3.0.3
@@ -178,8 +166,6 @@ pexpect==4.9.0
     # via scider (pyproject.toml)
 pillow==12.0.0
     # via scider (pyproject.toml)
-primp==0.15.0
-    # via ddgs
 propcache==0.4.1
     # via
     #   aiohttp
@@ -253,8 +239,6 @@ sniffio==1.3.1
     # via
     #   anyio
     #   openai
-socksio==1.0.0
-    # via httpx
 soupsieve==2.8
     # via beautifulsoup4
 sse-starlette==3.0.2

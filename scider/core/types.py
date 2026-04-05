@@ -15,7 +15,6 @@ def set_on_message_callback(callback: Callable[[Message], None] | None) -> None:
 
 
 import tiktoken
-from functional import seq
 from langgraph.graph import START
 from litellm import Message as LLMessage
 from pydantic import BaseModel
@@ -36,6 +35,9 @@ styles = {
 }
 
 ENCODING = tiktoken.get_encoding("cl100k_base")
+
+# Compact boundary marker content
+COMPACT_BOUNDARY_CONTENT = "[compact_boundary]"
 
 
 class Message(LLMessage):
@@ -62,6 +64,11 @@ class Message(LLMessage):
         "completion_tokens",
         "prompt_tokens",
         "_n_tokens",
+        "is_meta",
+        "is_compact_boundary",
+        "compact_metadata",
+        "persisted_content_path",
+        "content_before_snip",
     ]
 
     # --- tool call fields ---
@@ -74,11 +81,45 @@ class Message(LLMessage):
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
     _n_tokens: int | None = None
+    # True for programmatically injected messages (recovery nudges, system context, etc.)
+    # that are not real user/LLM interactions. Excluded when serializing to litellm.
+    is_meta: bool = False
+    # Compact boundary marker — inserted by autocompact to delimit compacted regions
+    is_compact_boundary: bool = False
+    # Metadata about compaction (trigger type, pre-token count, messages summarized, etc.)
+    compact_metadata: dict | None = None
+    # Path to the persisted full content on disk (set by Level 1 tool result budget).
+    # For debugging — not sent to LLM.
+    persisted_content_path: str | None = None
+    # Original content before Level 2 snip replaced it with a placeholder.
+    # Kept in memory for debugging — not sent to LLM.
+    content_before_snip: str | None = None
 
     @classmethod
     def from_ll_message(cls, msg: LLMessage) -> "Message":
         o = cls(**msg.__dict__)
         return o
+
+    @classmethod
+    def make_compact_boundary(
+        cls,
+        *,
+        trigger: str = "auto",
+        pre_tokens: int = 0,
+        messages_summarized: int = 0,
+    ) -> "Message":
+        """Create a compact boundary marker message."""
+        return cls(
+            role="system",
+            content=COMPACT_BOUNDARY_CONTENT,
+            is_compact_boundary=True,
+            is_meta=True,
+            compact_metadata={
+                "trigger": trigger,
+                "pre_tokens": pre_tokens,
+                "messages_summarized": messages_summarized,
+            },
+        )
 
     @property
     def n_tokens(self) -> int:
@@ -226,64 +267,24 @@ class Message(LLMessage):
         return self
 
 
-class ToolsetState(BaseModel):
-    # List of toolsets available to the agent
-    toolsets: list[str] = []
-
-
 class HistoryState(BaseModel):
-    # List of messages sent to the agent
+    # Flat message array — the single source of truth.
+    # Autocompact replaces messages in-place (boundary marker + summary).
     history: list[Message] = []
-    # List of patches to the history, used to compress the history
-    # NOTE: patches are applied in order by patch_id, and patched history could still be patched in the next patches.
-    history_patches: list["HistoryState.HistoryPatch"] = []
     node_history: list[str] = [START]
 
-    class HistoryPatch(BaseModel):
-        # patch id, used to identify the patch
-        patch_id: int
-        # start index (inclusive)
-        start_idx: int
-        # end index (exclusive)
-        end_idx: int
-        # The compressed/summarized message that replaces the range
-        patched_message: Message
+    @property
+    def messages(self) -> list[Message]:
+        """Return messages after the last compact boundary.
 
-        @property
-        def n_messages(self) -> int:
-            return max(self.end_idx - self.start_idx, 0)
+        This is the primary way to access the current conversation history.
+        Messages before the boundary have been summarized and replaced.
+        """
+        return get_messages_after_boundary(self.history)
 
     @property
-    def patched_history(self) -> list[Message]:
-        """
-        Returns the history with all patches applied in order.
-        Each patch replaces a range of messages with a single compressed message.
-        """
-        if not self.history_patches:
-            return self.history.copy()
-
-        # Apply patches in order
-        result = self.history.copy()
-        # Sort patches by patch_id to ensure proper order
-        sorted_patches = sorted(self.history_patches, key=lambda p: p.patch_id)
-
-        for patch in sorted_patches:
-            # Adjust indices based on previous patches
-            adjusted_start = patch.start_idx
-            adjusted_end = patch.end_idx
-
-            # Validate indices
-            if adjusted_start < 0 or adjusted_end > len(result):
-                continue
-
-            # Replace the range with the patched message
-            result = result[:adjusted_start] + [patch.patched_message] + result[adjusted_end:]
-
-        return result
-
-    @property
-    def total_patched_tokens(self) -> int:
-        return sum(m.n_tokens for m in self.patched_history)
+    def total_tokens(self) -> int:
+        return sum(m.n_tokens for m in self.messages)
 
     @property
     def round(self) -> int:
@@ -291,30 +292,6 @@ class HistoryState(BaseModel):
 
     def add_node_history(self, node_name: str) -> None:
         self.node_history.append(node_name)
-
-    def next_patch_id(self) -> int:
-        if not self.history_patches or len(self.history_patches) == 0:
-            return 0
-        return max(p.patch_id for p in self.history_patches) + 1
-
-    def partial_history_of_patch(self, patch_id: int) -> list[Message]:
-        """Get the history of a specific patch."""
-        patch = self.get_patch_by_id(patch_id)
-        if patch is None:
-            raise ValueError(f"Patch {patch_id} not found")
-
-        # sort patches by patch_id to ensure proper order
-        sorted_patches = sorted(self.history_patches, key=lambda p: p.patch_id)
-
-        # apply patches in order
-        his = self.history.copy()
-        for patch in sorted_patches:
-            if patch.patch_id >= patch_id:
-                break
-            his = his[: patch.start_idx] + [patch.patched_message] + his[patch.end_idx :]
-
-        # get the history of the patch
-        return his[patch.start_idx : patch.end_idx]
 
     def add_message(self, message: Message) -> None:
         """Add a new message to the history."""
@@ -325,30 +302,126 @@ class HistoryState(BaseModel):
             except Exception:
                 pass
 
-    def get_patch_by_id(self, patch_id: int) -> HistoryState.HistoryPatch | None:
+    def compact(self, summary_messages: list[Message], *, trigger: str = "auto") -> None:
+        """Replace all messages before current boundary with a compacted summary.
+
+        Inserts a compact boundary marker followed by the summary messages.
+        Old messages are discarded.
         """
-        Get a patch by its ID.
+        current_messages = self.messages
+        pre_tokens = sum(m.n_tokens for m in current_messages)
 
-        Args:
-            patch_id: The ID of the patch to retrieve
+        boundary = Message.make_compact_boundary(
+            trigger=trigger,
+            pre_tokens=pre_tokens,
+            messages_summarized=len(current_messages),
+        )
 
-        Returns:
-            The patch if found, None otherwise
+        # Complete replacement: boundary + summary + nothing else
+        # (caller is responsible for keeping any messages that should survive)
+        self.history = [boundary] + summary_messages
+
+    def normalize_for_api(self) -> list[Message]:
+        """Normalize message history for LLM API consumption.
+
+        Ensures:
+        1. No compact boundary markers sent to API
+        2. Every tool_use (assistant with tool_calls) has matching tool results
+        3. Every tool result has a preceding tool_use
+        4. No system messages in the middle (only as first message)
         """
-        return (
-            seq(self.history_patches)
-            .filter(lambda patch: patch.patch_id == patch_id)
-            .head_option(no_wrap=True)
-        )  # type: ignore
+        msgs = self.messages
+        result: list[Message] = []
+
+        for msg in msgs:
+            # Skip compact boundary markers
+            if msg.is_compact_boundary:
+                continue
+            result.append(msg)
+
+        # Ensure tool call / tool result pairing
+        result = _ensure_tool_pairing(result)
+
+        return result
+
+    # --- Backward compatibility ---
+
+    @property
+    def patched_history(self) -> list[Message]:
+        """Backward compatibility alias for messages."""
+        return self.messages
+
+    @property
+    def total_patched_tokens(self) -> int:
+        """Backward compatibility alias for total_tokens."""
+        return self.total_tokens
 
 
-class RBankState(BaseModel):
-    # session dir (short-term mem storage)
-    sess_dir: str | Path
-    # long-term mem save dirs (input & output)
-    long_term_mem_dir: str | Path
-    # project mem save dirs (input & output)
-    project_mem_dir: str | Path
+def get_messages_after_boundary(messages: list[Message]) -> list[Message]:
+    """Return messages after the last compact boundary marker.
+
+    If no boundary exists, returns all messages.
+    The boundary marker itself is included in the result.
+    """
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].is_compact_boundary:
+            return messages[i:]
+    return messages
+
+
+def _ensure_tool_pairing(messages: list[Message]) -> list[Message]:
+    """Ensure every tool_use has a matching tool_result and vice versa.
+
+    Fixes orphaned tool calls/results that can occur after compaction
+    or session crashes.
+    """
+    result = []
+    # Collect tool_call IDs from assistant messages that have tool_calls
+    pending_tool_calls: set[str] = set()
+
+    for msg in messages:
+        if msg.role == "assistant" and msg.tool_calls:
+            for tc in msg.tool_calls:
+                if tc.id:
+                    pending_tool_calls.add(tc.id)
+            result.append(msg)
+        elif msg.role == "tool" and msg.tool_call_id:
+            if msg.tool_call_id in pending_tool_calls:
+                pending_tool_calls.discard(msg.tool_call_id)
+                result.append(msg)
+            else:
+                # Orphaned tool result — skip it
+                pass
+        else:
+            result.append(msg)
+
+    # For any pending tool calls without results, inject synthetic results
+    if pending_tool_calls:
+        # Find the assistant message that has these tool calls and inject after it
+        for i, msg in enumerate(result):
+            if msg.role == "assistant" and msg.tool_calls:
+                orphan_ids = {tc.id for tc in msg.tool_calls if tc.id in pending_tool_calls}
+                if orphan_ids:
+                    insert_pos = i + 1
+                    # Skip past any existing tool results for this message
+                    while insert_pos < len(result) and result[insert_pos].role == "tool":
+                        insert_pos += 1
+                    for oid in orphan_ids:
+                        tc = next(tc for tc in msg.tool_calls if tc.id == oid)
+                        result.insert(
+                            insert_pos,
+                            Message(
+                                role="tool",
+                                tool_call_id=oid,
+                                tool_name=tc.function.name if tc.function else None,
+                                content="[Tool result lost due to compaction]",
+                                is_meta=True,
+                            ),
+                        )
+                        insert_pos += 1
+                        pending_tool_calls.discard(oid)
+
+    return result
 
 
 class ExecState(BaseModel):
