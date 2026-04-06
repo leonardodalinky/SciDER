@@ -155,6 +155,19 @@ class DataWorkflow(BaseModel):
         else:
             self.final_status = "failed"
 
+        # Save conversation history for debugging
+        if self.data_agent_history:
+            from scider.workflows.history_export import save_conversation_history
+
+            try:
+                save_conversation_history(
+                    self.data_agent_history,
+                    self.workspace_path / "data_agent_history.json",
+                    agent_name="data",
+                )
+            except Exception as e:
+                logger.warning("Failed to save data agent history: {}", e)
+
         logger.info(get_separator())
         logger.info(f"Data Workflow completed: {self.final_status}")
         logger.info(get_separator())

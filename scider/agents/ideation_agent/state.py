@@ -14,5 +14,10 @@ class IdeationAgentState(HistoryState):
     novelty_score: float | None = None
     output_summary: str | None = None
 
+    # Approval
+    approval_status: str = ""  # "approved" or "retry"
+    approval_retry_count: int = 0
+    max_approval_retries: int = 2
+
     # Intermediate state for UI tracking
     intermediate_state: list[dict] = []

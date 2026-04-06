@@ -111,3 +111,75 @@ def generate_report_node(agent_state: IdeationAgentState) -> IdeationAgentState:
     )
 
     return agent_state
+
+
+_EXTRACT_IDEAS_PROMPT = """\
+Extract ALL research ideas from the following ideation report as a JSON array.
+Each idea must have these fields:
+- "title": short title (string)
+- "description": 2-3 sentence description (string)
+- "novelty_score": 0-10 score if mentioned, otherwise null (number or null)
+
+Return ONLY a JSON array, no other text. Example:
+[{"title": "...", "description": "...", "novelty_score": 7.5}]
+
+Report:
+"""
+
+
+def extract_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
+    """Extract structured ideas from the ideation report."""
+    logger.debug("extract_ideas_node of IdeationAgent")
+    agent_state.add_node_history("extract_ideas")
+
+    if not agent_state.output_summary:
+        return agent_state
+
+    try:
+        msg = ModelRegistry.completion(
+            LLM_NAME,
+            [Message(role="user", content=_EXTRACT_IDEAS_PROMPT + agent_state.output_summary)],
+            system_prompt="You extract structured data from text. Return only valid JSON.",
+            agent_sender=AGENT_NAME,
+        )
+
+        import json
+
+        from json_repair import repair_json
+
+        raw = msg.content or "[]"
+        # Strip markdown code fences if present
+        if "```" in raw:
+            import re
+
+            match = re.search(r"```(?:json)?\s*(.*?)```", raw, re.DOTALL)
+            if match:
+                raw = match.group(1)
+        raw = repair_json(raw)
+        ideas = json.loads(raw)
+
+        if isinstance(ideas, list):
+            agent_state.research_ideas = ideas
+            # Extract average novelty score
+            scores = [i["novelty_score"] for i in ideas if i.get("novelty_score") is not None]
+            if scores:
+                agent_state.novelty_score = sum(scores) / len(scores)
+
+        logger.info("Extracted {} research ideas", len(agent_state.research_ideas))
+
+    except Exception as e:
+        logger.warning("Failed to extract structured ideas: {}", e)
+
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "extract_ideas",
+            "output": f"Extracted {len(agent_state.research_ideas)} ideas"
+            + (
+                f", avg novelty: {agent_state.novelty_score:.1f}/10"
+                if agent_state.novelty_score
+                else ""
+            ),
+        }
+    )
+
+    return agent_state

@@ -39,7 +39,9 @@ def render_form():
     with st.form("ideation_form", clear_on_submit=True):
         st.markdown("### Ideation Workflow")
         topic = st.text_input("Research Topic", placeholder="Enter your research topic here...")
-        submitted = st.form_submit_button("Run Ideation", type="primary")
+        submitted = st.form_submit_button(
+            "Run Ideation",
+        )
         if submitted and topic:
             return {"type": "ideation", "query": topic}
     return None

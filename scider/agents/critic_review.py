@@ -1,10 +1,10 @@
 """Shared critic review logic for data and experiment agents.
 
 Invokes the critic agent as a compiled subgraph, extracts feedback,
-and injects it into the parent agent's conversation for retry.
+then presents the result to the user for optional additional input.
 
-Used as a graph node in both data_agent and experiment_agent:
-    agent_loop → critic_review → [pass/retry] → generate_summary / agent_loop
+Used as graph nodes in both data_agent and experiment_agent:
+    agent_loop → critic_review → user_review → [pass/retry] → generate_summary / agent_loop
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from loguru import logger
 
 from scider.agents.critic_agent import build as critic_build
 from scider.agents.critic_agent.state import CriticAgentState
+from scider.core.approval import ApprovalResult, _get_handler
 from scider.core.types import Message
 
 # Compile critic graph once at import time
@@ -21,9 +22,6 @@ _critic_graph = critic_build().compile()
 
 def critic_review_node(agent_state):
     """Run critic agent to review the current agent's work.
-
-    Reads the agent's conversation history, invokes the critic,
-    and stores feedback in agent_state.critic_feedback.
 
     Accepts any state type (DataAgentState, ExperimentAgentState, etc.)
     that has critic_feedback and intermediate_state fields.
@@ -78,6 +76,109 @@ def critic_review_node(agent_state):
     return agent_state
 
 
+def user_review_node(agent_state):
+    """Present critic feedback to the user and ask for additional input.
+
+    Uses the approval handler to show the critic's assessment and give
+    the user a chance to approve, reject, or add their own feedback.
+    """
+    if hasattr(agent_state, "add_node_history"):
+        agent_state.add_node_history("user_review")
+
+    feedback = getattr(agent_state, "critic_feedback", None)
+    retry_count = getattr(agent_state, "critic_retry_count", 0)
+    max_retries = getattr(agent_state, "max_critic_retries", 2)
+
+    # No feedback or max retries reached → auto-approve
+    if not feedback or retry_count >= max_retries:
+        agent_state.approval_status = "approved"
+        return agent_state
+
+    # Build summary for the user
+    verdict = _extract_verdict(feedback)
+    summary = f"## Critic Assessment: {verdict.upper()}\n\n{feedback}"
+    if verdict == "retry":
+        summary += (
+            "\n\n---\n"
+            "*The critic found issues. You can:*\n"
+            "- **Approve** to proceed anyway\n"
+            "- **Reject** to retry with the critic's feedback\n"
+            "- **Feedback** to add your own instructions for the retry"
+        )
+    else:
+        summary += (
+            "\n\n---\n"
+            "*The critic thinks this is acceptable. You can:*\n"
+            "- **Approve** to proceed to summary\n"
+            "- **Feedback** to request additional changes"
+        )
+
+    handler = _get_handler()
+    response = handler.request_approval(
+        node_name="user_review",
+        summary=summary,
+        title="Review critic feedback — any additional changes?",
+    )
+
+    if response.result == ApprovalResult.APPROVED:
+        agent_state.approval_status = "approved"
+    elif response.result == ApprovalResult.REJECTED:
+        agent_state.approval_status = "retry"
+        # Inject critic feedback for the retry
+        agent_state.critic_retry_count = retry_count + 1
+        agent_state.add_message(
+            Message(
+                role="user",
+                content=(
+                    f"<system-reminder>\n"
+                    f"[Critic Review — Retry {agent_state.critic_retry_count}/{max_retries}]\n"
+                    f"The following issues were found. Please address them:\n\n"
+                    f"{feedback}\n"
+                    f"</system-reminder>"
+                ),
+                agent_sender="critic",
+                is_meta=True,
+            )
+        )
+    elif response.result == ApprovalResult.FEEDBACK:
+        agent_state.approval_status = "retry"
+        agent_state.critic_retry_count = retry_count + 1
+        # Combine critic feedback with user's additional feedback
+        user_feedback = response.feedback or ""
+        agent_state.add_message(
+            Message(
+                role="user",
+                content=(
+                    f"<system-reminder>\n"
+                    f"[Review — Retry {agent_state.critic_retry_count}/{max_retries}]\n"
+                    f"Critic feedback:\n{feedback}\n\n"
+                    f"User additional feedback:\n{user_feedback}\n"
+                    f"</system-reminder>"
+                ),
+                agent_sender="critic",
+                is_meta=True,
+            )
+        )
+
+    if hasattr(agent_state, "intermediate_state"):
+        agent_state.intermediate_state.append(
+            {
+                "node_name": "user_review",
+                "output": f"User decision: {agent_state.approval_status}",
+            }
+        )
+
+    return agent_state
+
+
+def user_review_conditional(agent_state) -> str:
+    """Conditional edge after user_review: retry or proceed."""
+    status = getattr(agent_state, "approval_status", "approved")
+    if status == "retry":
+        return "agent_loop"
+    return "generate_summary"
+
+
 def _extract_verdict(feedback: str) -> str:
     """Extract verdict from critic feedback.
 
@@ -86,7 +187,6 @@ def _extract_verdict(feedback: str) -> str:
     feedback_lower = feedback.lower()
     # Look for explicit verdict markers
     if "overall assessment" in feedback_lower:
-        # Find the line with the assessment
         for line in feedback.splitlines():
             if "overall assessment" in line.lower():
                 line_lower = line.lower()
@@ -101,46 +201,3 @@ def _extract_verdict(feedback: str) -> str:
 
     # Default: pass (don't block on ambiguous feedback)
     return "pass"
-
-
-def critic_should_retry(agent_state) -> str:
-    """Conditional edge: decide whether to retry or proceed to summary.
-
-    Returns 'agent_loop' to retry, or 'generate_summary' to proceed.
-    """
-    feedback = getattr(agent_state, "critic_feedback", None)
-    retry_count = getattr(agent_state, "critic_retry_count", 0)
-    max_retries = getattr(agent_state, "max_critic_retries", 2)
-
-    # No feedback or critic failed → proceed
-    if not feedback:
-        return "generate_summary"
-
-    # Max retries reached → proceed
-    if retry_count >= max_retries:
-        logger.info("Max critic retries ({}) reached, proceeding to summary", max_retries)
-        return "generate_summary"
-
-    # Check verdict
-    verdict = _extract_verdict(feedback)
-    if verdict == "pass":
-        return "generate_summary"
-
-    # Retry: inject feedback into conversation and increment counter
-    agent_state.critic_retry_count = retry_count + 1
-    agent_state.add_message(
-        Message(
-            role="user",
-            content=(
-                f"<system-reminder>\n"
-                f"[Critic Review — Retry {agent_state.critic_retry_count}/{max_retries}]\n"
-                f"The following issues were found in your work. Please address them:\n\n"
-                f"{feedback}\n"
-                f"</system-reminder>"
-            ),
-            agent_sender="critic",
-            is_meta=True,
-        )
-    )
-    logger.info("Critic requested retry ({}/{})", agent_state.critic_retry_count, max_retries)
-    return "agent_loop"

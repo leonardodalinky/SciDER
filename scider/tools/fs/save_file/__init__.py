@@ -30,7 +30,7 @@ class SaveFileTool(BaseTool):
         path = os.path.expandvars(os.path.expanduser(path))
         dir_path = os.path.dirname(os.path.abspath(path))
         if not os.path.isdir(dir_path):
-            return f"Error: Directory '{dir_path}' does not exist. Please create it first using the 'create_dir' tool."
+            return f"Error: Directory '{dir_path}' does not exist. Create it first with Bash(command=\"mkdir -p {dir_path}\")."
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)

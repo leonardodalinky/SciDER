@@ -95,7 +95,7 @@ def render_form():
                 "Analysis query",
                 placeholder="What would you like to analyze about this data?",
             )
-            submitted = st.form_submit_button("Generate & Analyze", type="primary")
+            submitted = st.form_submit_button("Generate & Analyze")
             if submitted:
                 if not feature_desc or not feature_desc.strip():
                     st.error("Please describe the data you want to generate.")
@@ -115,11 +115,13 @@ def render_form():
                 help="Enter a HuggingFace dataset repository name. It will be downloaded automatically.",
             )
             query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis", type="primary")
-            if submitted and query:
+            submitted = st.form_submit_button("Run Data Analysis")
+            if submitted:
                 if not hf_repo or not hf_repo.strip():
                     st.error("Please enter a HuggingFace dataset repository name.")
                     return None
+                if not query or not query.strip():
+                    query = "Analyze this dataset — explore its structure, key patterns, and notable findings."
                 return {"type": "data", "path": hf_repo.strip(), "query": query}
 
         else:
@@ -132,8 +134,10 @@ def render_form():
             if st.session_state.get("uploaded_data_path"):
                 st.info(f"Using uploaded data: `{st.session_state.uploaded_data_path}`")
             query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis", type="primary")
-            if submitted and query:
+            submitted = st.form_submit_button("Run Data Analysis")
+            if submitted:
+                if not query or not query.strip():
+                    query = "Analyze this dataset — explore its structure, key patterns, and notable findings."
                 path_to_use = None
                 if uploaded_zip:
                     cleanup_uploaded_data()

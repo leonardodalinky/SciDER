@@ -31,7 +31,6 @@ from workflow.runner import WorkflowRunner
 
 from scider.agents import ideation_agent
 from scider.core import approval as approval_module
-from scider.core.brain import Brain
 from scider.core.llms import ModelRegistry
 from scider.core.types import set_on_message_callback
 
@@ -364,7 +363,9 @@ if "initialized" not in st.session_state:
         os.environ["S2_API_KEY"] = _settings["s2_api_key"]
         _constant.S2_API_KEY = _settings["s2_api_key"]
 
-    Brain()
+    # Ensure brain directory exists (for tool result persistence, etc.)
+    Path(os.environ.get("BRAIN_DIR", "tmp_brain")).mkdir(parents=True, exist_ok=True)
+
     if register_all_models(_settings):
         st.session_state.ideation_graph = ideation_agent.build().compile()
         st.session_state.initialized = True

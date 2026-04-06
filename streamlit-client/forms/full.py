@@ -70,7 +70,9 @@ def render_form():
 
         run_data = st.checkbox("Run Data Analysis", value=True)
         run_exp = st.checkbox("Run Experiment", value=True)
-        submitted = st.form_submit_button("Run Full Workflow", type="primary")
+        submitted = st.form_submit_button(
+            "Run Full Workflow",
+        )
 
         if submitted and topic:
             data_path_to_use = None
