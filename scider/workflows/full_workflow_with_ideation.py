@@ -231,12 +231,25 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Phase 3: Running ExperimentWorkflow")
         self.current_phase = "experiment"
 
-        # Use selected idea as experiment query if available
+        # Build experiment query from ideation results
         experiment_query = self.user_query
         if self.research_ideas and self.selected_idea_index is not None:
+            # User already selected a specific idea (structured path)
             idea = self.research_ideas[self.selected_idea_index]
             experiment_query = self._format_experiment_query(idea)
             logger.info(f"Using selected idea for experiment: {idea.get('title', '')}")
+        elif self.ideation_summary:
+            # Pass ideation report so experiment agent can see all ideas
+            # and ask the user which one to implement via AskUserQuestion
+            experiment_query = (
+                f"# Original Research Query\n{self.user_query}\n\n"
+                f"# Ideation Report\n"
+                f"The following ideation report contains research ideas generated "
+                f"from literature review. Review the ideas and ask the user which "
+                f"one to implement before starting.\n\n"
+                f"{self.ideation_summary}"
+            )
+            logger.info("Passing ideation report to experiment agent for idea selection")
 
         self._experiment_workflow = ExperimentWorkflow(
             workspace_path=self.workspace_path,

@@ -117,6 +117,12 @@ class WebFetchTool(BaseTool):
     input_schema = WebFetchInput
     _always_read_only = True
     max_result_size_chars = 100_000
+    prompt = (
+        "# WebFetch tool usage\n"
+        "- Fetch content from a specific URL. Use after WebSearch to read a page in detail.\n"
+        "- Use the `prompt` parameter to focus extraction (e.g., 'extract the API reference').\n"
+        "- Results are cached for 15 minutes. Subsequent fetches of the same URL are instant.\n"
+    )
 
     def call(self, context: ToolContext, *, url: str, prompt: str | None = None) -> str:
         # Validate URL

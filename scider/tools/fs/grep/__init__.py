@@ -35,6 +35,13 @@ class GrepTool(BaseTool):
     )
     input_schema = GrepInput
     _always_read_only = True
+    prompt = (
+        "# Grep tool usage\n"
+        "- Use Grep to search file contents instead of Bash with `grep` or `rg`.\n"
+        "- Supports full regex syntax (e.g., `log.*Error`, `function\\s+\\w+`).\n"
+        "- Filter files with the `glob` parameter (e.g., `*.py`, `**/*.ts`).\n"
+        "- Returns file paths and line numbers for each match.\n"
+    )
 
     def call(
         self,

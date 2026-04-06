@@ -31,6 +31,12 @@ class GlobTool(BaseTool):
     )
     input_schema = GlobInput
     _always_read_only = True
+    prompt = (
+        "# Glob tool usage\n"
+        "- Use Glob to find files by name pattern instead of Bash with `find` or `ls`.\n"
+        "- Supports patterns like `**/*.py`, `src/**/*.ts`, `*.json`.\n"
+        "- Results are sorted by modification time (most recent first).\n"
+    )
 
     def call(self, context: ToolContext, *, pattern: str, path: str | None = None) -> str:
         search_dir = path or "."

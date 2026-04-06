@@ -36,6 +36,13 @@ class TaskOutputTool(BaseTool):
     )
     input_schema = TaskOutputInput
     _always_read_only = True
+    prompt = (
+        "# TaskOutput tool usage\n"
+        "- Use after Bash(run_in_background=true) to read background task results.\n"
+        "- Set `block=true` to wait for the task to complete before returning.\n"
+        "- Use `tail=N` to read only the last N lines of output (useful for large outputs).\n"
+        "- If a background task completes, you will receive a <task-notification> automatically.\n"
+    )
 
     def call(
         self,

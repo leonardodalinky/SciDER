@@ -111,6 +111,14 @@ class AgentTool(BaseTool):
     name = "Agent"
     description = ""  # Dynamically built from registered agent types
     input_schema = AgentToolInput
+    prompt = (
+        "# Agent tool usage\n"
+        "- Launch a subagent for complex, self-contained tasks (paper search, coding).\n"
+        "- Write a complete, self-contained prompt — the subagent has NO context from "
+        "this conversation. Include file paths, specific details, and what you need.\n"
+        "- Do NOT use Agent for simple tasks you can do directly (file reads, searches).\n"
+        "- The subagent executes autonomously and returns results when done.\n"
+    )
 
     @property
     def _dynamic_description(self) -> str:

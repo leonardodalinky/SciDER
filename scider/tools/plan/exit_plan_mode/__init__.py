@@ -23,6 +23,13 @@ class ExitPlanModeTool(BaseTool):
     )
     input_schema = ExitPlanModeInput
     _always_read_only = True  # doesn't modify files, just transitions state
+    prompt = (
+        "# ExitPlanMode tool usage\n"
+        "- Call this ONLY after thorough exploration and plan writing.\n"
+        "- The plan must include: context (why), approach (step-by-step), "
+        "files to modify, and verification steps.\n"
+        "- Do NOT use this for research tasks — only for implementation planning.\n"
+    )
 
     def call(self, context: ToolContext, *, plan: str) -> str:
         from scider.core.plan_mode import PlanModeState

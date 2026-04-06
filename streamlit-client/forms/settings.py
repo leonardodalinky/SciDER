@@ -25,7 +25,7 @@ OPENAI_MODELS = [
     "o4-mini",
 ]
 
-# Claude models for coding agent v3
+# Claude models for coding agent (Claude SDK)
 CLAUDE_MODELS = [
     "claude-haiku-4-5",
     "claude-sonnet-4-6",
@@ -43,18 +43,13 @@ MODEL_ROLE_GROUPS = {
     },
     "Data Analysis": {
         "data": "Data analysis",
-        "plan": "Planning",
         "critic": "Critic evaluation",
     },
     "Experiment": {
-        "experiment_agent": "Experiment orchestration",
-        "experiment_execute": "Code execution",
-        "experiment_monitor": "Execution monitoring",
-        "experiment_summary": "Result summarization",
+        "experiment": "Experiment agent",
     },
     "System": {
         "history": "History compression",
-        "mem": "Memory extraction",
     },
 }
 
@@ -64,14 +59,9 @@ GEMINI_ROLE_DEFAULTS = {
     "paper_search": "gemini/gemini-2.5-flash-lite",
     "metric_search": "gemini/gemini-2.5-flash-lite",
     "data": "gemini/gemini-2.5-flash-lite",
-    "plan": "gemini/gemini-2.5-flash",
     "critic": "gemini/gemini-2.5-flash-lite",
-    "mem": "gemini/gemini-2.5-flash-lite",
     "history": "gemini/gemini-2.5-flash-lite",
-    "experiment_agent": "gemini/gemini-2.5-flash",
-    "experiment_execute": "gemini/gemini-2.5-flash",
-    "experiment_monitor": "gemini/gemini-2.5-flash-lite",
-    "experiment_summary": "gemini/gemini-2.5-flash-lite",
+    "experiment": "gemini/gemini-2.5-flash",
 }
 
 OPENAI_ROLE_DEFAULTS = {
@@ -79,14 +69,9 @@ OPENAI_ROLE_DEFAULTS = {
     "paper_search": "gpt-5-nano",
     "metric_search": "gpt-5-nano",
     "data": "gpt-5-nano",
-    "plan": "gpt-5-mini",
     "critic": "gpt-5-nano",
-    "mem": "gpt-5-nano",
     "history": "gpt-5-nano",
-    "experiment_agent": "gpt-5-mini",
-    "experiment_execute": "gpt-5-mini",
-    "experiment_monitor": "gpt-5-nano",
-    "experiment_summary": "gpt-5-nano",
+    "experiment": "gpt-5-mini",
 }
 
 
@@ -137,13 +122,10 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         openai_api_key = st.text_input(
             "OpenAI API Key (for embeddings)",
             type="password",
-            placeholder="Optional — needed for memory/embedding features",
+            placeholder="Optional — needed for embedding features",
             value=current.get("openai_api_key", ""),
         )
-        st.caption(
-            "Embedding model (text-embedding-3-small) requires an OpenAI key. "
-            "Without it, memory features will be disabled."
-        )
+        st.caption("Embedding model (text-embedding-3-small) requires an OpenAI key.")
 
         s2_api_key = st.text_input(
             "Semantic Scholar API Key",
@@ -154,16 +136,6 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         st.caption(
             "Optional. If provided, paper search will also query Semantic Scholar "
             "in addition to arXiv. Get a key at https://www.semanticscholar.org/product/api"
-        )
-
-        # --- Memory toggle ---
-        st.divider()
-        st.markdown("#### Memory")
-        memory_enabled = st.checkbox(
-            "Enable memory (reasoning bank)",
-            value=current.get("memory_enabled", False),
-            help="Requires OpenAI API key for embeddings. Extracts and retrieves "
-            "long-term memory from conversations.",
         )
 
         # --- HuggingFace Dataset Download ---
@@ -187,8 +159,13 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         st.divider()
         st.markdown("#### Coding Agent")
 
-        coding_version = os.getenv("CODING_AGENT_VERSION", "v3")
-        version_label = "v3 — Claude Agent SDK" if coding_version == "v3" else "v2 — OpenHands"
+        coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
+        if coding_version in ("v3", "claude_sdk"):
+            version_label = "Claude Agent SDK"
+        elif coding_version in ("v2", "openhands"):
+            version_label = "OpenHands"
+        else:
+            version_label = coding_version
         st.text_input(
             "Coding Agent Backend",
             value=version_label,
@@ -197,10 +174,10 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         )
         st.caption(
             "To change the coding agent backend, set the `CODING_AGENT_VERSION` "
-            "environment variable (`v3` for Claude, `v2` for OpenHands) in `.env`."
+            "environment variable (`claude_sdk` or `openhands`) in `.env`."
         )
 
-        if coding_version == "v3":
+        if coding_version in ("v3", "claude_sdk"):
             coding_models = CLAUDE_MODELS
             coding_default = current_roles.get("experiment_coding", "claude-haiku-4-5")
         else:
@@ -269,17 +246,12 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
                 st.error("API key is required.")
                 return None
 
-            if memory_enabled and not final_openai:
-                st.error("Memory requires an OpenAI API key for embeddings.")
-                return None
-
             return {
                 "api_key": final_api_key,
                 "model_provider": model_provider,
                 "anthropic_api_key": final_anthropic,
                 "openai_api_key": final_openai,
                 "s2_api_key": final_s2,
-                "memory_enabled": memory_enabled,
                 "model_roles": role_selections,
             }
 

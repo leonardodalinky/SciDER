@@ -21,6 +21,11 @@ class TaskStopTool(BaseTool):
         "Use when a background command is taking too long or is no longer needed."
     )
     input_schema = TaskStopInput
+    prompt = (
+        "# TaskStop tool usage\n"
+        "- Stop a running background task by its task ID.\n"
+        "- Use when a command is taking too long, producing wrong output, or is no longer needed.\n"
+    )
 
     def call(self, context: ToolContext, *, task_id: str) -> str:
         from scider.core.task import TaskManager

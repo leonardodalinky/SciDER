@@ -268,6 +268,18 @@ class RunBashCmdTool(BaseTool):
         f"for file reading and searching."
     )
     input_schema = RunBashCmdInput
+    prompt = (
+        "# Bash tool usage\n"
+        "- Do NOT use Bash to read files (use Read), search files (use Glob), "
+        "or search content (use Grep). Reserve Bash for commands that require shell execution.\n"
+        "- Always quote file paths with spaces using double quotes.\n"
+        "- When issuing multiple independent commands, make separate tool calls in parallel.\n"
+        "- For long-running commands (training, builds, large data processing), "
+        "use `run_in_background=true` and check results later with TaskOutput.\n"
+        "- Foreground commands are capped at 10 minutes. Background commands allow up to 12 hours.\n"
+        "- If a command fails, diagnose why before retrying. Do not blindly re-run.\n"
+        "- Avoid unnecessary `sleep` commands — use `run_in_background` instead.\n"
+    )
 
     def is_read_only(self, **kwargs) -> bool:
         """Bash is read-only only if the specific command is classified as read-only.

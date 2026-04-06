@@ -21,9 +21,6 @@ from pydantic import BaseModel
 from rich.console import Console
 from rich.style import Style
 
-from .exec import SessionBase
-from .exec.manager import SessionManager
-
 console = Console()
 
 styles = {
@@ -422,19 +419,3 @@ def _ensure_tool_pairing(messages: list[Message]) -> list[Message]:
                         pending_tool_calls.discard(oid)
 
     return result
-
-
-class ExecState(BaseModel):
-    session_id: str | None = None
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @property
-    def session(self) -> SessionBase:
-        s = SessionManager().get_session(self.session_id)
-        if s is None:
-            raise RuntimeError(
-                f"Session with ID {self.session_id} not found. It may not be registered yet."
-            )
-        return s

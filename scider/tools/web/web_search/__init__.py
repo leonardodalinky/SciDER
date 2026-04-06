@@ -66,6 +66,13 @@ class WebSearchTool(BaseTool):
     input_schema = WebSearchInput
     _always_read_only = True
     max_result_size_chars = 100_000
+    prompt = (
+        "# WebSearch tool usage\n"
+        "- Use for looking up documentation, APIs, current events, or anything not in the codebase.\n"
+        "- When presenting search results to the user, ALWAYS include a 'Sources:' section "
+        "with markdown links at the end.\n"
+        "- Use `allowed_domains` to restrict to specific sites (e.g., docs.python.org).\n"
+    )
 
     def call(
         self,

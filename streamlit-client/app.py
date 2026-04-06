@@ -7,7 +7,7 @@ from pathlib import Path
 
 import streamlit as st
 
-os.environ["CODING_AGENT_VERSION"] = "v3"
+os.environ["CODING_AGENT_VERSION"] = "claude_sdk"
 os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -67,17 +67,14 @@ _AGENT_LABELS = {
     # Data
     "data": "📊 Data Agent",
     "data_agent": "📊 Data Agent",
-    "data_planner": "📋 Data Planner",
     "paper_search": "📖 Paper Search",
     "metric_search": "📏 Metric Search",
     "metric_extractor": "📏 Metric Extractor",
     "dataset_search": "🗃️ Dataset Search",
     # Experiment
+    "experiment": "🧪 Experiment Agent",
     "experiment_agent": "🧪 Experiment Agent",
-    "experiment_coding": "💻 Coding Agent",
-    "experiment_exec": "▶️ Execution Agent",
-    "experiment_summary": "📝 Summary Agent",
-    "experiment_monitor": "👁️ Monitor Agent",
+    "experiment_coding": "💻 Coding Subagent",
     # Coding backends
     "claude_agent_sdk": "🤖 Claude Agent SDK",
     "claude_code": "🤖 Claude Code",
@@ -87,11 +84,6 @@ _AGENT_LABELS = {
     "critic": "🧐 Critic Agent",
     "history": "🗜️ History Compression",
     "user_approval": "👤 User Approval",
-    # Memory
-    "mem_extraction": "🧠 Memory Extraction",
-    "mem_retrieval": "🧠 Memory Retrieval",
-    "mem_consolidation": "🧠 Memory Consolidation",
-    "mem_persistence": "🧠 Memory Persistence",
 }
 
 
@@ -166,22 +158,17 @@ def register_all_models(settings: dict):
     all_roles = [
         "ideation",
         "data",
-        "plan",
         "history",
-        "experiment_agent",
+        "experiment",
         "experiment_coding",
-        "experiment_execute",
-        "experiment_summary",
-        "experiment_monitor",
         "paper_search",
         "metric_search",
         "critic",
-        "mem",
     ]
-    # For v3 coding agent, set CLAUDE_MODEL env var from saved setting
-    coding_version = os.getenv("CODING_AGENT_VERSION", "v3")
+    # For Claude SDK coding agent, set CLAUDE_MODEL env var from saved setting
+    coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
     coding_model = role_models.get("experiment_coding", "")
-    if coding_version == "v3" and coding_model:
+    if coding_version in ("v3", "claude_sdk") and coding_model:
         os.environ["CLAUDE_MODEL"] = coding_model
 
     for role in all_roles:
@@ -325,17 +312,9 @@ if "initialized" not in st.session_state:
     if not os.getenv("BRAIN_DIR"):
         os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
 
-    # Memory: only enable if user toggled on AND has OpenAI key
+    # Semantic Scholar API key
     from scider.core import constant as _constant
 
-    if _settings.get("memory_enabled") and _settings.get("openai_api_key"):
-        os.environ["REASONING_BANK_ENABLED"] = "true"
-        _constant.REASONING_BANK_ENABLED = True
-    else:
-        os.environ["REASONING_BANK_ENABLED"] = "false"
-        _constant.REASONING_BANK_ENABLED = False
-
-    # Semantic Scholar API key
     if _settings.get("s2_api_key"):
         os.environ["S2_API_KEY"] = _settings["s2_api_key"]
         _constant.S2_API_KEY = _settings["s2_api_key"]

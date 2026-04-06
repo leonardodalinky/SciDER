@@ -81,7 +81,9 @@ def register_new_tool(tool_instance: "BaseTool") -> None:
         try:
             validated = tool_instance.validate_input(kwargs)
         except ValidationError as e:
-            return f"Input validation error for tool {name}: {e}"
+            # Raise so _execute_tool_calls counts it as an error and the model
+            # sees it as a failed tool call (not a successful result).
+            raise ValueError(f"Input validation error for tool {name}: {e}") from e
 
         return tool_instance.call(context, **validated)
 

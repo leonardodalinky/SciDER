@@ -41,6 +41,15 @@ class FileEditTool(BaseTool):
     name = "FileEdit"
     description = DESCRIPTION
     input_schema = FileEditInput
+    prompt = (
+        "# FileEdit tool usage\n"
+        "- You MUST read the file with Read before editing. The tool will fail otherwise.\n"
+        "- When editing text from Read output, preserve exact indentation (tabs/spaces).\n"
+        "- The edit fails if `old_string` is not unique. Provide more surrounding context "
+        "to make it unique, or use `replace_all=true` to change every occurrence.\n"
+        "- Prefer FileEdit for targeted changes. Use FileWrite only for new files or "
+        "complete rewrites.\n"
+    )
 
     def call(
         self,

@@ -56,6 +56,13 @@ class EnterPlanModeTool(BaseTool):
     )
     input_schema = EnterPlanModeInput
     _always_read_only = True
+    prompt = (
+        "# EnterPlanMode tool usage\n"
+        "- Use for complex tasks: new features, multi-file changes, architecture decisions.\n"
+        "- Do NOT use for simple tasks: single-line fixes, obvious bugs, small tweaks.\n"
+        "- In plan mode, only read-only tools are available. You explore, then write a plan.\n"
+        "- Call ExitPlanMode with your plan when done to submit for approval.\n"
+    )
 
     def call(self, context: ToolContext) -> str:
         from scider.core.plan_mode import PlanModeState

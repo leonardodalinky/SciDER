@@ -18,6 +18,13 @@ class SaveFileTool(BaseTool):
     name = "FileWrite"
     description = "Save the given content to a file path (overwrites existing file)."
     input_schema = SaveFileInput
+    prompt = (
+        "# FileWrite tool usage\n"
+        "- This tool overwrites the existing file. If editing an existing file, "
+        "use FileEdit instead — it only sends the diff.\n"
+        "- Use FileWrite only to create new files or for complete rewrites.\n"
+        "- You MUST read an existing file with Read before overwriting it.\n"
+    )
 
     def call(self, context: ToolContext, *, path: str, content: str) -> str:
         path = os.path.expandvars(os.path.expanduser(path))

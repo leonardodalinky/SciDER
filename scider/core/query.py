@@ -386,6 +386,13 @@ def query(
     consecutive_error_turns = 0
     compact_state = CompactState()
 
+    # --- Inject tool-specific prompts into system prompt ---
+    from ..tools.registry import get_tool_prompts
+
+    tool_prompts = get_tool_prompts([tool.name for tool in tools.values()])
+    if tool_prompts:
+        system_prompt = system_prompt + "\n\n# Tool-specific guidance\n" + "\n".join(tool_prompts)
+
     # Plan mode state — shared with tools via ToolContext.extra
     plan_mode_state = PlanModeState()
     if ctx_dict is None:

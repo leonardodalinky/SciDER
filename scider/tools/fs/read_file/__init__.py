@@ -104,10 +104,12 @@ class ReadFileTool(BaseTool):
     # Never persist read_file output — would cause circular reads
     max_result_size_chars = float("inf")
     prompt = (
-        "- Read files with the read_file tool. Output has line numbers.\n"
-        "- For large files, use offset and limit to read specific sections.\n"
-        "- offset is 1-indexed (first line is 1). Default limit is 2000 lines.\n"
-        "- Binary files (images, archives) return metadata, not content."
+        "# Read tool usage\n"
+        "- Use Read to read files instead of Bash with cat/head/tail.\n"
+        "- Output includes line numbers. For large files, use `offset` and `limit` to read specific sections.\n"
+        "- `offset` is 1-indexed (first line is 1). Default limit is 2000 lines.\n"
+        "- Binary files (images, archives) return metadata, not content.\n"
+        "- Files larger than 256KB are rejected — use offset/limit to read in sections.\n"
     )
 
     def call(
@@ -129,7 +131,22 @@ class ReadFileTool(BaseTool):
             return msg
 
         if os.path.isdir(file_path):
-            return f"Error: '{file_path}' is a directory, not a file. Use list_files instead."
+            # List first few entries to help the model pick a file
+            try:
+                entries = sorted(os.listdir(file_path))[:20]
+                listing = "\n".join(
+                    f"  {e}/" if os.path.isdir(os.path.join(file_path, e)) else f"  {e}"
+                    for e in entries
+                )
+                if len(os.listdir(file_path)) > 20:
+                    listing += f"\n  ... and {len(os.listdir(file_path)) - 20} more"
+                return (
+                    f"Error: '{file_path}' is a directory, not a file. "
+                    f"Use Glob to find files by pattern, or read a specific file.\n"
+                    f"Directory contents:\n{listing}"
+                )
+            except Exception:
+                return f"Error: '{file_path}' is a directory, not a file. Use Glob to find files by pattern."
 
         # Check for binary files
         ext = Path(file_path).suffix.lstrip(".").lower()

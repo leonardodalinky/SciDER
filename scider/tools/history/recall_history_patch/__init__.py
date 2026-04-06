@@ -22,6 +22,11 @@ class RecallHistoryTool(BaseTool):
     )
     input_schema = RecallHistoryInput
     _always_read_only = True
+    prompt = (
+        "# RecallHistory tool usage\n"
+        "- Use to recall earlier conversation context that may have been compressed.\n"
+        "- Useful when you need to reference previous analysis, decisions, or results.\n"
+    )
 
     def call(self, context: ToolContext, *, last_n: int = 10) -> str:
         agent_state = context.agent_state
