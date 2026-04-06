@@ -45,6 +45,12 @@ CLAUDE_PROMPT: Template = Template(
 {{ bg_info }}
 ```
 {% endif %}
+{% if skills %}
+# Skills
+The following skills provide domain-specific guidance:
+
+{{ skills }}
+{% endif %}
 # Task:
 {{ instruction }}
 """
@@ -71,10 +77,17 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
         bg_info = "\n".join([f"> {line}" for line in bg_info.splitlines()])
         workspace_dir = os.path.abspath(agent_state.workspace.working_dir)
 
+        # Load skills for the experiment agent
+        from scider.core.skills import SkillRegistry
+
+        SkillRegistry.instance().load_default_directories()
+        skills_text = SkillRegistry.instance().get_skill_prompts("experiment")
+
         prompt = CLAUDE_PROMPT.render(
             workspace_dir=workspace_dir,
             instruction=instruction,
             bg_info=bg_info,
+            skills=skills_text,
         )
 
         logger.info("Sending task to Claude Agent SDK: {}", instruction[:100])

@@ -403,6 +403,15 @@ def query(
     if tool_prompts:
         system_prompt = system_prompt + "\n\n# Tool-specific guidance\n" + "\n".join(tool_prompts)
 
+    # --- Inject skill prompts into system prompt ---
+    # Preloaded skills get full content; on-demand skills get listing only (use Skill tool)
+    from .skills import SkillRegistry
+
+    SkillRegistry.instance().load_default_directories()
+    skill_section = SkillRegistry.instance().build_system_prompt_section(agent_name)
+    if skill_section:
+        system_prompt = system_prompt + "\n\n# Skills\n" + skill_section
+
     # Plan mode state — shared with tools via ToolContext.extra
     plan_mode_state = PlanModeState()
     if ctx_dict is None:

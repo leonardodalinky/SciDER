@@ -9,7 +9,6 @@ from jinja2 import Template
 T = TypeVar("T")
 
 PROMPTS: "Prompts" = None  # type: ignore
-SKILLS: "Skills" = None  # type: ignore
 
 
 @dataclass
@@ -83,16 +82,10 @@ def parse_yaml_as_templates(model_type: Type[T], path: str | Path) -> T:
     return model_type(**data2)
 
 
-@dataclass
-class Skills:
-    uv_skill: str
-
-
 def init():
     DIR = Path(__file__).parent
 
     global PROMPTS
-    global SKILLS
 
     PROMPTS = Prompts(
         data_agent=parse_yaml_as_templates(DataAgentPrompts, DIR / "data_agent_prompt.yaml"),
@@ -110,10 +103,6 @@ def init():
         hypo_data_gen=parse_yaml_as_templates(
             HypoDataGenPrompts, DIR / "hypo_data_gen_prompt.yaml"
         ),
-    )
-
-    SKILLS = Skills(
-        uv_skill=(DIR / "skills" / "uv.md").read_text(),
     )
 
 

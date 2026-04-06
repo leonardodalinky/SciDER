@@ -8,8 +8,8 @@ if TYPE_CHECKING:
 from pydantic import PrivateAttr
 
 from scider.core.code_env import LocalEnv
+from scider.core.skills import SkillRegistry
 from scider.core.types import HistoryState
-from scider.prompts import SKILLS
 
 
 class CodingAgentState(HistoryState):
@@ -110,10 +110,10 @@ class CodingAgentState(HistoryState):
                         content="When using the File Editor tool and other file-related tools, always refer to files using their absolute paths. "
                         "This ensures that file operations are unambiguous and correctly targeted within the workspace. ",
                     ),
-                    Skill(
-                        name="UV - Python Package Manager Skill",
-                        content=SKILLS.uv_skill,
-                    ),
+                    *[
+                        Skill(name=s.name, content=s.content)
+                        for s in SkillRegistry.instance().get_skills_for_agent("experiment")
+                    ],
                 ],
                 system_message_suffix="""\
 <CLI_MODE>
