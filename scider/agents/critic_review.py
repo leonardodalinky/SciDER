@@ -185,14 +185,16 @@ def _extract_verdict(feedback: str) -> str:
     Returns 'pass' if the work is acceptable, 'retry' if it needs improvement.
     """
     feedback_lower = feedback.lower()
-    # Look for explicit verdict markers
+    # Look for explicit verdict markers near "overall assessment"
     if "overall assessment" in feedback_lower:
-        for line in feedback.splitlines():
+        lines = feedback.splitlines()
+        for i, line in enumerate(lines):
             if "overall assessment" in line.lower():
-                line_lower = line.lower()
-                if "strong" in line_lower or "adequate" in line_lower or "good" in line_lower:
+                # Check this line and the next 2 lines for verdict keywords
+                window = " ".join(lines[i : i + 3]).lower()
+                if "strong" in window or "adequate" in window or "good" in window:
                     return "pass"
-                if "poor" in line_lower or "needs improvement" in line_lower:
+                if "poor" in window or "needs improvement" in window:
                     return "retry"
 
     # Fallback: check for critical issues

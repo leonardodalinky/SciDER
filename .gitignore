@@ -221,3 +221,5 @@ saved_chats/
 .claude/
 .agents/
 .windsurf/
+
+.scider/

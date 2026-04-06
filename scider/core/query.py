@@ -412,6 +412,13 @@ def query(
     if skill_section:
         system_prompt = system_prompt + "\n\n# Skills\n" + skill_section
 
+    # --- Inject memory index into system prompt ---
+    from .memory import build_memory_prompt_section
+
+    memory_section = build_memory_prompt_section()
+    if memory_section:
+        system_prompt = system_prompt + "\n\n# Memory\n" + memory_section
+
     # Plan mode state — shared with tools via ToolContext.extra
     plan_mode_state = PlanModeState()
     if ctx_dict is None:
