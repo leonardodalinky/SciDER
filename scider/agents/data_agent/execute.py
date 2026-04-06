@@ -38,6 +38,7 @@ AGENT_TOOLS = [
     "AskUserQuestion",
     "TaskOutput",
     "TaskStop",
+    "TodoWrite",
     "RecallHistory",
     "EnterPlanMode",
     "ExitPlanMode",

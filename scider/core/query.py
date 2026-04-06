@@ -15,6 +15,7 @@ import inspect
 import json
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 import litellm
@@ -386,6 +387,15 @@ def query(
     consecutive_error_turns = 0
     compact_state = CompactState()
 
+    # --- Set tool results dir to workspace if available ---
+    from .compact import set_tool_results_dir
+
+    if hasattr(agent_state, "workspace") and hasattr(agent_state.workspace, "working_dir"):
+        workspace_dir = str(agent_state.workspace.working_dir)
+        set_tool_results_dir(str(Path(workspace_dir) / ".tool-results"))
+    else:
+        set_tool_results_dir(None)  # use default
+
     # --- Inject tool-specific prompts into system prompt ---
     from ..tools.registry import get_tool_prompts
 
@@ -423,10 +433,34 @@ def query(
             active_tools = tools
         active_tool_names = [tool.name for tool in active_tools.values()]
 
-        # --- Step 0.6: Inject plan mode reminder into system prompt ---
+        # --- Step 0.6: Inject plan mode / plan / todo reminders into system prompt ---
         effective_system_prompt = system_prompt
         if plan_mode_state.is_plan_mode:
             effective_system_prompt = system_prompt + _PLAN_MODE_SYSTEM_REMINDER
+
+        # Remind model of approved plan (if any)
+        if plan_mode_state.plan_content and plan_mode_state.plan_approved:
+            effective_system_prompt += (
+                "\n\n<system-reminder>\n"
+                "You have an approved plan. Follow it step by step:\n\n"
+                f"{plan_mode_state.plan_content}\n"
+                "</system-reminder>"
+            )
+
+        # Remind model of current todo list (if any)
+        current_todos = ctx_dict.get("todos") if ctx_dict else None
+        if current_todos:
+            status_icons = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]"}
+            todo_lines = [
+                f"{status_icons.get(t['status'], '[ ]')} {t['content']}" for t in current_todos
+            ]
+            effective_system_prompt += (
+                "\n\n<system-reminder>\n"
+                "Current task list:\n"
+                + "\n".join(todo_lines)
+                + "\n\nContinue with the current in-progress task."
+                "\n</system-reminder>"
+            )
 
         # --- Step 1: LLM call (with error recovery) ---
         try:

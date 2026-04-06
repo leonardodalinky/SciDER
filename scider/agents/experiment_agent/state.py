@@ -17,5 +17,10 @@ class ExperimentAgentState(HistoryState):
     final_summary: str = ""
     output_summary: str | None = None
 
+    # Critic review
+    critic_feedback: str | None = None
+    critic_retry_count: int = 0
+    max_critic_retries: int = 2
+
     # Intermediate state for UI tracking
     intermediate_state: list[dict] = []

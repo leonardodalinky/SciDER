@@ -54,6 +54,13 @@ st.markdown(
         margin-bottom: 2px;
         font-weight: 600;
     }
+    .chat-meta-msg {
+        color: #888;
+        font-size: 13px;
+        border-left: 3px solid #ddd;
+        padding-left: 10px;
+        margin: 4px 0;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -93,14 +100,39 @@ def _agent_label(agent: str | None) -> str:
     return _AGENT_LABELS.get(agent, agent)
 
 
-def render_chat_message(role: str, content: str, agent: str | None = None):
+def render_chat_message(
+    role: str,
+    content: str,
+    agent: str | None = None,
+    is_meta: bool = False,
+    is_tool: bool = False,
+    tool_name: str | None = None,
+):
     """Render a single chat message as a Streamlit chat_message with markdown."""
-    with st.chat_message(role):
-        if agent:
+    # Map role for st.chat_message (only supports "user", "assistant", "ai", "human")
+    display_role = role
+    if role == "tool":
+        display_role = "assistant"
+
+    with st.chat_message(display_role):
+        # Badge: tool result or agent name
+        if is_tool and tool_name:
+            st.markdown(
+                f"<div class='chat-agent-badge'>🔧 {tool_name}</div>",
+                unsafe_allow_html=True,
+            )
+        elif agent:
             label = _agent_label(agent)
             st.markdown(f"<div class='chat-agent-badge'>{label}</div>", unsafe_allow_html=True)
-        if len(content) > _TRUNCATE_LEN:
-            # Show first few lines as expander label (up to 200 chars)
+
+        # Meta messages: render as muted system info
+        if is_meta:
+            st.markdown(
+                f"<div style='color: #888; font-size: 13px; border-left: 3px solid #ddd; "
+                f"padding-left: 10px; margin: 4px 0;'>{content}</div>",
+                unsafe_allow_html=True,
+            )
+        elif len(content) > _TRUNCATE_LEN:
             preview_lines = content[:200].split("\n")
             label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
             with st.expander(f"{label}...", expanded=False):
@@ -133,14 +165,27 @@ def render_chat_messages(messages: list[dict]):
     for group in groups:
         if len(group) == 1:
             m = group[0]
-            render_chat_message(m["role"], m["content"], m.get("agent"))
+            render_chat_message(
+                m["role"],
+                m["content"],
+                m.get("agent"),
+                is_meta=m.get("is_meta", False),
+                is_tool=m.get("is_tool", False),
+                tool_name=m.get("tool_name"),
+            )
         else:
             # Multiple consecutive messages from same agent — collapse
             agent = group[0].get("agent")
             label = _agent_label(agent) or "Assistant"
             with st.expander(f"{label} ({len(group)} messages)", expanded=True):
                 for m in group:
-                    render_chat_message(m["role"], m["content"])
+                    render_chat_message(
+                        m["role"],
+                        m["content"],
+                        is_meta=m.get("is_meta", False),
+                        is_tool=m.get("is_tool", False),
+                        tool_name=m.get("tool_name"),
+                    )
 
 
 # ==================== Model registration ====================
@@ -460,7 +505,12 @@ if workflow_config and "workflow_runner" not in st.session_state:
     def _on_msg(msg):
         if msg.content:
             handler.push_message(
-                msg.role or "assistant", msg.content, getattr(msg, "agent_sender", None)
+                msg.role or "assistant",
+                msg.content,
+                getattr(msg, "agent_sender", None),
+                is_meta=getattr(msg, "is_meta", False),
+                is_tool=msg.role == "tool",
+                tool_name=getattr(msg, "tool_name", None),
             )
 
     set_on_message_callback(_on_msg)

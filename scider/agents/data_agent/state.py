@@ -22,5 +22,10 @@ class DataAgentState(HistoryState):
     datasets: list[dict] = []
     metrics: list[dict] = []
 
+    # Critic review
+    critic_feedback: str | None = None
+    critic_retry_count: int = 0
+    max_critic_retries: int = 2
+
     # Intermediate state for UI tracking
     intermediate_state: list[dict] = []

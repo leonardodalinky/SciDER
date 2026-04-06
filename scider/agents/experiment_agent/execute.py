@@ -34,6 +34,7 @@ AGENT_TOOLS = [
     "AskUserQuestion",
     "TaskOutput",
     "TaskStop",
+    "TodoWrite",
     "RecallHistory",
     "EnterPlanMode",
     "ExitPlanMode",
@@ -51,6 +52,14 @@ def _build_system_context(agent_state: ExperimentAgentState) -> str:
     ]
     if agent_state.repo_source:
         parts.append(f"repo_source: {agent_state.repo_source}")
+
+    # Git status snapshot (if workspace is a git repo)
+    from scider.core.utils import get_git_status
+
+    git_status = get_git_status(cwd=str(agent_state.workspace.working_dir))
+    if git_status:
+        parts.append(f"\n{git_status}")
+
     return (
         "<system-reminder>\n"
         "As you work, you can use the following context:\n"

@@ -1,4 +1,4 @@
-"""Todo toolset — new-style tools."""
+"""Todo tools."""
 
 from ..registry import register_new_tool
 from .todo import TodoTool

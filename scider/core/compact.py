@@ -48,8 +48,21 @@ def _get_prompts():
 TOOL_RESULT_MAX_CHARS = int(os.getenv("COMPACT_TOOL_RESULT_MAX_CHARS", 50_000))
 # Preview size in characters for the reference message
 TOOL_RESULT_PREVIEW_CHARS = int(os.getenv("COMPACT_TOOL_RESULT_PREVIEW_CHARS", 2_000))
-# Directory for persisted tool results (default: tmp_brain/tool-results)
-TOOL_RESULTS_DIR = os.getenv("COMPACT_TOOL_RESULTS_DIR", "tmp_brain/tool-results")
+# Default directory for persisted tool results (can be overridden per-session)
+_DEFAULT_TOOL_RESULTS_DIR = os.getenv("COMPACT_TOOL_RESULTS_DIR", "tmp_brain/tool-results")
+# Session-level override (set by query() from workspace path)
+_tool_results_dir_override: str | None = None
+
+
+def set_tool_results_dir(path: str | None) -> None:
+    """Override the tool results directory for the current session."""
+    global _tool_results_dir_override
+    _tool_results_dir_override = path
+
+
+def _get_tool_results_dir() -> str:
+    return _tool_results_dir_override or _DEFAULT_TOOL_RESULTS_DIR
+
 
 # Level 2: keep the N most recent tool results intact; snip older ones
 SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 5))
@@ -82,7 +95,7 @@ class CompactState:
 
 def _ensure_tool_results_dir() -> Path:
     """Ensure the tool results directory exists and return its path."""
-    d = Path(TOOL_RESULTS_DIR)
+    d = Path(_get_tool_results_dir())
     d.mkdir(parents=True, exist_ok=True)
     return d
 
