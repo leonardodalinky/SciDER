@@ -14,7 +14,6 @@ HIGH_COST_MODEL = "gemini/gemini-2.5-pro"
 MEDIUM_COST_MODEL_2 = "gemini/gemini-3-flash-preview"
 HIGH_COST_MODEL_2 = "gemini/gemini-3-pro-preview"
 
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 
@@ -70,13 +69,6 @@ def register_gemini_low_medium_models(reasoning: str = "low"):
         name="mem",
         model=LOW_COST_MODEL,
         api_key=GEMINI_KEY,
-    )
-
-    # NOTE: Use OpenAI embeddings for better performance
-    ModelRegistry.register(
-        name="embed",
-        model="text-embedding-3-small",
-        api_key=OPENAI_KEY,
     )
 
     ModelRegistry.register(
@@ -177,12 +169,6 @@ def register_gemini_medium_high_models(reasoning: str = "low"):
     )
 
     ModelRegistry.register(
-        name="embed",
-        model="text-embedding-3-small",
-        api_key=OPENAI_KEY,
-    )
-
-    ModelRegistry.register(
         name="history",
         model=MEDIUM_COST_MODEL,
         api_key=GEMINI_KEY,
@@ -277,12 +263,6 @@ def register_gemini3_medium_high_models(reasoning: str = "low"):
         name="mem",
         model=MEDIUM_COST_MODEL_2,
         api_key=GEMINI_KEY,
-    )
-
-    ModelRegistry.register(
-        name="embed",
-        model="text-embedding-3-small",
-        api_key=OPENAI_KEY,
     )
 
     ModelRegistry.register(

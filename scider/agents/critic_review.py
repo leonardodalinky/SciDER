@@ -124,7 +124,6 @@ def user_review_node(agent_state):
         agent_state.approval_status = "approved"
     elif response.result == ApprovalResult.REJECTED:
         agent_state.approval_status = "retry"
-        # Inject critic feedback for the retry
         agent_state.critic_retry_count = retry_count + 1
         agent_state.add_message(
             Message(
@@ -132,7 +131,9 @@ def user_review_node(agent_state):
                 content=(
                     f"<system-reminder>\n"
                     f"[Critic Review — Retry {agent_state.critic_retry_count}/{max_retries}]\n"
-                    f"The following issues were found. Please address them:\n\n"
+                    f"The following issues were found. You MUST address ALL of them "
+                    f"thoroughly using multiple tool calls before finishing. "
+                    f"Do NOT stop after a single tool call — work through each issue.\n\n"
                     f"{feedback}\n"
                     f"</system-reminder>"
                 ),
@@ -143,7 +144,6 @@ def user_review_node(agent_state):
     elif response.result == ApprovalResult.FEEDBACK:
         agent_state.approval_status = "retry"
         agent_state.critic_retry_count = retry_count + 1
-        # Combine critic feedback with user's additional feedback
         user_feedback = response.feedback or ""
         agent_state.add_message(
             Message(
@@ -151,6 +151,8 @@ def user_review_node(agent_state):
                 content=(
                     f"<system-reminder>\n"
                     f"[Review — Retry {agent_state.critic_retry_count}/{max_retries}]\n"
+                    f"Address ALL of the following feedback thoroughly using multiple "
+                    f"tool calls before finishing.\n\n"
                     f"Critic feedback:\n{feedback}\n\n"
                     f"User additional feedback:\n{user_feedback}\n"
                     f"</system-reminder>"

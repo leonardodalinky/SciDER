@@ -33,9 +33,10 @@ CLAUDE_PROMPT: Template = Template(
 
 # Important Notes:
 - DO NOT train the full model. Just train a demo if needed for testing code changes.
-- DO NOT run large data processing tasks. Just simulate with small data if needed for testing code
+- DO NOT run large data processing tasks. Just simulate with small data if needed for testing code.
 - Always ensure that the code runs without errors after your changes.
 - I would run the full experiments later after getting your code changes.
+- ALWAYS use `uv` instead of `pip` for package management. Use `uv pip install` to install packages, `uv pip list` to check installed packages, and `uv run python script.py` to run scripts. uv is significantly faster and handles dependencies better.
 
 # Workspace
 {{ workspace_dir }}

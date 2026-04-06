@@ -119,14 +119,6 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             value=current.get("anthropic_api_key", ""),
         )
 
-        openai_api_key = st.text_input(
-            "OpenAI API Key (for embeddings)",
-            type="password",
-            placeholder="Optional — needed for embedding features",
-            value=current.get("openai_api_key", ""),
-        )
-        st.caption("Embedding model (text-embedding-3-small) requires an OpenAI key.")
-
         s2_api_key = st.text_input(
             "Semantic Scholar API Key",
             type="password",
@@ -153,6 +145,24 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             "(e.g. `google/fleurs`) instead of uploading a local file. "
             "Datasets are downloaded and cached automatically. "
             "Configure size limit via `HF_DATASET_MAX_SIZE_MB` in `.env`."
+        )
+
+        # --- Memory ---
+        st.divider()
+        st.markdown("#### Memory")
+        mem_read = os.getenv("SCIDER_MEMORY_READ", "true").lower() in {"1", "true", "yes", "y"}
+        mem_write = os.getenv("SCIDER_MEMORY_WRITE", "true").lower() in {"1", "true", "yes", "y"}
+        if mem_read and mem_write:
+            st.success("Reading and writing enabled")
+        elif mem_read:
+            st.info("Reading enabled, writing disabled")
+        elif mem_write:
+            st.info("Writing enabled, reading disabled")
+        else:
+            st.warning("Memory disabled")
+        st.caption(
+            "Cross-session memory in `.scider/memory/`. "
+            "Configure via `SCIDER_MEMORY_READ` and `SCIDER_MEMORY_WRITE` in `.env`."
         )
 
         # --- Coding Agent ---
@@ -239,7 +249,6 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         if submitted:
             final_api_key = api_key.strip()
             final_anthropic = anthropic_api_key.strip()
-            final_openai = openai_api_key.strip()
             final_s2 = s2_api_key.strip()
 
             if not final_api_key:
@@ -250,7 +259,6 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
                 "api_key": final_api_key,
                 "model_provider": model_provider,
                 "anthropic_api_key": final_anthropic,
-                "openai_api_key": final_openai,
                 "s2_api_key": final_s2,
                 "model_roles": role_selections,
             }

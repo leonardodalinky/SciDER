@@ -19,6 +19,7 @@ No LLM-based semantic recall — just index injection + on-demand file reads.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from loguru import logger
@@ -31,15 +32,27 @@ MAX_INDEX_BYTES = 25_000
 _PROJECT_MEMORY_DIR = ".scider/memory"
 _USER_MEMORY_DIR = Path.home() / ".scider" / "memory"
 
-# Guidance injected alongside the memory index
-MEMORY_GUIDANCE = """\
+
+def _is_memory_read_enabled() -> bool:
+    """Check if memory reading is enabled. Default: True."""
+    return os.getenv("SCIDER_MEMORY_READ", "true").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _is_memory_write_enabled() -> bool:
+    """Check if memory writing is enabled. Default: True."""
+    return os.getenv("SCIDER_MEMORY_WRITE", "true").strip().lower() in {"1", "true", "yes", "y"}
+
+
+_MEMORY_READ_GUIDANCE = """\
 You have a persistent memory system at the path shown above. \
 MEMORY.md is the index — each entry is a one-line link to a memory file.
 
 ## Reading memories
 - The index is already loaded above. To read a specific memory, use Read on the linked file.
 - Before acting on a memory, verify it's still current (files may have changed since it was written).
+"""
 
+_MEMORY_WRITE_GUIDANCE = """\
 ## Writing memories
 When you learn something worth remembering across sessions, save it:
 1. Write the memory file with FileWrite to `.scider/memory/filename.md` using this format:
@@ -65,6 +78,16 @@ When you learn something worth remembering across sessions, save it:
 - Temporary task state or current conversation context
 - Content already in skills or CLAUDE.md
 """
+
+
+def _build_guidance() -> str:
+    """Build memory guidance based on enabled features."""
+    parts = [_MEMORY_READ_GUIDANCE]
+    if _is_memory_write_enabled():
+        parts.append(_MEMORY_WRITE_GUIDANCE)
+    else:
+        parts.append("Memory writing is disabled. You can only read existing memories.\n")
+    return "\n".join(parts)
 
 
 def load_memory_index() -> str:
@@ -119,13 +142,18 @@ def _read_and_truncate(path: Path, memory_dir: str) -> str:
 def build_memory_prompt_section() -> str:
     """Build the complete memory section for the system prompt.
 
-    Returns empty string if no memory index exists.
+    Returns empty string if memory reading is disabled or no index exists.
+    Controlled by SCIDER_MEMORY_READ env var (default: true).
+    Writing guidance is included only if SCIDER_MEMORY_WRITE is also true.
     """
+    if not _is_memory_read_enabled():
+        return ""
+
     index = load_memory_index()
     if not index:
         return ""
 
-    return f"{index}\n\n{MEMORY_GUIDANCE}"
+    return f"{index}\n\n{_build_guidance()}"
 
 
 def ensure_memory_dir() -> Path:

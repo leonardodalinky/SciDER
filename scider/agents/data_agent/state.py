@@ -23,6 +23,7 @@ class DataAgentState(HistoryState):
     metrics: list[dict] = []
 
     # Critic review
+    approval_status: str = ""
     critic_feedback: str | None = None
     critic_retry_count: int = 0
     max_critic_retries: int = 2

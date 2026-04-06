@@ -20,16 +20,33 @@ def run_full(cfg, workspace_path):
     if data_path:
         logger.info(f"Running full workflow with data path: {data_path}")
 
-    w = FullWorkflowWithIdeation(
-        user_query=cfg["query"],
-        workspace_path=workspace_path,
-        data_path=data_path,
-        run_data_workflow=cfg["run_data"],
-        run_experiment_workflow=cfg["run_exp"],
-        max_revisions=5,
-    )
-    w.run()
-    return w.final_summary or "Workflow finished", []
+    run_ideation = cfg.get("run_ideation", True)
+
+    if run_ideation:
+        w = FullWorkflowWithIdeation(
+            user_query=cfg["query"],
+            workspace_path=workspace_path,
+            data_path=data_path,
+            run_data_workflow=cfg["run_data"],
+            run_experiment_workflow=cfg["run_exp"],
+            max_revisions=5,
+        )
+        w.run()
+        return w.final_summary or "Workflow finished", []
+    else:
+        # Skip ideation — run data → experiment directly via the same class
+        # but with ideation phase effectively skipped (no ideation summary)
+        w = FullWorkflowWithIdeation(
+            user_query=cfg["query"],
+            workspace_path=workspace_path,
+            data_path=data_path,
+            run_data_workflow=cfg["run_data"],
+            run_experiment_workflow=cfg["run_exp"],
+            max_revisions=5,
+            skip_ideation=True,
+        )
+        w.run()
+        return w.final_summary or "Workflow finished", []
 
 
 def render_form():
@@ -68,6 +85,7 @@ def render_form():
             if st.session_state.get("uploaded_full_data_path"):
                 st.info(f"Using: `{st.session_state.uploaded_full_data_path}`")
 
+        run_ideation = st.checkbox("Run Ideation (literature search & idea generation)", value=True)
         run_data = st.checkbox("Run Data Analysis", value=True)
         run_exp = st.checkbox("Run Experiment", value=True)
         submitted = st.form_submit_button(
@@ -125,6 +143,7 @@ def render_form():
                     "type": "full",
                     "query": topic,
                     "data_path": data_path_to_use,
+                    "run_ideation": run_ideation,
                     "run_data": run_data,
                     "run_exp": run_exp,
                 }

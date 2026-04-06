@@ -41,7 +41,3 @@ models:
     model: gemini/gemini-2.5-pro
     key_source: gemini
     reasoning_effort: low
-
-  embed:
-    model: text-embedding-3-small
-    key_source: openai

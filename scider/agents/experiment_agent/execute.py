@@ -21,10 +21,8 @@ from .state import ExperimentAgentState
 LLM_NAME = "experiment"
 AGENT_NAME = "experiment"
 
-AGENT_TOOLS = [
+_BASE_TOOLS = [
     "Read",
-    "FileEdit",
-    "FileWrite",
     "Bash",
     "Glob",
     "Grep",
@@ -41,9 +39,31 @@ AGENT_TOOLS = [
     "ExitPlanMode",
 ]
 
+# Tools only available when there's no dedicated coding subagent
+_WRITE_TOOLS = ["FileEdit", "FileWrite"]
+
+
+def _get_coding_backend() -> str:
+    import os
+
+    raw = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
+    return {"v3": "claude_sdk", "v2": "openhands"}.get(raw, raw)
+
+
+def _get_agent_tools() -> list[str]:
+    """Return tool list based on coding backend.
+
+    When a dedicated coding subagent is configured (claude_sdk, openhands),
+    FileEdit/FileWrite are removed — all code writing goes through the subagent.
+    """
+    backend = _get_coding_backend()
+    if backend in ("claude_sdk", "openhands"):
+        return _BASE_TOOLS
+    return _BASE_TOOLS + _WRITE_TOOLS
+
 
 def _get_system_prompt() -> str:
-    return PROMPTS.experiment_agent.system_prompt.render()
+    return PROMPTS.experiment_agent.system_prompt.render(coding_backend=_get_coding_backend())
 
 
 def _build_system_context(agent_state: ExperimentAgentState) -> str:
@@ -90,7 +110,7 @@ def agent_loop_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     _inject_system_context(agent_state)
 
     system_prompt = _get_system_prompt()
-    tools = gather_tools(AGENT_TOOLS)
+    tools = gather_tools(_get_agent_tools())
 
     result: QueryResult = query(
         model_name=LLM_NAME,

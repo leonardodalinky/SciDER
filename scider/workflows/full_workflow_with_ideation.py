@@ -73,6 +73,11 @@ class FullWorkflowWithIdeation(BaseModel):
     data_agent_recursion_limit: int = 100  # Recursion limit for DataAgent
     experiment_agent_recursion_limit: int = 100  # Recursion limit for ExperimentAgent
 
+    # Control flags
+    skip_ideation: bool = (
+        False  # Skip ideation phase (user provides detailed instructions directly)
+    )
+
     # Session management
     data_desc: str | None = None  # Optional additional description of the data
 
@@ -120,10 +125,14 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Starting Full SciDER Workflow with Ideation")
         logger.info(get_separator())
 
-        # Step 1: Run IdeationAgent
-        if not self._run_ideation_phase():
-            self._finalize()
-            return self
+        # Step 1: Run IdeationAgent (unless skipped)
+        if not self.skip_ideation:
+            if not self._run_ideation_phase():
+                self._finalize()
+                return self
+        else:
+            logger.info("Skipping ideation phase (skip_ideation=True)")
+            self.current_phase = "ideation"  # mark as passed
 
         # Step 2: (Optional) Run DataWorkflow
         if self.run_data_workflow:
@@ -195,11 +204,22 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Phase 2: Running DataWorkflow for data analysis")
         self.current_phase = "data_analysis"
 
+        # Build enriched data description with ideation context so the
+        # data agent knows papers have already been searched.
+        enriched_desc = self.data_desc or ""
+        if self.ideation_summary:
+            enriched_desc += (
+                "\n\n# Prior Ideation Results\n"
+                "The ideation agent has already conducted a literature search. "
+                "Do NOT search for papers again — the relevant papers are summarized below.\n\n"
+                f"{self.ideation_summary}"
+            )
+
         self._data_workflow = DataWorkflow(
             data_path=self.data_path,
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
-            data_desc=self.data_desc,
+            data_desc=enriched_desc or None,
         )
 
         try:
@@ -263,9 +283,10 @@ class FullWorkflowWithIdeation(BaseModel):
         try:
             self._experiment_workflow.run()
 
-            # Extract results from experiment workflow
+            # Extract results and save summary to workspace
             self.final_status = self._experiment_workflow.final_status
             self.execution_results = self._experiment_workflow.execution_results
+            self._experiment_workflow.save_summary()
             self.final_summary = self._compose_summary()
             self.current_phase = "complete"
 

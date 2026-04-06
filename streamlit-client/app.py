@@ -223,11 +223,6 @@ def register_all_models(settings: dict):
             model = "gemini/gemini-2.5-flash-lite" if provider == "Gemini" else "gpt-5-nano"
         ModelRegistry.register(name=role, model=model, api_key=api_key)
 
-    # Embedding: requires OpenAI key
-    openai_key = settings.get("openai_api_key", "")
-    if openai_key:
-        ModelRegistry.register(name="embed", model="text-embedding-3-small", api_key=openai_key)
-
     return True
 
 

@@ -43,6 +43,12 @@ system_prompt: |
   **Specificity**: Includes concrete experimental methods, not just abstract descriptions
   **Grounding**: Rooted in existing literature with clear differentiation from prior work
 
+  ## Asking the User
+  - When the research direction is broad, use `AskUserQuestion` with structured options to narrow the focus (e.g., which subfield, which application domain, theoretical vs. applied).
+  - When you find multiple promising directions, ask the user which ones to pursue rather than choosing arbitrarily.
+  - When domain context is missing (target audience, constraints, available resources), ask before generating ideas.
+  - NEVER ask a question in plain text. If you need user input, ALWAYS use the `AskUserQuestion` tool. A text-only response ends your turn and you will NOT get an answer.
+
   # Section 4: Using Your Tools
   - Use `Agent(prompt="search query", subagent_type="paper_search")` for academic paper searches. Be specific in your search queries.
   - Use `WebSearch` for broader context — trends, benchmarks, datasets, tools.

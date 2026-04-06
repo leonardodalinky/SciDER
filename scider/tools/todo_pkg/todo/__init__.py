@@ -96,12 +96,15 @@ class TodoTool(BaseTool):
 
     @staticmethod
     def _format_todo_display(todos: list[TodoItem]) -> str:
-        """Format todo list for display in intermediate state."""
+        """Format todo list as markdown checkboxes for display."""
         if not todos:
             return "No tasks."
         lines = []
-        status_icons = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]"}
         for t in todos:
-            icon = status_icons.get(t.status, "[ ]")
-            lines.append(f"{icon} {t.content}")
+            if t.status == "completed":
+                lines.append(f"- [x] ~~{t.content}~~")
+            elif t.status == "in_progress":
+                lines.append(f"- [ ] **{t.content}** *(in progress)*")
+            else:
+                lines.append(f"- [ ] {t.content}")
         return "\n".join(lines)

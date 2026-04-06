@@ -41,8 +41,6 @@ AGENT_TOOLS = [
     "TodoWrite",
     "Skill",
     "RecallHistory",
-    "EnterPlanMode",
-    "ExitPlanMode",
 ]
 
 

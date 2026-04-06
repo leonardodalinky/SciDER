@@ -66,6 +66,7 @@ class Message(LLMessage):
         "compact_metadata",
         "persisted_content_path",
         "content_before_snip",
+        "finish_reason",
     ]
 
     # --- tool call fields ---
@@ -81,6 +82,8 @@ class Message(LLMessage):
     # True for programmatically injected messages (recovery nudges, system context, etc.)
     # that are not real user/LLM interactions. Excluded when serializing to litellm.
     is_meta: bool = False
+    # LLM finish reason: "stop", "length", "tool_calls", etc.
+    finish_reason: str | None = None
     # Compact boundary marker — inserted by autocompact to delimit compacted regions
     is_compact_boundary: bool = False
     # Metadata about compaction (trigger type, pre-token count, messages summarized, etc.)

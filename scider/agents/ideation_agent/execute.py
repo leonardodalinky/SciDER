@@ -23,8 +23,7 @@ AGENT_TOOLS = [
     "WebSearch",
     "WebFetch",
     "Agent",
-    "EnterPlanMode",
-    "ExitPlanMode",
+    "AskUserQuestion",
 ]
 
 

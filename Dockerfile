@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /app/requirements.txt
 COPY requirements-space.txt /app/requirements-space.txt
 RUN pip install --upgrade pip && \
+    pip install uv && \
     pip install --no-cache-dir -r requirements.txt -v && \
     pip install --no-cache-dir -r requirements-space.txt -v
 

@@ -385,6 +385,8 @@ def query(
     all_messages: list[Message] = []
     function_map = {tool.name: tool.func for tool in tools.values()}
     consecutive_error_turns = 0
+    prev_turn_had_errors = False  # track if last tool execution had any errors
+    gave_up_nudges = 0  # how many times we nudged the model to retry after giving up
     compact_state = CompactState()
 
     # --- Set tool results dir to workspace if available ---
@@ -531,6 +533,53 @@ def query(
 
         # --- Step 2: Check for tool calls ---
         if not assistant_msg.tool_calls or len(assistant_msg.tool_calls) == 0:
+            # Check for output truncation (finish_reason == "length")
+            # If truncated, inject a continue prompt so the model can finish
+            if getattr(assistant_msg, "finish_reason", None) == "length":
+                logger.info("Output truncated (finish_reason=length), injecting continue prompt")
+                continue_msg = Message(
+                    role="user",
+                    content=(
+                        "<system-reminder>\n"
+                        "Your previous response was truncated due to output length limits. "
+                        "Continue exactly where you left off.\n"
+                        "</system-reminder>"
+                    ),
+                    agent_sender=agent_name,
+                    is_meta=True,
+                )
+                agent_state.add_message(continue_msg)
+                all_messages.append(continue_msg)
+                continue
+
+            # Detect "give up after error" pattern: previous turn had tool
+            # errors but model responded with plain text instead of retrying.
+            # Nudge it to self-correct (up to 2 times).
+            if prev_turn_had_errors and gave_up_nudges < 2:
+                gave_up_nudges += 1
+                logger.info(
+                    "Model gave up after tool error (nudge {}/2), injecting retry prompt",
+                    gave_up_nudges,
+                )
+                nudge_msg = Message(
+                    role="user",
+                    content=(
+                        "<system-reminder>\n"
+                        "You described a tool error in plain text instead of fixing it. "
+                        "Do NOT restate errors — fix them by calling the tool again with "
+                        "corrected parameters. For example, if a file was not found, try "
+                        "listing the directory first. If a file was too large, use offset "
+                        "and limit parameters. Act now.\n"
+                        "</system-reminder>"
+                    ),
+                    agent_sender=agent_name,
+                    is_meta=True,
+                )
+                agent_state.add_message(nudge_msg)
+                all_messages.append(nudge_msg)
+                prev_turn_had_errors = False
+                continue
+
             # Before ending: check if background tasks are still running.
             # If so, wait for them and inject notifications so the agent can
             # see the results and continue working.
@@ -570,25 +619,43 @@ def query(
                 turn_count=turn + 1,
             )
 
+        # --- Step 3.5: Track if this turn had any tool errors ---
+        any_errors = any(
+            msg.content and ("Error" in msg.content or "failed" in msg.content.lower())
+            for msg in tool_msgs
+            if msg.role == "tool"
+        )
+        prev_turn_had_errors = any_errors
+        if not any_errors:
+            gave_up_nudges = 0  # reset on clean turn
+
         # --- Step 4: Consecutive error circuit breaker ---
         if all_errors:
             consecutive_error_turns += 1
-        else:
-            consecutive_error_turns = 0
-
-        if consecutive_error_turns >= 3:
-            logger.warning("Circuit breaker: 3 consecutive turns with all tool errors")
+            if consecutive_error_turns >= 3:
+                logger.warning("Circuit breaker: 3 consecutive turns with all tool errors")
+                return QueryResult(
+                    messages=all_messages,
+                    stop_reason=StopReason.ERROR,
+                    turn_count=turn + 1,
+                    error=RuntimeError("All tool calls failed for 3 consecutive turns"),
+                )
+            # Nudge the model to retry with correct parameters
             nudge_msg = Message(
                 role="user",
                 content=(
-                    "All tool calls have failed for 3 consecutive turns. "
-                    "Please reconsider your approach or ask for help."
+                    "<system-reminder>\n"
+                    f"All tool calls failed this turn ({consecutive_error_turns}/3 consecutive failures). "
+                    "Review the error messages above carefully and retry with corrected parameters. "
+                    "Do NOT give up — fix the tool call and try again.\n"
+                    "</system-reminder>"
                 ),
                 agent_sender=agent_name,
                 is_meta=True,
             )
             agent_state.add_message(nudge_msg)
             all_messages.append(nudge_msg)
+        else:
             consecutive_error_turns = 0
 
     # max_turns exhausted

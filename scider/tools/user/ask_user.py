@@ -68,10 +68,12 @@ class AskUserQuestionTool(BaseTool):
     _always_read_only = True
     prompt = (
         "# AskUserQuestion tool usage\n"
+        "- NEVER ask a question in plain text. If you need user input, you MUST call this tool. "
+        "A plain-text question ends your turn and the user CANNOT answer.\n"
         "- Use to gather preferences, clarify ambiguous instructions, or get decisions.\n"
         "- Provide 2-4 clear, distinct options when possible. Each option needs a label and description.\n"
         "- For open-ended questions, omit options — the user provides free-text input.\n"
-        "- Do NOT use for routine updates. Only for genuine questions where user input matters.\n"
+        "- Do NOT use for routine updates or obvious next steps. Only for genuine ambiguity.\n"
         "- You can ask 1-4 questions in a single call.\n"
     )
 

@@ -16,12 +16,16 @@ AGENT_NAME = "critic"
 
 AGENT_TOOLS = [
     "Read",
+    "Bash",
     "Glob",
     "Grep",
     "WebSearch",
     "WebFetch",
+    "AskUserQuestion",
     "RecallHistory",
 ]
+# NOTE: Critic has Bash for read-only verification (wc, head, python -c).
+# Writing is prohibited by prompt. FileEdit/FileWrite are intentionally excluded.
 
 
 def _get_system_prompt() -> str:

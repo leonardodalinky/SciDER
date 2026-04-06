@@ -73,9 +73,11 @@ def render_approval_ui(handler) -> None:
         if selected_item.get("description"):
             st.caption(selected_item["description"])
 
+    # Use a counter-based key so each new approval request gets a fresh input
+    approval_count = st.session_state.get("_approval_count", 0)
     feedback_text = st.text_input(
         "Feedback (required for feedback option)",
-        key="approval_feedback_input",
+        key=f"approval_feedback_input_{approval_count}",
         placeholder="Enter your feedback here...",
     )
 
@@ -87,6 +89,7 @@ def render_approval_ui(handler) -> None:
             st.session_state.messages.append(
                 {"role": "user", "content": f"✅ Approved [{node_name}]"}
             )
+            st.session_state["_approval_count"] = approval_count + 1
             handler.submit_response(
                 ApprovalResponse(ApprovalResult.APPROVED, selected_index=selected_index)
             )
@@ -96,6 +99,7 @@ def render_approval_ui(handler) -> None:
             st.session_state.messages.append(
                 {"role": "user", "content": f"❌ Rejected [{node_name}]"}
             )
+            st.session_state["_approval_count"] = approval_count + 1
             handler.submit_response(ApprovalResponse(ApprovalResult.REJECTED))
             st.rerun()
     with col3:
@@ -111,6 +115,7 @@ def render_approval_ui(handler) -> None:
                     "content": f"💬 Feedback [{node_name}]: {feedback_text.strip()}",
                 }
             )
+            st.session_state["_approval_count"] = approval_count + 1
             handler.submit_response(
                 ApprovalResponse(ApprovalResult.FEEDBACK, feedback=feedback_text.strip())
             )

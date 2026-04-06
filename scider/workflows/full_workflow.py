@@ -158,9 +158,10 @@ class FullWorkflow(BaseModel):
         try:
             self._experiment_workflow.run()
 
-            # Extract results from experiment workflow
+            # Extract results and save summary to workspace
             self.final_status = self._experiment_workflow.final_status
             self.execution_results = self._experiment_workflow.execution_results
+            self._experiment_workflow.save_summary()
             self.final_summary = self._compose_summary()
             self.current_phase = "complete"
 

@@ -49,7 +49,3 @@ models:
     key_source: openai
     reasoning:
       effort: low
-
-  embed:
-    model: text-embedding-3-small
-    key_source: openai

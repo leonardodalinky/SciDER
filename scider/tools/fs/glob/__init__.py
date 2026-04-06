@@ -33,8 +33,10 @@ class GlobTool(BaseTool):
     _always_read_only = True
     prompt = (
         "# Glob tool usage\n"
-        "- Use Glob to find files by name pattern instead of Bash with `find` or `ls`.\n"
-        "- Supports patterns like `**/*.py`, `src/**/*.ts`, `*.json`.\n"
+        "- REQUIRED parameter: `pattern` — the glob pattern (e.g., `**/*.py`, `*.csv`).\n"
+        "- Optional parameter: `path` — directory to search in.\n"
+        "- Use Glob for finding files by name pattern (e.g., all Python files, all CSVs).\n"
+        "- Do NOT use Glob as a substitute for `ls`. To list directory contents, use `Bash(command='ls -la /path')`.\n"
         "- Results are sorted by modification time (most recent first).\n"
     )
 
