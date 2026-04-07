@@ -167,8 +167,9 @@ class ReadFileTool(BaseTool):
                 return (
                     f"Error: File '{file_path}' is too large "
                     f"({file_size:,} bytes, max {MAX_FILE_SIZE_BYTES:,} bytes). "
-                    f"Use offset and limit to read specific portions. "
-                    f"For example: read_file(file_path='{file_path}', offset=1, limit=200)"
+                    f"For data files, read a small SAMPLE (e.g. `limit=50`) to inspect the schema, "
+                    f"then use `Bash` with `wc -l`, `awk`, or `python3 -c '...'` to compute statistics "
+                    f"on the full file. Do NOT paginate through the entire file with Read."
                 )
 
             if file_size > MAX_STREAM_FILE_SIZE_BYTES:

@@ -22,6 +22,7 @@ _VERSION_ALIASES = {
     "v2": "openhands",
     "claude_sdk": "claude_sdk",
     "openhands": "openhands",
+    "native": "native",
 }
 
 _raw_version = os.getenv("CODING_AGENT_VERSION", "v3")
@@ -38,6 +39,13 @@ def _register_coding_subagent() -> None:
     }
 
     match CODING_AGENT_VERSION:
+        case "native":
+            from scider.agents.coding_subagent_native.build import build as coding_build_fn
+            from scider.agents.coding_subagent_native.state import (
+                NativeCodingAgentState as CodingAgentState,
+            )
+
+            compiled_graph = coding_build_fn().compile()
         case "openhands":
             if not _OPENHANDS_ENABLED:
                 logger.warning(
@@ -79,8 +87,11 @@ def _register_coding_subagent() -> None:
         kwargs = {
             "user_query": prompt,
             "data_summary": data_summary,
-            "skip_summary": True,  # experiment agent generates its own summary
         }
+        # Claude/OpenHands subagents skip summary (experiment agent generates its own);
+        # native subagent always generates summary via LLM.
+        if CODING_AGENT_VERSION != "native":
+            kwargs["skip_summary"] = True
         if workspace is not None:
             kwargs["workspace"] = workspace
         return kwargs
@@ -103,7 +114,7 @@ def _register_coding_subagent() -> None:
         AgentType(
             name="coding",
             description=(
-                "Delegate complex coding tasks to a specialized coding agent (Claude Agent SDK). "
+                f"Delegate complex coding tasks to a specialized coding agent ({CODING_AGENT_VERSION}). "
                 "The agent can read, write, edit files, run commands, and manage a full coding workflow. "
                 "Use for tasks requiring multi-file changes, environment setup, or significant implementation work."
             ),

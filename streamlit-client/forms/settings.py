@@ -174,6 +174,8 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             version_label = "Claude Agent SDK"
         elif coding_version in ("v2", "openhands"):
             version_label = "OpenHands"
+        elif coding_version == "native":
+            version_label = "Native (SciDER)"
         else:
             version_label = coding_version
         st.text_input(
@@ -184,7 +186,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         )
         st.caption(
             "To change the coding agent backend, set the `CODING_AGENT_VERSION` "
-            "environment variable (`claude_sdk` or `openhands`) in `.env`."
+            "environment variable (`claude_sdk`, `openhands`, or `native`) in `.env`."
         )
 
         if coding_version in ("v3", "claude_sdk"):

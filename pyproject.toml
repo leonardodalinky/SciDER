@@ -38,6 +38,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "jupyterlab>=4.4.10",
+    "pytest>=8.0.0",
 ]
 
 [project.optional-dependencies]
