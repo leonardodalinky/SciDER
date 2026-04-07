@@ -27,7 +27,7 @@ from scider.prompts.prompt_data import PROMPTS
 class FeatureSpec(BaseModel):
     name: str
     dtype: Literal["numeric", "categorical", "integer"]
-    distribution: Literal["gaussian", "uniform", "categorical", "integer_range"]
+    distribution: Literal["gaussian", "uniform", "categorical", "integer_range", "formula"]
     params: dict[str, Any]
     description: str = ""
 
@@ -91,10 +91,13 @@ def generate_data_spec(
 def format_spec_for_review(spec: DataGenSpec) -> str:
     """Format a ``DataGenSpec`` as a readable table for user approval."""
     lines = [f"**Dataset**: {spec.dataset_name}", ""]
-    lines.append("| Feature | Type | Distribution | Parameters |")
-    lines.append("|---------|------|--------------|------------|")
+    lines.append("| Feature | Type | Distribution | Parameters / Formula |")
+    lines.append("|---------|------|--------------|----------------------|")
     for f in spec.features:
-        params_str = ", ".join(f"{k}={v}" for k, v in f.params.items())
+        if f.distribution == "formula":
+            params_str = f"`{f.params.get('expression', '')}`"
+        else:
+            params_str = ", ".join(f"{k}={v}" for k, v in f.params.items())
         lines.append(f"| {f.name} | {f.dtype} | {f.distribution} | {params_str} |")
         if f.description:
             lines.append(f"|  | | | _{f.description}_ |")
@@ -129,25 +132,35 @@ def generate_csv_from_spec(
 
     for f in spec.features:
         p = f.params
+        # Each feature is also assigned to a local variable so later
+        # `formula` features can reference earlier features by name.
         if f.distribution == "gaussian":
             mean = float(p.get("mean", 0))
             std = float(p.get("std", 1))
-            script_lines.append(f'data["{f.name}"] = np.random.normal({mean}, {std}, n)')
+            script_lines.append(f"{f.name} = np.random.normal({mean}, {std}, n)")
         elif f.distribution == "uniform":
             low = float(p.get("low", 0))
             high = float(p.get("high", 1))
-            script_lines.append(f'data["{f.name}"] = np.random.uniform({low}, {high}, n)')
+            script_lines.append(f"{f.name} = np.random.uniform({low}, {high}, n)")
         elif f.distribution == "categorical":
             cats = p.get("categories", ["A", "B"])
             probs = p.get("probs", None)
             if probs:
-                script_lines.append(f'data["{f.name}"] = np.random.choice({cats}, n, p={probs})')
+                script_lines.append(f"{f.name} = np.random.choice({cats}, n, p={probs})")
             else:
-                script_lines.append(f'data["{f.name}"] = np.random.choice({cats}, n)')
+                script_lines.append(f"{f.name} = np.random.choice({cats}, n)")
         elif f.distribution == "integer_range":
             low = int(p.get("low", 0))
             high = int(p.get("high", 100))
-            script_lines.append(f'data["{f.name}"] = np.random.randint({low}, {high + 1}, n)')
+            script_lines.append(f"{f.name} = np.random.randint({low}, {high + 1}, n)")
+        elif f.distribution == "formula":
+            expression = p.get("expression", "")
+            if not expression:
+                raise ValueError(
+                    f"Feature {f.name!r} has distribution='formula' but no 'expression' param"
+                )
+            script_lines.append(f"{f.name} = {expression}")
+        script_lines.append(f'data["{f.name}"] = {f.name}')
 
     script_lines += [
         "",
