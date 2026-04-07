@@ -77,7 +77,7 @@ class ModelRegistry:
         return self.models[name]
 
     # Retry config: exponential backoff with jitter
-    _MAX_RETRIES = 8
+    _MAX_RETRIES = 10
     _BASE_DELAY_S = 1.0  # 1s base
     _MAX_DELAY_S = 120.0  # 2 min cap
 

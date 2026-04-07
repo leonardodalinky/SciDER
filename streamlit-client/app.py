@@ -7,7 +7,22 @@ from pathlib import Path
 
 import streamlit as st
 
-os.environ["CODING_AGENT_VERSION"] = "claude_sdk"
+# Load .env BEFORE setting any defaults so .env values take precedence.
+# override=True ensures .env wins over any inherited shell env vars — otherwise
+# a stale `export CODING_AGENT_VERSION=claude_sdk` in the parent shell would
+# silently override what's in .env.
+try:
+    from dotenv import load_dotenv
+
+    _env_path = Path(__file__).parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+    else:
+        load_dotenv()
+except Exception:
+    pass
+
+os.environ.setdefault("CODING_AGENT_VERSION", "claude_sdk")
 os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -227,18 +242,7 @@ def register_all_models(settings: dict):
 
 
 # ==================== Settings gate ====================
-
-# Load .env for non-secret vars (BRAIN_DIR, logging, etc.) — but NOT for API keys
-try:
-    from dotenv import load_dotenv
-
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-    else:
-        load_dotenv()
-except Exception:
-    pass
+# .env is loaded at module top so CODING_AGENT_VERSION etc. are honored.
 
 # --- Case study view mode (before settings gates so it works without API keys) ---
 if st.session_state.get("view_mode") == "case_study":
@@ -570,6 +574,9 @@ if "workflow_runner" in st.session_state:
         del st.session_state.approval_handler
         st.rerun()
     else:
+        render_chat_message("assistant", "Workflow is running...", None)
+        time.sleep(2)
+        st.rerun()
         render_chat_message("assistant", "Workflow is running...", None)
         time.sleep(2)
         st.rerun()
