@@ -163,6 +163,51 @@ def array_to_bullets(arr: list[str]) -> str:
     return "\n".join([f"- {s}" for s in arr])
 
 
+def get_git_status(cwd: str | None = None, max_status_chars: int = 2000) -> str | None:
+    """Get a git status snapshot for context injection.
+
+    Returns a formatted string with branch, status, and recent commits,
+    or None if the directory is not a git repo. Modeled after Claude Code's
+    getGitStatus() (src/utils/git.ts).
+    """
+    import subprocess
+
+    def _run(args: list[str]) -> str:
+        try:
+            r = subprocess.run(
+                ["git", "--no-optional-locks"] + args,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=5,
+            )
+            return r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    # Check if it's a git repo
+    if not _run(["rev-parse", "--is-inside-work-tree"]):
+        return None
+
+    branch = _run(["branch", "--show-current"]) or _run(["rev-parse", "--short", "HEAD"])
+    status = _run(["status", "--short"])
+    log = _run(["log", "--oneline", "-n", "5"])
+    user_name = _run(["config", "user.name"])
+
+    if status and len(status) > max_status_chars:
+        status = status[:max_status_chars] + "\n... (truncated)"
+
+    parts = [
+        "gitStatus: This is the git status at the start of the conversation. "
+        "Note that this status is a snapshot in time, and will not update during the conversation.",
+        f"Current branch: {branch}" if branch else None,
+        f"Git user: {user_name}" if user_name else None,
+        f"Status:\n{status}" if status else "Status: (clean)",
+        f"Recent commits:\n{log}" if log else None,
+    ]
+    return "\n\n".join(p for p in parts if p)
+
+
 def smart_truncate(text: str, max_length: int = 32000) -> str:
     """Truncate text if it exceeds max_length. Keep the head and tail, and adding in the middle."""
     if len(text) <= max_length:

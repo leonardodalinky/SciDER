@@ -21,13 +21,6 @@ models:
     key_source: gemini
     reasoning_effort: low
 
-  plan:
-    model: gemini/gemini-2.5-pro
-    key_source: gemini
-    reasoning_effort: low
-    temperature: 0.3
-    top_p: 0.9
-
   critic:
     model: gemini/gemini-2.5-pro
     key_source: gemini
@@ -35,40 +28,16 @@ models:
     temperature: 0.3
     top_p: 0.9
 
-  mem:
-    model: gemini/gemini-2.5-flash
-    key_source: gemini
-
-  embed:
-    model: text-embedding-3-small
-    key_source: openai
-
   history:
     model: gemini/gemini-2.5-flash
     key_source: gemini
 
-  experiment_agent:
+  experiment:
     model: gemini/gemini-2.5-pro
     key_source: gemini
     reasoning_effort: low
 
   experiment_coding:
-    model: gemini/gemini-2.5-pro
-    key_source: gemini
-    reasoning_effort: low
-
-  experiment_execute:
-    model: gemini/gemini-2.5-pro
-    key_source: gemini
-    reasoning_effort: low
-
-  experiment_monitor:
-    model: gemini/gemini-2.5-flash
-    key_source: gemini
-    temperature: 0.3
-    top_p: 0.9
-
-  experiment_summary:
     model: gemini/gemini-2.5-pro
     key_source: gemini
     reasoning_effort: low

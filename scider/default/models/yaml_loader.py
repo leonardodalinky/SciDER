@@ -57,16 +57,10 @@ def register_from_yaml(
             api_key = os.getenv(env_var)
 
         if api_key is None:
-            if role == "embed":
-                logger.warning(
-                    f"Skipping '{role}' registration: no API key for key_source='{key_source}'"
-                )
-                continue
-            else:
-                logger.warning(
-                    f"No API key for key_source='{key_source}' (role='{role}'). "
-                    f"Registration may fail at runtime."
-                )
+            logger.warning(
+                f"No API key for key_source='{key_source}' (role='{role}'). "
+                f"Registration may fail at runtime."
+            )
 
         # Extract extra kwargs (everything except model and key_source)
         kwargs = {k: v for k, v in params.items() if k not in RESERVED_KEYS}

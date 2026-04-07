@@ -24,10 +24,10 @@ class ZeroChoiceError(Exception):
 def function_to_json_schema(func_or_name: Callable | str) -> dict:
     if isinstance(func_or_name, str):
         tool = ToolRegistry.instance().tools[func_or_name]
-        return tool.json_schema
+        return tool.get_json_schema()
     elif callable(func_or_name):
         tool = ToolRegistry.instance().tools[func_or_name.__name__]
-        return tool.json_schema
+        return tool.get_json_schema()
     else:
         raise ValueError("func must be a string or a callable")
 
@@ -76,40 +76,54 @@ class ModelRegistry:
             raise ValueError(f"Model `{name}` not found")
         return self.models[name]
 
+    # Retry config: exponential backoff with jitter
+    _MAX_RETRIES = 10
+    _BASE_DELAY_S = 1.0  # 1s base
+    _MAX_DELAY_S = 120.0  # 2 min cap
+
+    @staticmethod
+    def _backoff_delay(attempt: int, base: float = 1.0, cap: float = 120.0) -> float:
+        """Exponential backoff with ±25% jitter, capped at `cap` seconds."""
+        import random
+
+        delay = min(base * (2**attempt), cap)
+        jitter = delay * 0.25 * (2 * random.random() - 1)  # ±25%
+        return max(0.1, delay + jitter)
+
     @classmethod
     def completion(cls, *args, **kwargs) -> Message:
-        # completion with retry for RateLimitError
-        max_retries = 3
-
-        for attempt in range(max_retries):
+        """Completion with exponential-backoff retry for transient errors."""
+        for attempt in range(cls._MAX_RETRIES):
             try:
                 return cls._completion(*args, **kwargs)
             except RateLimitError as e:
-                rate_limit_delay = 65  # seconds
-                if attempt == max_retries - 1:
-                    # Last attempt failed, re-raise
-                    logger.error(f"RateLimitError after {max_retries} attempts: {str(e)}")
+                if attempt == cls._MAX_RETRIES - 1:
+                    logger.error(f"RateLimitError after {cls._MAX_RETRIES} attempts: {e}")
                     raise
-                # Wait and retry
+                delay = cls._backoff_delay(attempt, base=cls._BASE_DELAY_S, cap=cls._MAX_DELAY_S)
                 logger.warning(
-                    f"RateLimitError on attempt {attempt + 1}/{max_retries}. "
-                    f"Waiting {rate_limit_delay}s before retry... Error: {str(e)}"
+                    f"RateLimitError on attempt {attempt + 1}/{cls._MAX_RETRIES}. "
+                    f"Waiting {delay:.1f}s before retry... Error: {e}"
                 )
-                sleep(rate_limit_delay)
+                sleep(delay)
             except ZeroChoiceError as e:
-                if attempt == max_retries - 1:
+                if attempt == cls._MAX_RETRIES - 1:
                     raise
+                delay = cls._backoff_delay(attempt, base=cls._BASE_DELAY_S, cap=cls._MAX_DELAY_S)
                 logger.warning(
-                    f"Encountered ZeroChoiceError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries} after 45 seconds..."
+                    f"ZeroChoiceError on attempt {attempt + 1}/{cls._MAX_RETRIES}. "
+                    f"Waiting {delay:.1f}s before retry... Error: {e}"
                 )
-                sleep(45)  # brief wait before retry
+                sleep(delay)
             except ServiceUnavailableError as e:
-                if attempt == max_retries - 1:
+                if attempt == cls._MAX_RETRIES - 1:
                     raise
+                delay = cls._backoff_delay(attempt, base=cls._BASE_DELAY_S, cap=cls._MAX_DELAY_S)
                 logger.warning(
-                    f"Encountered ServiceUnavailableError({str(e)}) in LLM completion. Retrying {attempt + 1}/{max_retries} after 60 seconds..."
+                    f"ServiceUnavailableError on attempt {attempt + 1}/{cls._MAX_RETRIES}. "
+                    f"Waiting {delay:.1f}s before retry... Error: {e}"
                 )
-                sleep(60)  # brief wait before retry
+                sleep(delay)
 
     @classmethod
     def _completion(
@@ -246,26 +260,12 @@ class ModelRegistry:
             response = ll_completion(**params)
             if response.choices is None or len(response.choices) == 0:
                 raise ZeroChoiceError("No choices returned from completion API")
-            msg: Message = Message.from_ll_message(response.choices[0].message)  # type: ignore
+            choice = response.choices[0]
+            msg: Message = Message.from_ll_message(choice.message)  # type: ignore
             usage: Usage = response.usage  # type: ignore
             msg.llm_sender = name
             msg.agent_sender = agent_sender
             msg.completion_tokens = usage.completion_tokens
             msg.prompt_tokens = usage.prompt_tokens
+            msg.finish_reason = getattr(choice, "finish_reason", None)
             return msg
-
-    # Parameters that are only valid for completion, not embedding
-    _COMPLETION_ONLY_PARAMS = {"reasoning_effort", "reasoning", "tools", "tool_choice"}
-
-    @classmethod
-    def embedding(cls, name: str, texts: list[str], **kwargs) -> list[list[float]]:
-        """Returns a list of embeddings for the given texts."""
-        from litellm import embedding as ll_embedding
-
-        model_params: dict = cls.instance().models[name]
-        params = {k: v for k, v in model_params.items() if k not in cls._COMPLETION_ONLY_PARAMS}
-        params.update(kwargs)
-        params.update({"input": texts})
-
-        response = ll_embedding(**params)
-        return [d["embedding"] for d in response.data]

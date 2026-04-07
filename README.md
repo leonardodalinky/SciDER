@@ -27,18 +27,16 @@ pinned: false
 
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
-- [📦 Installation](#-installation)
-- [⚙️ Configuration](#️-configuration)
-- [🌐 Web UI](#-web-ui)
-- [🤖 Coding Framework](#-coding-framework)
-  - [Optional (Recommended): install Claude Agent SDK (for `claude_agent_sdk` toolset):](#optional-recommended-install-claude-agent-sdk-for-claude_agent_sdk-toolset)
-  - [Optional: install Claude Code (for `claude_code` toolset):](#optional-install-claude-code-for-claude_code-toolset)
-- [🛠️ Development Guide](#️-development-guide)
-- [📊 Benchmarks](#-benchmarks)
-- [💬 Feedback and Contributions](#-feedback-and-contributions)
+- [Installation](#installation)
+- [Workflows](#workflows)
+- [Configuration](#configuration)
+- [Web UI](#web-ui)
+- [Coding Backend](#coding-backend)
+- [Development Guide](#development-guide)
+- [Benchmarks](#benchmarks)
+- [Feedback and Contributions](#feedback-and-contributions)
 
-## 📦 Installation
+## Installation
 
 You can install the project using `pip`:
 
@@ -67,13 +65,28 @@ wf = run_full_workflow(
 print(wf.final_summary)
 ```
 
-## ⚙️ Configuration
+## Workflows
+
+SciDER provides six workflows in `scider.workflows`:
+
+| Workflow | Description |
+|---|---|
+| `IdeationWorkflow` | Generate research ideas from literature search. |
+| `DataWorkflow` | Analyze a dataset and produce a structured summary. |
+| `HypoDataWorkflow` | Generate synthetic data from a feature description, then analyze it. |
+| `ExperimentWorkflow` | Implement and run an experiment given a data summary. |
+| `FullWorkflow` | Data analysis -> experiment execution. |
+| `FullWorkflowWithIdeation` | Ideation -> (optional) data analysis -> (optional) experiment. Each phase can be skipped via flags. |
+
+Each workflow has a class form (`FooWorkflow`) and a convenience function (`run_foo_workflow`).
+
+## Configuration
 
 The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference.
 
 Also, you can set environment variables directly in your shell or terminal session.
 
-## 🌐 Web UI
+## Web UI
 
 The web UI is a Streamlit application. Deploy it using the `Dockerfile` at the project root.
 
@@ -110,36 +123,19 @@ docker run -d \
   </tr>
 </table>
 
-## 🤖 Coding Framework
+## Coding Backend
 
-Currently we supports "OpenHands", "Claude Code" and "Claude Agent SDK" (Recommended) as coding framework. You can choose to install one or more of them.
+The experiment agent delegates code implementation to a coding subagent. Three backends are available, selectable via the `CODING_AGENT_VERSION` environment variable:
 
-### Optional (Recommended): install Claude Agent SDK (for `claude_agent_sdk` toolset):
+| Backend | Value | Description |
+|---|---|---|
+| Claude Agent SDK (default) | `claude_sdk` | Delegates to Claude Agent SDK. Requires `pip install claude-agent-sdk` and `ANTHROPIC_API_KEY`. |
+| Native | `native` | SciDER's built-in coding agent. Uses the `experiment_coding` model role with any LiteLLM-supported provider. No external dependencies. Pick this if you want a non-Claude provider (Gemini, GPT, etc.). |
+| OpenHands | `openhands` | Delegates to OpenHands sandbox. Requires `SCIDER_ENABLE_OPENHANDS=1`. |
 
-- Docs: `https://platform.claude.com/docs/en/agent-sdk/overview`
-- Install:
+Set `CODING_AGENT_VERSION` in `.env` to switch backends.
 
-```shell
-pip install claude-agent-sdk
-export ANTHROPIC_API_KEY="..."
-```
-
-<details>
-
-<summary>Optional: install OpenHands (for `openhands` toolset):</summary>
-
-### Optional: install Claude Code (for `claude_code` toolset):
-
-- Ensure the `claude` CLI is installed and authenticated on your machine.
-- If your `claude` command needs extra flags, set `CLAUDE_CODE_CMD`, e.g.:
-
-```shell
-export CLAUDE_CODE_CMD="claude"
-```
-
-</details>
-
-## 🛠️ Development Guide
+## Development Guide
 
 First, install `pre-commit`:
 ```shell
@@ -168,11 +164,16 @@ uv sync --extra cu128
 uv sync --extra streamlit
 ```
 
-## 📊 Benchmarks
+Run tests with:
+```shell
+uv run pytest tests/
+```
+
+## Benchmarks
 
 See [BENCHMARKS](./benchmarks) for details on the benchmarks we have conducted to evaluate SciDER's performance.
 
-## 💬 Feedback and Contributions
+## Feedback and Contributions
 
 We welcome contributions to improve SciDER. Please open an issue or submit a pull request on our GitHub repository.
 

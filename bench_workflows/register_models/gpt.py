@@ -80,13 +80,6 @@ def register_gpt_low_medium_models(reasoning: str = "low"):
         },
     )
 
-    # NOTE: Use OpenAI embeddings for better performance
-    ModelRegistry.register(
-        name="embed",
-        model="text-embedding-3-small",
-        api_key=OPENAI_KEY,
-    )
-
     ModelRegistry.register(
         name="history",
         model=LOW_COST_MODEL,
@@ -206,12 +199,6 @@ def register_gpt_medium_high_models(reasoning: str = "low"):
         reasoning={
             "effort": "minimal",
         },
-    )
-
-    ModelRegistry.register(
-        name="embed",
-        model="text-embedding-3-small",
-        api_key=OPENAI_KEY,
     )
 
     ModelRegistry.register(

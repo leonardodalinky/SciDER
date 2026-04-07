@@ -43,8 +43,12 @@ def render_form():
         if st.session_state.get("uploaded_experiment_path"):
             st.info(f"Using: `{st.session_state.uploaded_experiment_path}`")
         query = st.text_input("Experiment Query", placeholder="Describe your experiment...")
-        submitted = st.form_submit_button("Run Experiment", type="primary")
-        if submitted and query:
+        submitted = st.form_submit_button(
+            "Run Experiment",
+        )
+        if submitted:
+            if not query or not query.strip():
+                query = "Run an experiment based on the data analysis — build a model, evaluate it, and report results."
             path_to_use = None
             if uploaded_exp_zip:
                 prev = st.session_state.get("uploaded_experiment_path")

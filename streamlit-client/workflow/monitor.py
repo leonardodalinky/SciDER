@@ -15,23 +15,22 @@ from typing import Any, Callable
 class PhaseType(Enum):
     """Workflow phase types."""
 
-    IDEATION_LITERATURE_SEARCH = "ideation_literature_search"
-    IDEATION_ANALYZE_PAPERS = "ideation_analyze_papers"
-    IDEATION_GENERATE_IDEAS = "ideation_generate_ideas"
-    IDEATION_NOVELTY_CHECK = "ideation_novelty_check"
+    # All agents now use a single agent_loop, so phases map to graph nodes
+    IDEATION_INIT = "ideation_init"
+    IDEATION_AGENT_LOOP = "ideation_agent_loop"
     IDEATION_REPORT = "ideation_report"
 
-    DATA_PLANNING = "data_planning"
-    DATA_EXECUTION = "data_execution"
-    DATA_PAPER_SEARCH = "data_paper_search"
-    DATA_FINALIZE = "data_finalize"
+    DATA_INIT = "data_init"
+    DATA_AGENT_LOOP = "data_agent_loop"
+    DATA_SUMMARY = "data_summary"
 
     EXPERIMENT_INIT = "experiment_init"
-    EXPERIMENT_CODING = "experiment_coding"
-    EXPERIMENT_EXEC = "experiment_exec"
+    EXPERIMENT_AGENT_LOOP = "experiment_agent_loop"
     EXPERIMENT_SUMMARY = "experiment_summary"
-    EXPERIMENT_ANALYSIS = "experiment_analysis"
-    EXPERIMENT_REVISION = "experiment_revision"
+
+    CRITIC_INIT = "critic_init"
+    CRITIC_AGENT_LOOP = "critic_agent_loop"
+    CRITIC_SUMMARY = "critic_summary"
 
     COMPLETE = "complete"
     ERROR = "error"

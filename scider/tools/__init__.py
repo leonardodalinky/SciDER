@@ -1,32 +1,19 @@
 import os
 
-# import tools to register them
+# Tool packages (register via register_new_tool in package __init__)
+from . import agent_tool  # noqa: F401
 from . import (  # noqa: F401
-    claude_agent_sdk_tool,
-    claude_code_tool,
-    dataset_search_tool,
-    env_tool,
-    exec_tool,
-    fs_tool,
-    github_tool,
-    history_tool,
-    metric_search_tool,
-    paper_search_tool,
-    shell_tool,
-    state_tool,
-    todo_tool,
-    web_tool,
+    environment,
+    fs,
+    github,
+    history,
+    plan,
+    shell,
+    skill,
+    task,
+    todo_pkg,
+    user,
+    web,
 )
-
-# OpenHands is intentionally optional. Avoid importing/registering it unless explicitly enabled,
-# since importing it may mutate sys.path and/or require extra dependencies.
-_ENABLE_OPENHANDS = os.getenv("SCIDER_ENABLE_OPENHANDS", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "y",
-}
-if _ENABLE_OPENHANDS:
-    from . import openhands_tool  # noqa: F401
-
+from .base import BaseTool, ToolContext
 from .registry import Tool, ToolRegistry

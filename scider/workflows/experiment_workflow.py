@@ -58,6 +58,7 @@ class ExperimentWorkflow(BaseModel):
     current_revision: int = 0
     error_message: str | None = None
     experiment_agent_intermediate_state: list[dict] = []
+    experiment_agent_history: list = []
 
     # Internal: compiled graph (lazy loaded)
     _experiment_agent_graph: object = PrivateAttr(default=None)
@@ -154,7 +155,6 @@ class ExperimentWorkflow(BaseModel):
             data_summary=self.data_summary,
             user_query=self.user_query,
             repo_source=self.repo_source,
-            max_revisions=self.max_revisions,
         )
 
         try:
@@ -166,10 +166,9 @@ class ExperimentWorkflow(BaseModel):
 
             # Extract results
             self.final_status = result_state.final_status
-            self.execution_results = result_state.all_execution_results
-            self.current_revision = result_state.current_revision
             self.experiment_agent_intermediate_state = result_state.intermediate_state
-            self.final_summary = self._compose_summary(result_state)
+            self.experiment_agent_history = result_state.history
+            self.final_summary = result_state.final_summary or result_state.output_summary or ""
             self.current_phase = "complete"
 
             logger.info(f"ExperimentAgent completed: {self.final_status}")
@@ -215,6 +214,19 @@ class ExperimentWorkflow(BaseModel):
 
         if not success and not self.final_summary:
             self.final_summary = f"# Experiment Workflow Failed\n\nError: {self.error_message}"
+
+        # Save conversation history for debugging
+        if self.experiment_agent_history:
+            from scider.workflows.history_export import save_conversation_history
+
+            try:
+                save_conversation_history(
+                    self.experiment_agent_history,
+                    self.workspace_path / "experiment_agent_history.json",
+                    agent_name="experiment",
+                )
+            except Exception as e:
+                logger.warning("Failed to save experiment agent history: {}", e)
 
         logger.info(get_separator())
         logger.info(f"Experiment Workflow completed: {self.final_status}")

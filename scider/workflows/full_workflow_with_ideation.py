@@ -18,7 +18,6 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
-from scider.core.brain import Brain
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
@@ -74,8 +73,12 @@ class FullWorkflowWithIdeation(BaseModel):
     data_agent_recursion_limit: int = 100  # Recursion limit for DataAgent
     experiment_agent_recursion_limit: int = 100  # Recursion limit for ExperimentAgent
 
+    # Control flags
+    skip_ideation: bool = (
+        False  # Skip ideation phase (user provides detailed instructions directly)
+    )
+
     # Session management
-    session_name: str | None = None  # Optional custom session name
     data_desc: str | None = None  # Optional additional description of the data
 
     # ==================== INTERNAL STATE ====================
@@ -99,11 +102,6 @@ class FullWorkflowWithIdeation(BaseModel):
     metrics: list[dict] = []
     paper_search_summary: str | None = None
 
-    # Brain-managed directories (initialized in _setup_brain)
-    sess_dir: Path | None = None
-    long_term_mem_dir: Path | None = None
-    project_mem_dir: Path | None = None
-
     # ==================== OUTPUT ====================
     final_status: Literal["success", "failed"] | None = None
     final_summary: str = ""
@@ -115,33 +113,6 @@ class FullWorkflowWithIdeation(BaseModel):
     _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
 
-    def _setup_brain(self):
-        """Setup Brain session and memory directories."""
-        # Setup workspace
-        self.workspace_path.mkdir(parents=True, exist_ok=True)
-
-        # Get Brain instance (uses brain_dir or BRAIN_DIR env)
-        brain = Brain.instance()
-
-        # Create session
-        if self.session_name:
-            brain_session = Brain.new_session_named(self.session_name)
-        else:
-            brain_session = Brain.new_session()
-
-        # Set memory directories from Brain
-        self.sess_dir = brain_session.session_dir
-        self.long_term_mem_dir = brain.brain_dir / "mem_long_term"
-        self.project_mem_dir = brain.brain_dir / "mem_project"
-
-        # Ensure memory directories exist
-        self.long_term_mem_dir.mkdir(parents=True, exist_ok=True)
-        self.project_mem_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Brain session: {self.sess_dir}")
-        logger.debug(f"Long-term memory: {self.long_term_mem_dir}")
-        logger.debug(f"Project memory: {self.project_mem_dir}")
-
     def run(self) -> "FullWorkflowWithIdeation":
         """
         Run the complete workflow: IdeationAgent -> (optional) DataWorkflow -> (optional) ExperimentWorkflow.
@@ -149,17 +120,19 @@ class FullWorkflowWithIdeation(BaseModel):
         Returns:
             self (for chaining)
         """
-        # Step 0: Setup Brain session
-        self._setup_brain()
 
         logger.info(get_separator())
         logger.info("Starting Full SciDER Workflow with Ideation")
         logger.info(get_separator())
 
-        # Step 1: Run IdeationAgent
-        if not self._run_ideation_phase():
-            self._finalize()
-            return self
+        # Step 1: Run IdeationAgent (unless skipped)
+        if not self.skip_ideation:
+            if not self._run_ideation_phase():
+                self._finalize()
+                return self
+        else:
+            logger.info("Skipping ideation phase (skip_ideation=True)")
+            self.current_phase = "ideation"  # mark as passed
 
         # Step 2: (Optional) Run DataWorkflow
         if self.run_data_workflow:
@@ -191,10 +164,6 @@ class FullWorkflowWithIdeation(BaseModel):
             workspace_path=self.workspace_path,
             research_domain=self.research_domain,
             recursion_limit=self.ideation_agent_recursion_limit,
-            # Pass Brain-managed directories
-            sess_dir=self.sess_dir,
-            long_term_mem_dir=self.long_term_mem_dir,
-            project_mem_dir=self.project_mem_dir,
         )
 
         try:
@@ -235,15 +204,22 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Phase 2: Running DataWorkflow for data analysis")
         self.current_phase = "data_analysis"
 
+        # Build enriched data description with ideation context so the
+        # data agent knows papers have already been searched.
+        enriched_desc = self.data_desc or ""
+        if self.ideation_summary:
+            enriched_desc += (
+                "\n\n# Prior Ideation Results\n"
+                "The ideation agent has already conducted a literature search. "
+                "Do NOT search for papers again — the relevant papers are summarized below.\n\n"
+                f"{self.ideation_summary}"
+            )
+
         self._data_workflow = DataWorkflow(
             data_path=self.data_path,
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
-            data_desc=self.data_desc,
-            # Pass Brain-managed directories
-            sess_dir=self.sess_dir,
-            long_term_mem_dir=self.long_term_mem_dir,
-            project_mem_dir=self.project_mem_dir,
+            data_desc=enriched_desc or None,
         )
 
         try:
@@ -275,12 +251,25 @@ class FullWorkflowWithIdeation(BaseModel):
         logger.info("Phase 3: Running ExperimentWorkflow")
         self.current_phase = "experiment"
 
-        # Use selected idea as experiment query if available
+        # Build experiment query from ideation results
         experiment_query = self.user_query
         if self.research_ideas and self.selected_idea_index is not None:
+            # User already selected a specific idea (structured path)
             idea = self.research_ideas[self.selected_idea_index]
             experiment_query = self._format_experiment_query(idea)
             logger.info(f"Using selected idea for experiment: {idea.get('title', '')}")
+        elif self.ideation_summary:
+            # Pass ideation report so experiment agent can see all ideas
+            # and ask the user which one to implement via AskUserQuestion
+            experiment_query = (
+                f"# Original Research Query\n{self.user_query}\n\n"
+                f"# Ideation Report\n"
+                f"The following ideation report contains research ideas generated "
+                f"from literature review. Review the ideas and ask the user which "
+                f"one to implement before starting.\n\n"
+                f"{self.ideation_summary}"
+            )
+            logger.info("Passing ideation report to experiment agent for idea selection")
 
         self._experiment_workflow = ExperimentWorkflow(
             workspace_path=self.workspace_path,
@@ -289,18 +278,15 @@ class FullWorkflowWithIdeation(BaseModel):
             repo_source=self.repo_source,
             max_revisions=self.max_revisions,
             recursion_limit=self.experiment_agent_recursion_limit,
-            # Pass Brain-managed directories
-            sess_dir=self.sess_dir,
-            long_term_mem_dir=self.long_term_mem_dir,
-            project_mem_dir=self.project_mem_dir,
         )
 
         try:
             self._experiment_workflow.run()
 
-            # Extract results from experiment workflow
+            # Extract results and save summary to workspace
             self.final_status = self._experiment_workflow.final_status
             self.execution_results = self._experiment_workflow.execution_results
+            self._experiment_workflow.save_summary()
             self.final_summary = self._compose_summary()
             self.current_phase = "complete"
 
@@ -429,7 +415,6 @@ def run_full_workflow_with_ideation(
     ideation_agent_recursion_limit: int = 50,
     data_agent_recursion_limit: int = 100,
     experiment_agent_recursion_limit: int = 100,
-    session_name: str | None = None,
     data_desc: str | None = None,
     user_approval_enabled: bool = False,
 ) -> FullWorkflowWithIdeation:
@@ -448,7 +433,6 @@ def run_full_workflow_with_ideation(
         ideation_agent_recursion_limit: Recursion limit for IdeationAgent (default=50)
         data_agent_recursion_limit: Recursion limit for DataAgent (default=100)
         experiment_agent_recursion_limit: Recursion limit for ExperimentAgent (default=100)
-        session_name: Optional custom session name (otherwise uses timestamp)
         data_desc: Optional additional description of the data
 
     Returns:
@@ -486,7 +470,6 @@ def run_full_workflow_with_ideation(
         ideation_agent_recursion_limit=ideation_agent_recursion_limit,
         data_agent_recursion_limit=data_agent_recursion_limit,
         experiment_agent_recursion_limit=experiment_agent_recursion_limit,
-        session_name=session_name,
         data_desc=data_desc,
     )
     with override_user_approval(user_approval_enabled):
@@ -576,7 +559,6 @@ if __name__ == "__main__":
         ideation_agent_recursion_limit=args.ideation_recursion_limit,
         data_agent_recursion_limit=args.data_recursion_limit,
         experiment_agent_recursion_limit=args.experiment_recursion_limit,
-        session_name=args.session_name,
         data_desc=args.data_desc,
     )
 

@@ -7,7 +7,22 @@ from pathlib import Path
 
 import streamlit as st
 
-os.environ["CODING_AGENT_VERSION"] = "v3"
+# Load .env BEFORE setting any defaults so .env values take precedence.
+# override=True ensures .env wins over any inherited shell env vars — otherwise
+# a stale `export CODING_AGENT_VERSION=claude_sdk` in the parent shell would
+# silently override what's in .env.
+try:
+    from dotenv import load_dotenv
+
+    _env_path = Path(__file__).parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+    else:
+        load_dotenv()
+except Exception:
+    pass
+
+os.environ.setdefault("CODING_AGENT_VERSION", "claude_sdk")
 os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -16,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from components.display import render_approval_ui
 from forms.case_study import render_case_study_viewer
 from forms.data import render_form as data_form
-from forms.data import run_data
+from forms.data import run_data, run_hypo_data
 from forms.experiment import render_form as experiment_form
 from forms.experiment import run_experiment
 from forms.full import render_form as full_form
@@ -31,7 +46,6 @@ from workflow.runner import WorkflowRunner
 
 from scider.agents import ideation_agent
 from scider.core import approval as approval_module
-from scider.core.brain import Brain
 from scider.core.llms import ModelRegistry
 from scider.core.types import set_on_message_callback
 
@@ -54,6 +68,13 @@ st.markdown(
         margin-bottom: 2px;
         font-weight: 600;
     }
+    .chat-meta-msg {
+        color: #888;
+        font-size: 13px;
+        border-left: 3px solid #ddd;
+        padding-left: 10px;
+        margin: 4px 0;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -67,17 +88,14 @@ _AGENT_LABELS = {
     # Data
     "data": "📊 Data Agent",
     "data_agent": "📊 Data Agent",
-    "data_planner": "📋 Data Planner",
     "paper_search": "📖 Paper Search",
     "metric_search": "📏 Metric Search",
     "metric_extractor": "📏 Metric Extractor",
     "dataset_search": "🗃️ Dataset Search",
     # Experiment
+    "experiment": "🧪 Experiment Agent",
     "experiment_agent": "🧪 Experiment Agent",
-    "experiment_coding": "💻 Coding Agent",
-    "experiment_exec": "▶️ Execution Agent",
-    "experiment_summary": "📝 Summary Agent",
-    "experiment_monitor": "👁️ Monitor Agent",
+    "experiment_coding": "💻 Coding Subagent",
     # Coding backends
     "claude_agent_sdk": "🤖 Claude Agent SDK",
     "claude_code": "🤖 Claude Code",
@@ -87,11 +105,6 @@ _AGENT_LABELS = {
     "critic": "🧐 Critic Agent",
     "history": "🗜️ History Compression",
     "user_approval": "👤 User Approval",
-    # Memory
-    "mem_extraction": "🧠 Memory Extraction",
-    "mem_retrieval": "🧠 Memory Retrieval",
-    "mem_consolidation": "🧠 Memory Consolidation",
-    "mem_persistence": "🧠 Memory Persistence",
 }
 
 
@@ -101,14 +114,39 @@ def _agent_label(agent: str | None) -> str:
     return _AGENT_LABELS.get(agent, agent)
 
 
-def render_chat_message(role: str, content: str, agent: str | None = None):
+def render_chat_message(
+    role: str,
+    content: str,
+    agent: str | None = None,
+    is_meta: bool = False,
+    is_tool: bool = False,
+    tool_name: str | None = None,
+):
     """Render a single chat message as a Streamlit chat_message with markdown."""
-    with st.chat_message(role):
-        if agent:
+    # Map role for st.chat_message (only supports "user", "assistant", "ai", "human")
+    display_role = role
+    if role == "tool":
+        display_role = "assistant"
+
+    with st.chat_message(display_role):
+        # Badge: tool result or agent name
+        if is_tool and tool_name:
+            st.markdown(
+                f"<div class='chat-agent-badge'>🔧 {tool_name}</div>",
+                unsafe_allow_html=True,
+            )
+        elif agent:
             label = _agent_label(agent)
             st.markdown(f"<div class='chat-agent-badge'>{label}</div>", unsafe_allow_html=True)
-        if len(content) > _TRUNCATE_LEN:
-            # Show first few lines as expander label (up to 200 chars)
+
+        # Meta messages: render as muted system info
+        if is_meta:
+            st.markdown(
+                f"<div style='color: #888; font-size: 13px; border-left: 3px solid #ddd; "
+                f"padding-left: 10px; margin: 4px 0;'>{content}</div>",
+                unsafe_allow_html=True,
+            )
+        elif len(content) > _TRUNCATE_LEN:
             preview_lines = content[:200].split("\n")
             label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
             with st.expander(f"{label}...", expanded=False):
@@ -141,14 +179,27 @@ def render_chat_messages(messages: list[dict]):
     for group in groups:
         if len(group) == 1:
             m = group[0]
-            render_chat_message(m["role"], m["content"], m.get("agent"))
+            render_chat_message(
+                m["role"],
+                m["content"],
+                m.get("agent"),
+                is_meta=m.get("is_meta", False),
+                is_tool=m.get("is_tool", False),
+                tool_name=m.get("tool_name"),
+            )
         else:
             # Multiple consecutive messages from same agent — collapse
             agent = group[0].get("agent")
             label = _agent_label(agent) or "Assistant"
             with st.expander(f"{label} ({len(group)} messages)", expanded=True):
                 for m in group:
-                    render_chat_message(m["role"], m["content"])
+                    render_chat_message(
+                        m["role"],
+                        m["content"],
+                        is_meta=m.get("is_meta", False),
+                        is_tool=m.get("is_tool", False),
+                        tool_name=m.get("tool_name"),
+                    )
 
 
 # ==================== Model registration ====================
@@ -166,22 +217,17 @@ def register_all_models(settings: dict):
     all_roles = [
         "ideation",
         "data",
-        "plan",
         "history",
-        "experiment_agent",
+        "experiment",
         "experiment_coding",
-        "experiment_execute",
-        "experiment_summary",
-        "experiment_monitor",
         "paper_search",
         "metric_search",
         "critic",
-        "mem",
     ]
-    # For v3 coding agent, set CLAUDE_MODEL env var from saved setting
-    coding_version = os.getenv("CODING_AGENT_VERSION", "v3")
+    # For Claude SDK coding agent, set CLAUDE_MODEL env var from saved setting
+    coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
     coding_model = role_models.get("experiment_coding", "")
-    if coding_version == "v3" and coding_model:
+    if coding_version in ("v3", "claude_sdk") and coding_model:
         os.environ["CLAUDE_MODEL"] = coding_model
 
     for role in all_roles:
@@ -192,27 +238,11 @@ def register_all_models(settings: dict):
             model = "gemini/gemini-2.5-flash-lite" if provider == "Gemini" else "gpt-5-nano"
         ModelRegistry.register(name=role, model=model, api_key=api_key)
 
-    # Embedding: requires OpenAI key
-    openai_key = settings.get("openai_api_key", "")
-    if openai_key:
-        ModelRegistry.register(name="embed", model="text-embedding-3-small", api_key=openai_key)
-
     return True
 
 
 # ==================== Settings gate ====================
-
-# Load .env for non-secret vars (BRAIN_DIR, logging, etc.) — but NOT for API keys
-try:
-    from dotenv import load_dotenv
-
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-    else:
-        load_dotenv()
-except Exception:
-    pass
+# .env is loaded at module top so CODING_AGENT_VERSION etc. are honored.
 
 # --- Case study view mode (before settings gates so it works without API keys) ---
 if st.session_state.get("view_mode") == "case_study":
@@ -325,17 +355,16 @@ if "initialized" not in st.session_state:
     if not os.getenv("BRAIN_DIR"):
         os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
 
-    # Memory: only enable if user toggled on AND has OpenAI key
+    # Semantic Scholar API key
     from scider.core import constant as _constant
 
-    if _settings.get("memory_enabled") and _settings.get("openai_api_key"):
-        os.environ["REASONING_BANK_ENABLED"] = "true"
-        _constant.REASONING_BANK_ENABLED = True
-    else:
-        os.environ["REASONING_BANK_ENABLED"] = "false"
-        _constant.REASONING_BANK_ENABLED = False
+    if _settings.get("s2_api_key"):
+        os.environ["S2_API_KEY"] = _settings["s2_api_key"]
+        _constant.S2_API_KEY = _settings["s2_api_key"]
 
-    Brain()
+    # Ensure brain directory exists (for tool result persistence, etc.)
+    Path(os.environ.get("BRAIN_DIR", "tmp_brain")).mkdir(parents=True, exist_ok=True)
+
     if register_all_models(_settings):
         st.session_state.ideation_graph = ideation_agent.build().compile()
         st.session_state.initialized = True
@@ -451,6 +480,8 @@ def _run_workflow_func(wc, ideation_graph, workspace_path):
         return run_ideation(wc.get("query"), ideation_graph)
     elif wtype == "data":
         return run_data(wc["path"], wc["query"], workspace_path)
+    elif wtype == "data_hypo":
+        return run_hypo_data(wc["feature_desc"], wc["num_rows"], wc["query"], workspace_path)
     elif wtype == "experiment":
         return run_experiment(wc["query"], wc.get("path"), workspace_path)
     elif wtype == "full":
@@ -474,7 +505,12 @@ if workflow_config and "workflow_runner" not in st.session_state:
     def _on_msg(msg):
         if msg.content:
             handler.push_message(
-                msg.role or "assistant", msg.content, getattr(msg, "agent_sender", None)
+                msg.role or "assistant",
+                msg.content,
+                getattr(msg, "agent_sender", None),
+                is_meta=getattr(msg, "is_meta", False),
+                is_tool=msg.role == "tool",
+                tool_name=getattr(msg, "tool_name", None),
             )
 
     set_on_message_callback(_on_msg)
@@ -538,6 +574,9 @@ if "workflow_runner" in st.session_state:
         del st.session_state.approval_handler
         st.rerun()
     else:
+        render_chat_message("assistant", "Workflow is running...", None)
+        time.sleep(2)
+        st.rerun()
         render_chat_message("assistant", "Workflow is running...", None)
         time.sleep(2)
         st.rerun()

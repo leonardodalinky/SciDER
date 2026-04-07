@@ -56,18 +56,8 @@ def _capture_state_snapshot(agent_state) -> dict[str, Any]:
             else:
                 snapshot["workspace"] = str(agent_state.workspace)
 
-        if hasattr(agent_state, "remaining_plans"):
-            snapshot["remaining_plans_count"] = (
-                len(agent_state.remaining_plans) if agent_state.remaining_plans else 0
-            )
-
-        if hasattr(agent_state, "past_plans"):
-            snapshot["past_plans_count"] = (
-                len(agent_state.past_plans) if agent_state.past_plans else 0
-            )
-
         # Capture other relevant state fields
-        for attr in ["user_query", "talk_mode", "output_summary", "data_desc"]:
+        for attr in ["user_query", "output_summary", "data_desc"]:
             if hasattr(agent_state, attr):
                 value = getattr(agent_state, attr)
                 # Convert to string if needed
@@ -207,10 +197,6 @@ def monitor_node(
                         # Add other useful info
                         if "message_count" in state_after:
                             intermediate_output["message_count"] = state_after["message_count"]
-                        if "remaining_plans_count" in state_after:
-                            intermediate_output["remaining_plans_count"] = state_after[
-                                "remaining_plans_count"
-                            ]
                         if "workspace" in state_after:
                             intermediate_output["workspace"] = state_after["workspace"]
 

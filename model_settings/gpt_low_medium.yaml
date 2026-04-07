@@ -27,27 +27,11 @@ models:
       effort: low
       summary: detailed
 
-  plan:
-    model: gpt-5-mini
-    key_source: openai
-    reasoning:
-      effort: low
-
   critic:
     model: gpt-5-nano
     key_source: openai
     reasoning:
       effort: low
-
-  mem:
-    model: gpt-5-nano
-    key_source: openai
-    reasoning:
-      effort: minimal
-
-  embed:
-    model: text-embedding-3-small
-    key_source: openai
 
   history:
     model: gpt-5-nano
@@ -55,7 +39,7 @@ models:
     reasoning:
       effort: minimal
 
-  experiment_agent:
+  experiment:
     model: gpt-5-mini
     key_source: openai
     reasoning:
@@ -63,24 +47,6 @@ models:
 
   experiment_coding:
     model: gpt-5-mini
-    key_source: openai
-    reasoning:
-      effort: low
-
-  experiment_execute:
-    model: gpt-5-mini
-    key_source: openai
-    reasoning:
-      effort: low
-
-  experiment_monitor:
-    model: gpt-5-nano
-    key_source: openai
-    reasoning:
-      effort: minimal
-
-  experiment_summary:
-    model: gpt-5-nano
     key_source: openai
     reasoning:
       effort: low

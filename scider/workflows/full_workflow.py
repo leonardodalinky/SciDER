@@ -17,7 +17,6 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
-from scider.core.brain import Brain
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
@@ -52,7 +51,6 @@ class FullWorkflow(BaseModel):
     max_revisions: int = 5
     data_agent_recursion_limit: int = 100
     experiment_agent_recursion_limit: int = 100
-    session_name: str | None = None  # Optional custom session name
     data_desc: str | None = None  # Optional additional description of the data
 
     # ==================== INTERNAL STATE ====================
@@ -66,11 +64,6 @@ class FullWorkflow(BaseModel):
     metrics: list[dict] = []
     paper_search_summary: str | None = None
 
-    # Brain-managed directories (initialized in _setup_brain)
-    sess_dir: Path | None = None
-    long_term_mem_dir: Path | None = None
-    project_mem_dir: Path | None = None
-
     # ==================== OUTPUT ====================
     final_status: Literal["success", "failed", "max_revisions_reached"] | None = None
     final_summary: str = ""
@@ -81,33 +74,6 @@ class FullWorkflow(BaseModel):
     _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
 
-    def _setup_brain(self):
-        """Setup Brain session and memory directories."""
-        # Setup workspace
-        self.workspace_path.mkdir(parents=True, exist_ok=True)
-
-        # Get Brain instance (uses brain_dir or BRAIN_DIR env)
-        brain = Brain.instance()
-
-        # Create session
-        if self.session_name:
-            brain_session = Brain.new_session_named(self.session_name)
-        else:
-            brain_session = Brain.new_session()
-
-        # Set memory directories from Brain
-        self.sess_dir = brain_session.session_dir
-        self.long_term_mem_dir = brain.brain_dir / "mem_long_term"
-        self.project_mem_dir = brain.brain_dir / "mem_project"
-
-        # Ensure memory directories exist
-        self.long_term_mem_dir.mkdir(parents=True, exist_ok=True)
-        self.project_mem_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Brain session: {self.sess_dir}")
-        logger.debug(f"Long-term memory: {self.long_term_mem_dir}")
-        logger.debug(f"Project memory: {self.project_mem_dir}")
-
     def run(self) -> "FullWorkflow":
         """
         Run the complete workflow: DataWorkflow -> ExperimentWorkflow.
@@ -115,8 +81,6 @@ class FullWorkflow(BaseModel):
         Returns:
             self (for chaining)
         """
-        # Step 0: Setup Brain session
-        self._setup_brain()
 
         logger.info(get_separator())
         logger.info("Starting Full SciDER Workflow")
@@ -150,10 +114,6 @@ class FullWorkflow(BaseModel):
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
             data_desc=self.data_desc,
-            # Pass Brain-managed directories
-            sess_dir=self.sess_dir,
-            long_term_mem_dir=self.long_term_mem_dir,
-            project_mem_dir=self.project_mem_dir,
         )
 
         try:
@@ -193,18 +153,15 @@ class FullWorkflow(BaseModel):
             repo_source=self.repo_source,
             max_revisions=self.max_revisions,
             recursion_limit=self.experiment_agent_recursion_limit,
-            # Pass Brain-managed directories (for future use in ExperimentAgent)
-            sess_dir=self.sess_dir,
-            long_term_mem_dir=self.long_term_mem_dir,
-            project_mem_dir=self.project_mem_dir,
         )
 
         try:
             self._experiment_workflow.run()
 
-            # Extract results from experiment workflow
+            # Extract results and save summary to workspace
             self.final_status = self._experiment_workflow.final_status
             self.execution_results = self._experiment_workflow.execution_results
+            self._experiment_workflow.save_summary()
             self.final_summary = self._compose_summary()
             self.current_phase = "complete"
 
@@ -281,7 +238,6 @@ def run_full_workflow(
     max_revisions: int = 3,
     data_agent_recursion_limit: int = 100,
     experiment_agent_recursion_limit: int = 100,
-    session_name: str | None = None,
     data_desc: str | None = None,
     user_approval_enabled: bool = False,
 ) -> FullWorkflow:
@@ -296,7 +252,6 @@ def run_full_workflow(
         max_revisions: Maximum revision loops for experiment agent
         data_agent_recursion_limit: Recursion limit for DataAgent (default=100)
         experiment_agent_recursion_limit: Recursion limit for ExperimentAgent (default=100)
-        session_name: Optional custom session name (otherwise uses timestamp)
         data_desc: Optional additional description of the data
 
     Returns:
@@ -311,10 +266,6 @@ def run_full_workflow(
         >>> print(result.final_summary)
 
     Note:
-        Memory directories are managed by Brain singleton at FullWorkflow level:
-        - Session dir: Created via Brain.new_session()
-        - Long-term memory: brain_dir/mem_long_term
-        - Project memory: brain_dir/mem_project
 
         These directories are then passed to DataWorkflow and ExperimentWorkflow.
     """
@@ -326,7 +277,6 @@ def run_full_workflow(
         max_revisions=max_revisions,
         data_agent_recursion_limit=data_agent_recursion_limit,
         experiment_agent_recursion_limit=experiment_agent_recursion_limit,
-        session_name=session_name,
         data_desc=data_desc,
     )
     with override_user_approval(user_approval_enabled):
@@ -388,7 +338,6 @@ if __name__ == "__main__":
         max_revisions=args.max_revisions,
         data_agent_recursion_limit=args.data_recursion_limit,
         experiment_agent_recursion_limit=args.experiment_recursion_limit,
-        session_name=args.session_name,
         data_desc=args.data_desc,
     )
 
