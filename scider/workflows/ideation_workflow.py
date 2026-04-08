@@ -54,6 +54,7 @@ class IdeationWorkflow(BaseModel):
     research_ideas: list[dict] = []
     novelty_score: float | None = None  # Average novelty score
     error_message: str | None = None
+    ideation_agent_history: list = []
 
     # Internal: compiled graph (lazy loaded)
     _ideation_agent_graph: object = PrivateAttr(default=None)
@@ -127,34 +128,40 @@ class IdeationWorkflow(BaseModel):
             research_domain=self.research_domain,
         )
 
-        try:
-            result = self._ideation_agent_graph.invoke(
-                ideation_state,
-                {"recursion_limit": self.recursion_limit},
-            )
-            result_state = IdeationAgentState(**result)
+        from scider.workflows.history_export import capture_messages
 
-            # Extract results
-            self.ideation_summary = result_state.output_summary or ""
-            self.research_ideas = result_state.research_ideas
-            self.novelty_score = result_state.novelty_score
-
-            logger.info("IdeationAgent completed successfully")
-            logger.info(
-                f"Generated {len(self.research_ideas)} ideas"
-                + (
-                    f" with novelty score: {self.novelty_score:.2f}/10"
-                    if self.novelty_score
-                    else ""
+        with capture_messages() as captured:
+            try:
+                result = self._ideation_agent_graph.invoke(
+                    ideation_state,
+                    {"recursion_limit": self.recursion_limit},
                 )
-            )
-            return True
+                result_state = IdeationAgentState(**result)
 
-        except Exception as e:
-            logger.exception("IdeationAgent failed")
-            self.error_message = f"IdeationAgent failed: {e}"
-            self.current_phase = "failed"
-            return False
+                # Extract results
+                self.ideation_summary = result_state.output_summary or ""
+                self.research_ideas = result_state.research_ideas
+                self.novelty_score = result_state.novelty_score
+                self.ideation_agent_history = result_state.history
+
+                logger.info("IdeationAgent completed successfully")
+                logger.info(
+                    f"Generated {len(self.research_ideas)} ideas"
+                    + (
+                        f" with novelty score: {self.novelty_score:.2f}/10"
+                        if self.novelty_score
+                        else ""
+                    )
+                )
+                return True
+
+            except Exception as e:
+                # Preserve captured history so failure traces are not lost
+                self.ideation_agent_history = list(captured)
+                logger.exception("IdeationAgent failed")
+                self.error_message = f"IdeationAgent failed: {e}"
+                self.current_phase = "failed"
+                return False
 
     def _finalize(self, success: bool):
         """Finalize the workflow."""
@@ -164,6 +171,19 @@ class IdeationWorkflow(BaseModel):
         else:
             self.current_phase = "failed"
             self.final_status = "failed"
+
+        # Save conversation history for debugging
+        if self.ideation_agent_history:
+            from scider.workflows.history_export import save_conversation_history
+
+            try:
+                save_conversation_history(
+                    self.ideation_agent_history,
+                    self.workspace_path / "ideation_agent_history.json",
+                    agent_name="ideation",
+                )
+            except Exception as e:
+                logger.warning("Failed to save ideation agent history: {}", e)
 
         logger.info(get_separator())
         logger.info(f"Ideation Workflow completed: {self.final_status}")

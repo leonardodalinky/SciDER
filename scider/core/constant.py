@@ -14,15 +14,6 @@ __CTX_NAME__ = "ctx"
 # Logging
 LOG_SYSTEM_PROMPT = str_to_bool(os.getenv("LOG_SYSTEM_PROMPT", False))
 
-# Aider
-AIDER_GIT = str_to_bool(os.getenv("AIDER_GIT", False))
-AIDER_VERBOSE = str_to_bool(os.getenv("AIDER_VERBOSE", False))
-AIDER_MODEL = os.getenv("AIDER_MODEL", "gpt-5-nano")
-AIDER_REASONING_EFFORT = os.getenv("AIDER_REASONING_EFFORT", "low")
-AIDER_COMMIT = str_to_bool(os.getenv("AIDER_COMMIT", False))
-AIDER_DIRTY_COMMITS = str_to_bool(os.getenv("AIDER_DIRTY_COMMITS", False))
-AIDER_AUTO_COMMITS = str_to_bool(os.getenv("AIDER_AUTO_COMMITS", False))
-
 # Semantic Scholar
 S2_API_KEY = os.getenv("S2_API_KEY", "")
 
