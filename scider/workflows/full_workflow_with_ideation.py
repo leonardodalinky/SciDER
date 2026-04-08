@@ -171,12 +171,8 @@ class FullWorkflowWithIdeation(BaseModel):
 
             if self._ideation_workflow.final_status == "success":
                 self.ideation_summary = self._ideation_workflow.ideation_summary
-                self.ideation_papers = self._ideation_workflow.ideation_papers
                 self.research_ideas = self._ideation_workflow.research_ideas
-                self.selected_idea_index = self._ideation_workflow.selected_idea_index
-                self.idea_novelty_assessments = self._ideation_workflow.idea_novelty_assessments
                 self.novelty_score = self._ideation_workflow.novelty_score
-                self.novelty_feedback = self._ideation_workflow.novelty_feedback
                 logger.info("IdeationWorkflow completed successfully")
                 return True
             else:

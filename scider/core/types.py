@@ -1,17 +1,65 @@
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
-from typing import Callable, Self
+from typing import Callable, Iterator, Self
 
-# Global callback invoked on every HistoryState.add_message() call.
-# Set by the UI layer (e.g. Streamlit) to receive real-time message updates.
-_on_message_callback: Callable[[Message], None] | None = None
+# Global listeners invoked on every HistoryState.add_message() call.
+# Multiple subscribers are supported (e.g. UI layer + workflow history capture).
+_message_listeners: list[Callable[["Message"], None]] = []
 
 
-def set_on_message_callback(callback: Callable[[Message], None] | None) -> None:
-    """Set a global callback for real-time message notifications."""
-    global _on_message_callback
-    _on_message_callback = callback
+def add_message_listener(listener: Callable[["Message"], None]) -> None:
+    """Register a listener that fires on every add_message() call.
+
+    Multiple listeners can be registered. Each will be called in registration
+    order. Exceptions from listeners are caught and ignored.
+    """
+    _message_listeners.append(listener)
+
+
+def remove_message_listener(listener: Callable[["Message"], None]) -> None:
+    """Unregister a previously-registered message listener."""
+    try:
+        _message_listeners.remove(listener)
+    except ValueError:
+        pass
+
+
+@contextlib.contextmanager
+def message_listener(
+    listener: Callable[["Message"], None],
+) -> Iterator[Callable[["Message"], None]]:
+    """Context manager: register a listener for the duration of the block.
+
+    Always unregisters on exit, even if the block raises.
+    """
+    add_message_listener(listener)
+    try:
+        yield listener
+    finally:
+        remove_message_listener(listener)
+
+
+# --- Backwards-compat shim ---
+# Old single-callback API. Kept for streamlit-client and other consumers that
+# haven't migrated yet. Internally translates to add/remove listener calls.
+_legacy_callback: Callable[["Message"], None] | None = None
+
+
+def set_on_message_callback(callback: Callable[["Message"], None] | None) -> None:
+    """[Deprecated] Set a single global callback. Prefer add_message_listener().
+
+    Replacing the callback removes the previous one and registers the new one.
+    Pass ``None`` to clear.
+    """
+    global _legacy_callback
+    if _legacy_callback is not None:
+        remove_message_listener(_legacy_callback)
+        _legacy_callback = None
+    if callback is not None:
+        add_message_listener(callback)
+        _legacy_callback = callback
 
 
 import tiktoken
@@ -296,9 +344,9 @@ class HistoryState(BaseModel):
     def add_message(self, message: Message) -> None:
         """Add a new message to the history."""
         self.history.append(message)
-        if _on_message_callback is not None:
+        for listener in list(_message_listeners):
             try:
-                _on_message_callback(message)
+                listener(message)
             except Exception:
                 pass
 

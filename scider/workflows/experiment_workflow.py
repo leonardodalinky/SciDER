@@ -157,29 +157,34 @@ class ExperimentWorkflow(BaseModel):
             repo_source=self.repo_source,
         )
 
-        try:
-            result = self._experiment_agent_graph.invoke(
-                exp_state,
-                {"recursion_limit": self.recursion_limit},
-            )
-            result_state = ExperimentAgentState(**result)
+        from scider.workflows.history_export import capture_messages
 
-            # Extract results
-            self.final_status = result_state.final_status
-            self.experiment_agent_intermediate_state = result_state.intermediate_state
-            self.experiment_agent_history = result_state.history
-            self.final_summary = result_state.final_summary or result_state.output_summary or ""
-            self.current_phase = "complete"
+        with capture_messages() as captured:
+            try:
+                result = self._experiment_agent_graph.invoke(
+                    exp_state,
+                    {"recursion_limit": self.recursion_limit},
+                )
+                result_state = ExperimentAgentState(**result)
 
-            logger.info(f"ExperimentAgent completed: {self.final_status}")
-            return True
+                # Extract results
+                self.final_status = result_state.final_status
+                self.experiment_agent_intermediate_state = result_state.intermediate_state
+                self.experiment_agent_history = result_state.history
+                self.final_summary = result_state.final_summary or result_state.output_summary or ""
+                self.current_phase = "complete"
 
-        except Exception as e:
-            logger.exception("ExperimentAgent failed")
-            self.error_message = f"ExperimentAgent failed: {e}"
-            self.current_phase = "failed"
-            self.final_status = "failed"
-            return False
+                logger.info(f"ExperimentAgent completed: {self.final_status}")
+                return True
+
+            except Exception as e:
+                # Preserve captured history so failure traces are not lost
+                self.experiment_agent_history = list(captured)
+                logger.exception("ExperimentAgent failed")
+                self.error_message = f"ExperimentAgent failed: {e}"
+                self.current_phase = "failed"
+                self.final_status = "failed"
+                return False
 
     def _compose_summary(self, exp_state: ExperimentAgentState) -> str:
         """Compose the final summary."""

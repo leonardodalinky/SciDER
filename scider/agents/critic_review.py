@@ -50,6 +50,20 @@ def critic_review_node(agent_state):
 
         agent_state.critic_feedback = feedback
 
+        # Persist critic's full conversation history under <workspace>/subagents/
+        try:
+            workspace = getattr(agent_state, "workspace", None)
+            if workspace is not None and hasattr(workspace, "working_dir"):
+                from scider.workflows.history_export import save_subagent_history
+
+                save_subagent_history(
+                    history=result_state.history,
+                    workspace_path=workspace.working_dir,
+                    subagent_type="critic",
+                )
+        except Exception as e:
+            logger.warning("Failed to persist critic history: {}", e)
+
         # Determine verdict
         verdict = _extract_verdict(feedback)
         logger.info("Critic verdict for {} agent: {}", agent_name, verdict)

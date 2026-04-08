@@ -167,6 +167,24 @@ class AgentTool(BaseTool):
             subagent_state = agent_type.state_cls(**state_kwargs)
             result_dict = agent_type.compiled_graph.invoke(subagent_state)
 
+            # Persist subagent's full conversation history under <workspace>/subagents/
+            try:
+                workspace = getattr(parent_state, "workspace", None)
+                if workspace is not None and hasattr(workspace, "working_dir"):
+                    sub_history = (
+                        result_dict.get("history") if isinstance(result_dict, dict) else None
+                    )
+                    if sub_history:
+                        from scider.workflows.history_export import save_subagent_history
+
+                        save_subagent_history(
+                            history=sub_history,
+                            workspace_path=workspace.working_dir,
+                            subagent_type=subagent_type,
+                        )
+            except Exception as e:
+                logger.warning("Failed to persist {} subagent history: {}", subagent_type, e)
+
             # Extract results
             extractor = agent_type.result_extractor or (lambda r: r)
             extracted = extractor(result_dict)

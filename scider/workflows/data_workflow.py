@@ -110,27 +110,33 @@ class DataWorkflow(BaseModel):
             data_desc=self.data_desc,
         )
 
-        try:
-            result = self._data_agent_graph.invoke(
-                data_state,
-                {"recursion_limit": self.recursion_limit},
-            )
-            result_state = DataAgentState(**result)
+        from scider.workflows.history_export import capture_messages
 
-            # Extract data summary from history
-            self.data_agent_history = result_state.history
-            self.data_agent_intermediate_state = result_state.intermediate_state
-            self.data_summary = self._extract_data_summary(result_state)
+        with capture_messages() as captured:
+            try:
+                result = self._data_agent_graph.invoke(
+                    data_state,
+                    {"recursion_limit": self.recursion_limit},
+                )
+                result_state = DataAgentState(**result)
 
-            logger.info("DataAgent completed successfully")
-            logger.debug(f"Data summary: {len(self.data_summary)} chars")
-            return True
+                # Prefer the result_state.history over captured (more complete)
+                self.data_agent_history = result_state.history
+                self.data_agent_intermediate_state = result_state.intermediate_state
+                self.data_summary = self._extract_data_summary(result_state)
 
-        except Exception as e:
-            logger.exception("DataAgent failed")
-            self.error_message = f"DataAgent failed: {e}"
-            self.current_phase = "failed"
-            return False
+                logger.info("DataAgent completed successfully")
+                logger.debug(f"Data summary: {len(self.data_summary)} chars")
+                return True
+
+            except Exception as e:
+                # On failure, fall back to captured messages so debugging info
+                # is preserved even when graph.invoke() raised mid-run.
+                self.data_agent_history = list(captured)
+                logger.exception("DataAgent failed")
+                self.error_message = f"DataAgent failed: {e}"
+                self.current_phase = "failed"
+                return False
 
     def _extract_data_summary(self, result_state: DataAgentState) -> str:
         """Extract data summary from DataAgent state."""

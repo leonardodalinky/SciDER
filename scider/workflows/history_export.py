@@ -5,12 +5,37 @@ Saves agent conversation history to workspace as JSON for debugging and review.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
+from typing import Iterator
 
 from loguru import logger
 
-from scider.core.types import Message
+from scider.core.types import Message, message_listener
+
+
+@contextlib.contextmanager
+def capture_messages() -> Iterator[list[Message]]:
+    """Context manager that captures every Message added to any HistoryState.
+
+    Returns a list that the caller can read after the context exits. The list
+    is populated in real time, so even if the agent crashes mid-run, the
+    captured messages so far are preserved.
+
+    Usage::
+
+        with capture_messages() as captured:
+            graph.invoke(state)  # may raise
+        # captured is the message history regardless of success/failure
+    """
+    captured: list[Message] = []
+
+    def _listener(msg: Message) -> None:
+        captured.append(msg)
+
+    with message_listener(_listener):
+        yield captured
 
 
 def save_conversation_history(
@@ -62,3 +87,39 @@ def save_conversation_history(
     path.write_text(json.dumps(records, ensure_ascii=False, indent=2, default=str))
     logger.info("Saved {} messages to {}", len(records), path)
     return path
+
+
+def save_subagent_history(
+    history: list,
+    workspace_path: Path | str,
+    subagent_type: str,
+) -> Path | None:
+    """Save a subagent's conversation history under <workspace>/subagents/.
+
+    Files are named ``<subagent_type>_<NNN>.json`` with NNN auto-incrementing
+    so multiple invocations of the same subagent type don't overwrite each other.
+
+    Args:
+        history: List of Message objects from the subagent state.
+        workspace_path: Parent agent's workspace directory.
+        subagent_type: Name of the subagent (e.g. "coding", "paper_search", "critic").
+
+    Returns:
+        The path where the history was saved, or None if history was empty/save failed.
+    """
+    if not history:
+        return None
+
+    try:
+        subagents_dir = Path(workspace_path) / "subagents"
+        subagents_dir.mkdir(parents=True, exist_ok=True)
+
+        # Find next available index for this subagent type
+        existing = list(subagents_dir.glob(f"{subagent_type}_*.json"))
+        next_idx = len(existing) + 1
+        path = subagents_dir / f"{subagent_type}_{next_idx:03d}.json"
+
+        return save_conversation_history(history, path, agent_name=subagent_type)
+    except Exception as e:
+        logger.warning("Failed to save {} subagent history: {}", subagent_type, e)
+        return None
