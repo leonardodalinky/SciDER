@@ -17,7 +17,7 @@ from pathlib import Path
 
 from scider.core import constant
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
+CLAUDE_SDK_MODEL = os.getenv("CLAUDE_SDK_MODEL", "claude-haiku-4-5")
 
 
 def _resolve_cwd(cwd: str | None, agent_state) -> Path:
@@ -73,7 +73,7 @@ def run_claude_agent_sdk(
         try:
             msgs: list[dict] = []
             options = ClaudeAgentOptions(
-                model=CLAUDE_MODEL,
+                model=CLAUDE_SDK_MODEL,
                 allowed_tools=tools,
                 permission_mode=permission_mode,
                 max_buffer_size=10 * 1024 * 1024,  # 10 MB

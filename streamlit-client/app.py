@@ -260,14 +260,14 @@ def register_all_models(settings: dict) -> bool:
 
     role_models = settings.get("model_roles", {})
 
-    # CLAUDE_MODEL env var drives the claude_sdk coding backend.
+    # CLAUDE_SDK_MODEL env var drives the claude_sdk coding backend.
     # This is the one env var we must set because the SDK reads it directly.
     coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
     coding_model_id = role_models.get("experiment_coding", "")
     if coding_version in ("v3", "claude_sdk") and coding_model_id:
         entry = ModelCatalog.get(coding_model_id)
         if entry is not None:
-            os.environ["CLAUDE_MODEL"] = entry.litellm_id.split("/", 1)[-1]
+            os.environ["CLAUDE_SDK_MODEL"] = entry.litellm_id.split("/", 1)[-1]
 
     # Register user overrides.
     for role, mid in role_models.items():
@@ -390,11 +390,7 @@ with col_reset:
         st.rerun()
 
 # --- Per-session initialization ---
-# One-time setup (brain dir, etc.)
 if "initialized" not in st.session_state:
-    if not os.getenv("BRAIN_DIR"):
-        os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
-    Path(os.environ.get("BRAIN_DIR", "tmp_brain")).mkdir(parents=True, exist_ok=True)
     st.session_state.initialized = True
 
 # Re-register models on EVERY rerun so each session uses its own keys.

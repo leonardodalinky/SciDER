@@ -48,8 +48,9 @@ def _get_prompts():
 TOOL_RESULT_MAX_CHARS = int(os.getenv("COMPACT_TOOL_RESULT_MAX_CHARS", 50_000))
 # Preview size in characters for the reference message
 TOOL_RESULT_PREVIEW_CHARS = int(os.getenv("COMPACT_TOOL_RESULT_PREVIEW_CHARS", 2_000))
-# Default directory for persisted tool results (can be overridden per-session)
-_DEFAULT_TOOL_RESULTS_DIR = os.getenv("COMPACT_TOOL_RESULTS_DIR", "tmp_brain/tool-results")
+# Default directory for persisted tool results — uses system temp dir.
+# Can be overridden via env var or per-session via set_tool_results_dir().
+_DEFAULT_TOOL_RESULTS_DIR: str | None = os.getenv("COMPACT_TOOL_RESULTS_DIR")
 # Session-level override (set by query() from workspace path)
 _tool_results_dir_override: str | None = None
 
@@ -61,7 +62,13 @@ def set_tool_results_dir(path: str | None) -> None:
 
 
 def _get_tool_results_dir() -> str:
-    return _tool_results_dir_override or _DEFAULT_TOOL_RESULTS_DIR
+    if _tool_results_dir_override:
+        return _tool_results_dir_override
+    if _DEFAULT_TOOL_RESULTS_DIR:
+        return _DEFAULT_TOOL_RESULTS_DIR
+    import tempfile
+
+    return os.path.join(tempfile.gettempdir(), "scider-tool-results")
 
 
 # Level 2: keep the N most recent tool results intact; snip older ones
