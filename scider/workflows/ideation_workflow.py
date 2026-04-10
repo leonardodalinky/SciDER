@@ -53,6 +53,8 @@ class IdeationWorkflow(BaseModel):
     ideation_summary: str = ""
     research_ideas: list[dict] = []
     novelty_score: float | None = None  # Average novelty score
+    idea_novelty_assessments: list[dict] = []  # Per-idea novelty scores
+    ideation_papers: list[dict] = []  # Papers reviewed during literature search
     error_message: str | None = None
     ideation_agent_history: list = []
 

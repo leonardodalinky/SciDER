@@ -1,0 +1,169 @@
+# Unified Model Catalog
+#
+# Single source of truth for all models SciDER knows about, regardless of
+# provider. Each entry declares its provider, LiteLLM model id, what it can do
+# (capabilities), which env vars are required, and any default LiteLLM kwargs.
+#
+# Add a new model: drop a new entry here, then optionally point a role at it
+# via model_settings/role_defaults.yaml or via the frontend Settings page.
+
+models:
+  # ---- Gemini (completion) ----
+  gemini-2.5-flash-lite:
+    provider: gemini
+    litellm_id: gemini/gemini-2.5-flash-lite
+    capabilities: [completion]
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-2.5-flash:
+    provider: gemini
+    litellm_id: gemini/gemini-2.5-flash
+    capabilities: [completion]
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-2.5-pro:
+    provider: gemini
+    litellm_id: gemini/gemini-2.5-pro
+    capabilities: [completion]
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-3-flash-preview:
+    provider: gemini
+    litellm_id: gemini/gemini-3-flash-preview
+    capabilities: [completion]
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-3-pro-preview:
+    provider: gemini
+    litellm_id: gemini/gemini-3-pro-preview
+    capabilities: [completion]
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  # ---- OpenAI (completion) ----
+  gpt-5-nano:
+    provider: openai
+    litellm_id: gpt-5-nano
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: minimal
+
+  gpt-5-mini:
+    provider: openai
+    litellm_id: gpt-5-mini
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
+
+  gpt-5:
+    provider: openai
+    litellm_id: gpt-5
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
+
+  gpt-5-pro:
+    provider: openai
+    litellm_id: gpt-5-pro
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
+
+  gpt-5-chat:
+    provider: openai
+    litellm_id: gpt-5-chat
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+
+  o1-mini:
+    provider: openai
+    litellm_id: o1-mini
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+
+  o3-mini:
+    provider: openai
+    litellm_id: o3-mini
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+
+  o3:
+    provider: openai
+    litellm_id: o3
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+
+  o4-mini:
+    provider: openai
+    litellm_id: o4-mini
+    capabilities: [completion]
+    requires_env: [OPENAI_API_KEY]
+
+  # ---- Anthropic (completion) ----
+  # Used by experiment_coding role when CODING_AGENT_VERSION=claude_sdk, but
+  # also callable directly via litellm if you'd rather mix Claude in elsewhere.
+  claude-haiku-4-5:
+    provider: anthropic
+    litellm_id: anthropic/claude-haiku-4-5
+    capabilities: [completion]
+    requires_env: [ANTHROPIC_API_KEY]
+
+  claude-sonnet-4-5:
+    provider: anthropic
+    litellm_id: anthropic/claude-sonnet-4-5
+    capabilities: [completion]
+    requires_env: [ANTHROPIC_API_KEY]
+
+  claude-sonnet-4-6:
+    provider: anthropic
+    litellm_id: anthropic/claude-sonnet-4-6
+    capabilities: [completion]
+    requires_env: [ANTHROPIC_API_KEY]
+
+  claude-opus-4-5:
+    provider: anthropic
+    litellm_id: anthropic/claude-opus-4-5
+    capabilities: [completion]
+    requires_env: [ANTHROPIC_API_KEY]
+
+  claude-opus-4-6:
+    provider: anthropic
+    litellm_id: anthropic/claude-opus-4-6
+    capabilities: [completion]
+    requires_env: [ANTHROPIC_API_KEY]
+
+  # ---- Embedding ----
+  text-embedding-3-small:
+    provider: openai
+    litellm_id: text-embedding-3-small
+    capabilities: [embedding]
+    requires_env: [OPENAI_API_KEY]
+
+  text-embedding-3-large:
+    provider: openai
+    litellm_id: text-embedding-3-large
+    capabilities: [embedding]
+    requires_env: [OPENAI_API_KEY]
+
+  gemini-embedding-001:
+    provider: gemini
+    litellm_id: gemini/gemini-embedding-001
+    capabilities: [embedding]
+    requires_env: [GEMINI_API_KEY]

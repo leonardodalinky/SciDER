@@ -1,0 +1,11 @@
+# Gemini 3 medium-high cost preset.
+
+defaults:
+  ideation: gemini-3-pro-preview[reasoning_effort=low]
+  paper_search: gemini-3-flash-preview[reasoning_effort=low]
+  metric_search: gemini-3-flash-preview[reasoning_effort=low]
+  data: gemini-3-flash-preview[reasoning_effort=low]
+  critic: gemini-3-pro-preview[reasoning_effort=low,temperature=0.3]
+  history: gemini-3-flash-preview
+  experiment: gemini-3-pro-preview[reasoning_effort=low]
+  experiment_coding: gemini-3-pro-preview[reasoning_effort=low]

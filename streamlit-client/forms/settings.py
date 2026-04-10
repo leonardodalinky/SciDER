@@ -1,40 +1,19 @@
-"""Settings form for API key and model configuration."""
+"""Settings form for API keys and per-role model assignments.
+
+The frontend uses the unified ModelCatalog (model_settings/catalog.yaml) so
+users can mix-and-match providers per role. Models whose required env vars
+aren't set are shown but greyed out based on the keys actually entered in the
+form (not the process environment).
+"""
 
 import os
 
 import streamlit as st
 
-# Available models per provider
-GEMINI_MODELS = [
-    "gemini/gemini-2.5-flash-lite",
-    "gemini/gemini-2.5-flash",
-    "gemini/gemini-2.5-pro",
-    "gemini/gemini-3-flash-preview",
-    "gemini/gemini-3-pro-preview",
-]
+from scider.default.models import CAP_COMPLETION, ModelCatalog, ModelEntry
 
-OPENAI_MODELS = [
-    "gpt-5-nano",
-    "gpt-5-mini",
-    "gpt-5",
-    "gpt-5-pro",
-    "gpt-5-chat",
-    "o1-mini",
-    "o3-mini",
-    "o3",
-    "o4-mini",
-]
-
-# Claude models for coding agent (Claude SDK)
-CLAUDE_MODELS = [
-    "claude-haiku-4-5",
-    "claude-sonnet-4-6",
-    "claude-sonnet-4-5",
-    "claude-opus-4-6",
-    "claude-opus-4-5",
-]
-
-# Model roles grouped by category (experiment_coding excluded — handled separately)
+# Model roles grouped by category. experiment_coding is handled separately
+# because it's tied to CODING_AGENT_VERSION.
 MODEL_ROLE_GROUPS = {
     "Ideation": {
         "ideation": "Idea generation",
@@ -53,26 +32,74 @@ MODEL_ROLE_GROUPS = {
     },
 }
 
-# Default model assignments (low-cost for most, higher for key roles)
-GEMINI_ROLE_DEFAULTS = {
-    "ideation": "gemini/gemini-2.5-flash",
-    "paper_search": "gemini/gemini-2.5-flash-lite",
-    "metric_search": "gemini/gemini-2.5-flash-lite",
-    "data": "gemini/gemini-2.5-flash-lite",
-    "critic": "gemini/gemini-2.5-flash-lite",
-    "history": "gemini/gemini-2.5-flash-lite",
-    "experiment": "gemini/gemini-2.5-flash",
+# Mapping: env var name -> (settings key, env var name)
+_KEY_ENV_MAP = {
+    "GEMINI_API_KEY": "gemini_api_key",
+    "OPENAI_API_KEY": "openai_api_key",
+    "ANTHROPIC_API_KEY": "anthropic_api_key",
 }
 
-OPENAI_ROLE_DEFAULTS = {
-    "ideation": "gpt-5-mini",
-    "paper_search": "gpt-5-nano",
-    "metric_search": "gpt-5-nano",
-    "data": "gpt-5-nano",
-    "critic": "gpt-5-nano",
-    "history": "gpt-5-nano",
-    "experiment": "gpt-5-mini",
-}
+
+def _initial_key_value(settings_key: str, current: dict) -> str:
+    """Resolve initial key value from saved settings only (never from env)."""
+    return current.get(settings_key, "")
+
+
+def _entry_available_with_keys(entry: ModelEntry, provided_keys: dict[str, str]) -> bool:
+    """Check if a model entry is available given the keys the user actually entered."""
+    for env_var in entry.requires_env:
+        settings_key = _KEY_ENV_MAP.get(env_var, "")
+        if not provided_keys.get(settings_key, ""):
+            return False
+    return True
+
+
+def _make_format_func(provided_keys: dict[str, str]):
+    """Build a format_func that checks availability against provided keys, not os.environ."""
+
+    def _format(model_id: str) -> str:
+        entry = ModelCatalog.get(model_id)
+        if entry is None:
+            return f"{model_id} (unknown)"
+        if not _entry_available_with_keys(entry, provided_keys):
+            missing_env = [
+                k for k in entry.requires_env if not provided_keys.get(_KEY_ENV_MAP.get(k, ""), "")
+            ]
+            missing_labels = ", ".join(missing_env)
+            return f"{entry.id}  \u26a0 missing {missing_labels}"
+        return f"{entry.id}  ({entry.provider})"
+
+    return _format
+
+
+def _completion_model_ids() -> list[str]:
+    return [e.id for e in ModelCatalog.by_capability(CAP_COMPLETION)]
+
+
+def _claude_completion_ids() -> list[str]:
+    return [e.id for e in ModelCatalog.by_capability(CAP_COMPLETION) if e.provider == "anthropic"]
+
+
+def _select_model(
+    label: str,
+    options: list[str],
+    saved: str | None,
+    fallback: str | None,
+    key: str,
+    format_func=None,
+) -> str:
+    default = saved if saved in options else (fallback if fallback in options else options[0])
+    idx = options.index(default)
+    kwargs = {}
+    if format_func is not None:
+        kwargs["format_func"] = format_func
+    return st.selectbox(
+        label,
+        options,
+        index=idx,
+        key=key,
+        **kwargs,
+    )
 
 
 def render_settings_form(current_settings: dict | None = None) -> dict | None:
@@ -82,48 +109,76 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         "Your settings are stored locally on this machine only and are never uploaded to the cloud."
     )
 
+    # Make sure the catalog is loaded once before we render anything.
+    ModelCatalog.load()
+
     current = current_settings or {}
-    current_provider = current.get("model_provider", "Gemini")
     current_roles = current.get("model_roles", {})
 
-    # Provider selector outside form so switching triggers immediate rerun
-    model_provider = st.selectbox(
-        "Model Provider",
-        ["Gemini", "OpenAI"],
-        index=(
-            ["Gemini", "OpenAI"].index(current_provider)
-            if current_provider in ("Gemini", "OpenAI")
-            else 0
-        ),
-        key="settings_model_provider",
-    )
+    completion_ids = _completion_model_ids()
+    claude_ids = _claude_completion_ids() or completion_ids
+
+    # --- API Keys (outside form so we can read their values for rendering) ---
+    # Streamlit forms capture widget values only on submit, so we use
+    # session_state keys to read the *current* typed values for the
+    # format_func, falling back to initial defaults.
+
+    # Compute initial defaults: saved setting > env var > empty
+    init_gemini = _initial_key_value("gemini_api_key", current)
+    init_openai = _initial_key_value("openai_api_key", current)
+    init_anthropic = _initial_key_value("anthropic_api_key", current)
+
+    # Build a snapshot of provided keys for the format_func.
+    # On first render we use initial values; after user types, session_state
+    # updates on the next rerun (Streamlit forms only update on submit, but
+    # since model dropdowns are inside the same form, the availability display
+    # reflects the *initial* keys — which is correct: if you just opened
+    # settings, the keys you already saved / have in env are "provided".)
+    provided_keys = {
+        "gemini_api_key": st.session_state.get("_sk_gemini", init_gemini),
+        "openai_api_key": st.session_state.get("_sk_openai", init_openai),
+        "anthropic_api_key": st.session_state.get("_sk_anthropic", init_anthropic),
+    }
+
+    format_func = _make_format_func(provided_keys)
 
     with st.form("settings_form"):
         # --- API Keys ---
         st.markdown("#### API Keys")
-
-        api_key = st.text_input(
-            f"{model_provider} API Key",
-            type="password",
-            placeholder=f"Enter your {model_provider} API key",
-            value=current.get("api_key", ""),
-            help="Required.",
+        st.caption(
+            "Configure any combination of providers. Models whose key is missing "
+            "will appear greyed-out in the dropdowns below."
         )
 
-        st.divider()
-
+        gemini_api_key = st.text_input(
+            "Gemini API Key",
+            type="password",
+            placeholder="Enter your Gemini API key",
+            value=init_gemini,
+            key="_sk_gemini",
+        )
+        openai_api_key = st.text_input(
+            "OpenAI API Key",
+            type="password",
+            placeholder="Enter your OpenAI API key",
+            value=init_openai,
+            key="_sk_openai",
+        )
         anthropic_api_key = st.text_input(
             "Anthropic (Claude) API Key",
             type="password",
             placeholder="Optional — needed for Claude coding agent",
-            value=current.get("anthropic_api_key", ""),
+            value=init_anthropic,
+            key="_sk_anthropic",
         )
+
+        st.divider()
 
         s2_api_key = st.text_input(
             "Semantic Scholar API Key",
             type="password",
             placeholder="Optional — enables Semantic Scholar paper search",
-            value=current.get("s2_api_key", ""),
+            value=_initial_key_value("s2_api_key", current),
         )
         st.caption(
             "Optional. If provided, paper search will also query Semantic Scholar "
@@ -142,9 +197,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             st.info("Disabled. Set `HF_DATASET_DOWNLOAD_ENABLED=true` in `.env` to enable.")
         st.caption(
             "When enabled, you can enter a HuggingFace dataset repo name "
-            "(e.g. `google/fleurs`) instead of uploading a local file. "
-            "Datasets are downloaded and cached automatically. "
-            "Configure size limit via `HF_DATASET_MAX_SIZE_MB` in `.env`."
+            "(e.g. `google/fleurs`) instead of uploading a local file."
         )
 
         # --- Memory ---
@@ -160,10 +213,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             st.info("Writing enabled, reading disabled")
         else:
             st.warning("Memory disabled")
-        st.caption(
-            "Cross-session memory in `.scider/memory/`. "
-            "Configure via `SCIDER_MEMORY_READ` and `SCIDER_MEMORY_WRITE` in `.env`."
-        )
+        st.caption("Configure via `SCIDER_MEMORY_READ` / `SCIDER_MEMORY_WRITE` in `.env`.")
 
         # --- Coding Agent ---
         st.divider()
@@ -190,37 +240,30 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         )
 
         if coding_version in ("v3", "claude_sdk"):
-            coding_models = CLAUDE_MODELS
-            coding_default = current_roles.get("experiment_coding", "claude-haiku-4-5")
+            coding_options = claude_ids
+            coding_fallback = "claude-haiku-4-5"
         else:
-            coding_models = GEMINI_MODELS if model_provider == "Gemini" else OPENAI_MODELS
-            fallback_defaults = (
-                GEMINI_ROLE_DEFAULTS if model_provider == "Gemini" else OPENAI_ROLE_DEFAULTS
-            )
-            coding_default = current_roles.get(
-                "experiment_coding", fallback_defaults.get("experiment_coding", coding_models[0])
-            )
+            coding_options = completion_ids
+            coding_fallback = "gemini-2.5-pro"
 
-        if coding_default not in coding_models:
-            coding_default = coding_models[0]
-        coding_idx = coding_models.index(coding_default)
-
-        coding_model = st.selectbox(
+        coding_model = _select_model(
             "Code generation model",
-            coding_models,
-            index=coding_idx,
+            coding_options,
+            saved=current_roles.get("experiment_coding"),
+            fallback=coding_fallback,
             key="model_role_experiment_coding",
+            format_func=format_func,
         )
 
         # --- Per-role model selection ---
         st.divider()
         st.markdown("#### Model Assignments")
-        st.caption("Choose which model to use for each agent role.")
+        st.caption(
+            "Choose which model to use for each agent role. Models from any provider "
+            "can be mixed freely."
+        )
 
-        models_list = GEMINI_MODELS if model_provider == "Gemini" else OPENAI_MODELS
-        defaults = GEMINI_ROLE_DEFAULTS if model_provider == "Gemini" else OPENAI_ROLE_DEFAULTS
-
-        role_selections = {}
+        role_selections: dict[str, str] = {}
         max_cols = 3
         for group_name, roles in MODEL_ROLE_GROUPS.items():
             st.markdown(f"**{group_name}**")
@@ -230,36 +273,60 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
                 cols = st.columns(max_cols)
                 for col, (role, label) in zip(cols, row):
                     with col:
-                        saved = current_roles.get(role)
-                        default = (
-                            saved if saved in models_list else defaults.get(role, models_list[0])
-                        )
-                        idx = models_list.index(default) if default in models_list else 0
-                        role_selections[role] = st.selectbox(
+                        role_selections[role] = _select_model(
                             label,
-                            models_list,
-                            index=idx,
+                            completion_ids,
+                            saved=current_roles.get(role),
+                            fallback=None,
                             key=f"model_role_{role}",
+                            format_func=format_func,
                         )
 
-        # Include coding model in role_selections
         role_selections["experiment_coding"] = coding_model
 
         # --- Submit ---
         submitted = st.form_submit_button("Save Settings", type="primary")
 
         if submitted:
-            final_api_key = api_key.strip()
+            final_gemini = gemini_api_key.strip()
+            final_openai = openai_api_key.strip()
             final_anthropic = anthropic_api_key.strip()
             final_s2 = s2_api_key.strip()
 
-            if not final_api_key:
-                st.error("API key is required.")
+            if not (final_gemini or final_openai or final_anthropic):
+                st.error("Provide at least one provider API key (Gemini, OpenAI, or Anthropic).")
+                return None
+
+            # Build final provided keys for availability check.
+            final_keys = {
+                "gemini_api_key": final_gemini,
+                "openai_api_key": final_openai,
+                "anthropic_api_key": final_anthropic,
+            }
+
+            # Validate that selected models have their keys filled in.
+            unavailable = []
+            for role, mid in role_selections.items():
+                entry = ModelCatalog.get(mid)
+                if entry and not _entry_available_with_keys(entry, final_keys):
+                    missing_env = [
+                        k
+                        for k in entry.requires_env
+                        if not final_keys.get(_KEY_ENV_MAP.get(k, ""), "")
+                    ]
+                    unavailable.append((role, mid, missing_env))
+
+            if unavailable:
+                lines = "\n".join(
+                    f"- **{role}** \u2192 `{mid}` (missing: {', '.join(missing)})"
+                    for role, mid, missing in unavailable
+                )
+                st.error("Some selected models are still missing API keys:\n" + lines)
                 return None
 
             return {
-                "api_key": final_api_key,
-                "model_provider": model_provider,
+                "gemini_api_key": final_gemini,
+                "openai_api_key": final_openai,
                 "anthropic_api_key": final_anthropic,
                 "s2_api_key": final_s2,
                 "model_roles": role_selections,

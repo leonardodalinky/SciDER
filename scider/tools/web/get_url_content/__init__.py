@@ -209,8 +209,17 @@ def _validate_url(url: str) -> str | None:
     except Exception:
         return f"Error: Invalid URL format: {url}"
 
-    if not parsed.scheme or not parsed.netloc:
-        return f"Error: Invalid URL format: {url}"
+    if parsed.scheme not in ("http", "https"):
+        return (
+            f"Error: WebFetch only accepts http:// or https:// URLs, got '{parsed.scheme}://'.\n"
+            "If this is a local file path, use the Read tool instead."
+        )
+
+    if not parsed.netloc:
+        return (
+            f"Error: Invalid URL (no host): {url}\n"
+            "If this is a local file path, use the Read tool instead."
+        )
 
     if parsed.username or parsed.password:
         return "Error: URLs with embedded credentials are not supported"

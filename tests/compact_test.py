@@ -53,4 +53,4 @@ class TestPersistedReference:
         assert "<persisted-output>" in ref
         assert "100,000" in ref
         assert "preview text" in ref
-        assert "/tmp/test.txt" in ref
+        assert "Do NOT try to fetch" in ref

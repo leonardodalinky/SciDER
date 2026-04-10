@@ -60,6 +60,7 @@ openhands = [
 ]
 streamlit = [
     "streamlit>=1.30.0",
+    "streamlit-js-eval>=0.1.7",
     "watchdog>=3.0.0",
 ]
 

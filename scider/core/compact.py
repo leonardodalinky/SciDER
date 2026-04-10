@@ -122,8 +122,8 @@ def _build_persisted_reference(filepath: str, original_size: int, preview: str) 
     """Build the reference message that replaces the full tool result."""
     has_more = original_size > TOOL_RESULT_PREVIEW_CHARS
     msg = "<persisted-output>\n"
-    msg += f"Output too large ({original_size:,} chars). " f"Full output saved to: {filepath}\n\n"
-    msg += f"Preview (first {TOOL_RESULT_PREVIEW_CHARS:,} chars):\n"
+    msg += f"Output too large ({original_size:,} chars). Only the first {TOOL_RESULT_PREVIEW_CHARS:,} chars are shown below.\n"
+    msg += "Work with this preview. Do NOT try to fetch the full output via WebFetch.\n\n"
     msg += preview
     if has_more:
         msg += "\n..."
