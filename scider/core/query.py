@@ -421,6 +421,14 @@ def query(
     if memory_section:
         system_prompt = system_prompt + "\n\n# Memory\n" + memory_section
 
+    # --- Inject SCIDER.md project context ---
+    from .scider_context import load_scider_md
+
+    _ws = getattr(getattr(agent_state, "workspace", None), "working_dir", None)
+    scider_md = load_scider_md(_ws)
+    if scider_md:
+        system_prompt = system_prompt + "\n\n# Project Instructions (SCIDER.md)\n" + scider_md
+
     # Plan mode state — shared with tools via ToolContext.extra
     plan_mode_state = PlanModeState()
     if ctx_dict is None:

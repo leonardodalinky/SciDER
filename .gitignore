@@ -222,5 +222,10 @@ saved_chats/
 .agents/
 .windsurf/
 
-.scider/
+# Ignore .scider/ contents but allow specific entries to be tracked
+.scider/*
+!.scider/skills/
+!.scider/rules/
+!.scider/SCIDER.md
+
 workspace/

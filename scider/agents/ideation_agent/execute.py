@@ -24,6 +24,7 @@ AGENT_TOOLS = [
     "WebFetch",
     "Agent",
     "AskUserQuestion",
+    "TodoWrite",
 ]
 
 

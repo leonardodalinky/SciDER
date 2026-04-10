@@ -28,9 +28,8 @@ from loguru import logger
 MAX_INDEX_LINES = 200
 MAX_INDEX_BYTES = 25_000
 
-# Default memory directories
-_PROJECT_MEMORY_DIR = ".scider/memory"
-_USER_MEMORY_DIR = Path.home() / ".scider" / "memory"
+# Default memory directory name under .scider/
+_MEMORY_SUBDIR = "memory"
 
 
 def _is_memory_read_enabled() -> bool:
@@ -91,12 +90,18 @@ def _build_guidance() -> str:
 
 
 def load_memory_index() -> str:
-    """Load the MEMORY.md index from .scider/memory/.
+    """Load the MEMORY.md index by walking up from cwd to root, plus home.
 
-    Returns the index content (truncated if needed), or empty string if not found.
-    Checks project-level first, then user-level.
+    Checks .scider/memory/MEMORY.md in each directory. Returns the FIRST
+    one found (closest to workspace wins for memory, since memory is
+    per-project).
     """
-    for memory_dir in [Path(_PROJECT_MEMORY_DIR), _USER_MEMORY_DIR]:
+    from .scider_context import walk_up_dirs
+
+    # Walk up but check in REVERSE (workspace-first) so closest wins
+    dirs = list(reversed(walk_up_dirs()))
+    for d in dirs:
+        memory_dir = d / ".scider" / _MEMORY_SUBDIR
         index_path = memory_dir / "MEMORY.md"
         if index_path.is_file():
             return _read_and_truncate(index_path, str(memory_dir))
@@ -158,6 +163,6 @@ def build_memory_prompt_section() -> str:
 
 def ensure_memory_dir() -> Path:
     """Ensure the project-level memory directory exists. Returns the path."""
-    d = Path(_PROJECT_MEMORY_DIR)
+    d = Path(".scider") / _MEMORY_SUBDIR
     d.mkdir(parents=True, exist_ok=True)
     return d
