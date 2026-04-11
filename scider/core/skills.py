@@ -9,13 +9,12 @@ Two injection modes:
 - **On-demand**: Only skill name + description in system prompt. Agent calls
   SkillTool to load full content when needed.
 
-Skill sources (priority order):
-1. Project-level: .scider/skills/ (in working directory)
-2. User-level: ~/.scider/skills/ (global)
+Skill sources (priority order, walk-up from workspace to root + home):
+  Each .scider/skills/ directory is scanned.
 
 Supported formats:
-- skill-name/SKILL.md  (directory format, allows resource files)
-- skill-name.md        (simple file format)
+- .scider/skills/skill-name/SKILL.md  (directory format, allows resource files)
+- .scider/skills/skill-name.md        (simple file format)
 """
 
 from __future__ import annotations
@@ -24,9 +23,21 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
+from typing import Literal, Sequence, Union
 
 import yaml
 from loguru import logger
+
+# Canonical agent names that can be targeted by skills.
+AgentName = Literal[
+    "ideation",
+    "data",
+    "experiment",
+    "experiment_coding",
+    "native_coding",
+    "critic",
+    "paper_search",
+]
 
 
 @dataclass
@@ -35,7 +46,6 @@ class Skill:
 
     name: str
     description: str
-    when_to_use: str
     content: str  # full markdown content (after frontmatter)
     allowed_agents: list[str] | None  # None = all agents
     preload_for: list[str] | None  # Agents that get full content in system prompt
@@ -78,11 +88,29 @@ def _parse_skill_file(path: Path, source: str = "project") -> Skill | None:
             return [a.strip() for a in val.split(",")]
         return None
 
+    body = content.strip()
+
+    # For directory-format skills (name/SKILL.md), prepend an explicit header
+    # explaining how to resolve relative file references (scripts/, references/,
+    # assets/, etc.) against the skill's on-disk location — NOT the workspace.
+    if path.name == "SKILL.md":
+        base_dir = str(path.parent.resolve())
+        header = (
+            f"Base directory for this skill: {base_dir}\n\n"
+            f"IMPORTANT: All relative paths in this skill (e.g. `scripts/foo.py`, "
+            f"`references/bar.md`, `assets/baz.md`) refer to files inside the base "
+            f"directory above — NOT the current workspace. When running scripts or "
+            f"reading reference files, you MUST prefix them with the base directory, "
+            f"for example:\n"
+            f"  python {base_dir}/scripts/foo.py <args>\n"
+            f"  Read({base_dir}/references/bar.md)\n"
+        )
+        body = f"{header}\n{body}"
+
     return Skill(
         name=name,
         description=frontmatter.get("description", ""),
-        when_to_use=frontmatter.get("when_to_use", ""),
-        content=content.strip(),
+        content=body,
         allowed_agents=_parse_list(frontmatter.get("allowed_agents")),
         preload_for=_parse_list(frontmatter.get("preload_for")),
         source_path=str(path),
@@ -149,13 +177,91 @@ class SkillRegistry:
             logger.info("Loaded {} skills from {}", count, path)
         return count
 
-    def load_default_directories(self) -> int:
-        """Load skills from default directories (project + user level)."""
+    def load_default_directories(self, workspace_path: str | Path | None = None) -> int:
+        """Load skills by walking up from workspace to root, plus home dir.
+
+        At each directory, scans .scider/skills/ for skill subdirs
+        (name/SKILL.md) and loose .md files. Directories closer to the
+        workspace load later, so project-level skills override
+        identically-named ones from parents.
+        """
+        from .scider_context import walk_up_dirs
+
+        dirs = walk_up_dirs(workspace_path)
         total = 0
-        total += self.load_from_directory(".scider/skills", source="project")
-        user_dir = Path.home() / ".scider" / "skills"
-        total += self.load_from_directory(user_dir, source="user")
+        for d in dirs:
+            skills_dir = d / ".scider" / "skills"
+            # Dirs closer to workspace load later → "project" source wins
+            source = "project" if d == dirs[-1] else "user"
+            total += self.load_from_directory(skills_dir, source=source)
         return total
+
+    def register_skill_dirs(
+        self,
+        path: Union[str, Path, Sequence[Union[str, Path]]],
+        *,
+        allow: Sequence[AgentName] | None = None,
+        preload_for: Sequence[AgentName] | None = None,
+        source: str = "project",
+    ) -> int:
+        """Register one or more skill directories with programmatic overrides.
+
+        Each ``path`` must be a directory containing a ``SKILL.md`` file
+        (directory-format skill). ``allow`` and ``preload_for`` override
+        the matching fields in the skill's frontmatter when provided.
+
+        Args:
+            path: A single directory or a list/sequence of directories.
+            allow: Agent names allowed to use these skills. If ``None``,
+                the frontmatter's ``allowed_agents`` is kept; if the
+                frontmatter also has no value, the skill is available to
+                all agents.
+            preload_for: Agents that get the full skill content in their
+                system prompt. If ``None``, the frontmatter's ``preload_for``
+                is kept; if the frontmatter also has no value, the skill
+                is on-demand only.
+            source: "project" (default) or "user", used for override priority.
+
+        Returns:
+            Number of skills successfully registered.
+        """
+        if isinstance(path, (str, Path)):
+            paths: list[Path] = [Path(path)]
+        else:
+            paths = [Path(p) for p in path]
+
+        allow_override = list(allow) if allow is not None else None
+        preload_override = list(preload_for) if preload_for is not None else None
+
+        count = 0
+        for p in paths:
+            skill_file = p / "SKILL.md"
+            if not skill_file.is_file():
+                logger.warning("No SKILL.md found in {}", p)
+                continue
+
+            skill = _parse_skill_file(skill_file, source=source)
+            if skill is None:
+                continue
+
+            # Programmatic values override frontmatter ONLY when explicitly
+            # provided (non-None). None means "keep frontmatter value".
+            if allow_override is not None:
+                skill.allowed_agents = allow_override
+            if preload_override is not None:
+                skill.preload_for = preload_override
+
+            if skill.name in self._skills:
+                existing = self._skills[skill.name]
+                if not (source == "project" and existing.source == "user"):
+                    continue
+            self._skills[skill.name] = skill
+            count += 1
+            logger.debug("Registered skill '{}' from {}", skill.name, skill.source_path)
+
+        if count:
+            logger.info("Registered {} skills via register_skill_dirs", count)
+        return count
 
     def get_skill(self, name: str) -> Skill | None:
         """Get a skill by name."""
@@ -211,10 +317,7 @@ class SkillRegistry:
         if ondemand:
             listing_lines = ["## Available Skills (use Skill tool to load)"]
             for skill in ondemand:
-                desc = skill.description
-                if skill.when_to_use:
-                    desc += f" — {skill.when_to_use}"
-                listing_lines.append(f"- **{skill.name}**: {desc}")
+                listing_lines.append(f"- **{skill.name}**: {skill.description}")
             parts.append("\n".join(listing_lines))
 
         return "\n\n---\n\n".join(parts)

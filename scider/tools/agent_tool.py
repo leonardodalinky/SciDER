@@ -163,25 +163,25 @@ class AgentTool(BaseTool):
             parent_state = context.agent_state
             state_kwargs = agent_type.state_builder(prompt, parent_state)
 
-            # Create and invoke subagent
+            # Create and invoke subagent, capturing all messages so the saved
+            # history includes anything dropped by compaction.
             subagent_state = agent_type.state_cls(**state_kwargs)
-            result_dict = agent_type.compiled_graph.invoke(subagent_state)
+            from scider.workflows.history_export import capture_messages
+
+            with capture_messages() as sub_captured:
+                result_dict = agent_type.compiled_graph.invoke(subagent_state)
 
             # Persist subagent's full conversation history under <workspace>/subagents/
             try:
                 workspace = getattr(parent_state, "workspace", None)
-                if workspace is not None and hasattr(workspace, "working_dir"):
-                    sub_history = (
-                        result_dict.get("history") if isinstance(result_dict, dict) else None
-                    )
-                    if sub_history:
-                        from scider.workflows.history_export import save_subagent_history
+                if workspace is not None and hasattr(workspace, "working_dir") and sub_captured:
+                    from scider.workflows.history_export import save_subagent_history
 
-                        save_subagent_history(
-                            history=sub_history,
-                            workspace_path=workspace.working_dir,
-                            subagent_type=subagent_type,
-                        )
+                    save_subagent_history(
+                        history=list(sub_captured),
+                        workspace_path=workspace.working_dir,
+                        subagent_type=subagent_type,
+                    )
             except Exception as e:
                 logger.warning("Failed to persist {} subagent history: {}", subagent_type, e)
 

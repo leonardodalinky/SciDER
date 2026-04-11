@@ -32,6 +32,7 @@ pinned: false
 - [Configuration](#configuration)
 - [Web UI](#web-ui)
 - [Coding Backend](#coding-backend)
+- [Skills](#skills)
 - [Development Guide](#development-guide)
 - [Benchmarks](#benchmarks)
 - [Feedback and Contributions](#feedback-and-contributions)
@@ -134,6 +135,59 @@ The experiment agent delegates code implementation to a coding subagent. Three b
 | OpenHands | `openhands` | Delegates to OpenHands sandbox. Requires `SCIDER_ENABLE_OPENHANDS=1`. |
 
 Set `CODING_AGENT_VERSION` in `.env` to switch backends.
+
+## Skills
+
+Skills are markdown files with YAML frontmatter that inject domain-specific guidance into an agent's system prompt. Modeled after Claude Code, they can be either **preloaded** (full content injected) or **on-demand** (listed by name, loaded via the `Skill` tool when needed).
+
+### Discovery
+
+On startup, SciDER walks up from the workspace directory to the filesystem root (plus `~`), scanning `.scider/skills/` at each level. Closer directories override identically-named skills from parents. Supported layouts:
+
+```
+.scider/skills/
+├── my-skill/
+│   ├── SKILL.md              # directory format — can bundle reference files
+│   └── references/
+│       └── usage.md
+└── another.md                # single-file format
+```
+
+Frontmatter fields:
+
+```yaml
+---
+name: my-skill
+description: One-line summary shown in the on-demand listing.
+allowed_agents: [data, experiment]   # omit → available to all agents
+preload_for: [data]                  # omit → on-demand only (must be called via Skill tool)
+---
+```
+
+For directory-format skills, SciDER automatically injects `Base directory for this skill: <absolute path>` at the top of the content so the model can resolve relative file references (e.g. `references/usage.md`) via the `Read` tool.
+
+### Dynamic Registration
+
+You can also register skills programmatically, overriding frontmatter fields:
+
+```python
+from scider.core.skills import SkillRegistry
+
+# Single directory
+SkillRegistry.instance().register_skill_dirs(
+    "path/to/my-skill",
+    allow=["experiment", "native_coding"],
+    preload_for=["experiment"],
+)
+
+# Multiple directories at once
+SkillRegistry.instance().register_skill_dirs(
+    ["path/to/skill-a", "path/to/skill-b"],
+    allow=["data"],
+)
+```
+
+`allow` restricts which agents see the skill; `preload_for` controls which agents get the full content in their system prompt. Both accept a `Literal` of the valid agent names (`ideation`, `data`, `experiment`, `experiment_coding`, `native_coding`, `critic`, `paper_search`) for static type checking. Passing `None` for either keeps the value from the SKILL.md frontmatter.
 
 ## Development Guide
 

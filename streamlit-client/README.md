@@ -28,7 +28,7 @@ On first launch, a settings page will appear. Configure:
 - **OpenAI API Key for Embeddings** (optional — enables memory features)
 - **Per-role model assignments** (which model to use for each agent role)
 
-Settings are stored locally in `~/.scider/settings.json` and persist across sessions.
+Settings (including API keys) are stored in the browser's localStorage and never saved on the server.
 
 ## Workflows
 
@@ -62,7 +62,7 @@ docker compose up --build
 ```
 streamlit-client/
 ├── app.py                  # Main entry point
-├── settings.py             # Persistent settings (~/.scider/settings.json)
+├── settings.py             # Persistent settings (browser localStorage)
 ├── utils.py                # Shared utilities (upload, chat history)
 ├── forms/                  # Workflow form UIs
 │   ├── ideation.py

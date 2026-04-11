@@ -26,8 +26,5 @@ class PaperSearchAgentState(HistoryState):
     metrics: list[dict] = []  # Extracted metrics from papers
     output_summary: str | None = None  # Final summary
 
-    # Approval status (transient, for conditional edge routing)
-    approval_status: str | None = None
-
     # Intermediate states
     intermediate_state: list[dict] = []

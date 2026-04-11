@@ -53,6 +53,8 @@ class IdeationWorkflow(BaseModel):
     ideation_summary: str = ""
     research_ideas: list[dict] = []
     novelty_score: float | None = None  # Average novelty score
+    idea_novelty_assessments: list[dict] = []  # Per-idea novelty scores
+    ideation_papers: list[dict] = []  # Papers reviewed during literature search
     error_message: str | None = None
     ideation_agent_history: list = []
 
@@ -142,7 +144,9 @@ class IdeationWorkflow(BaseModel):
                 self.ideation_summary = result_state.output_summary or ""
                 self.research_ideas = result_state.research_ideas
                 self.novelty_score = result_state.novelty_score
-                self.ideation_agent_history = result_state.history
+                # Prefer captured (full pre-compact history) over result_state.history,
+                # which compact() would have truncated.
+                self.ideation_agent_history = list(captured)
 
                 logger.info("IdeationAgent completed successfully")
                 logger.info(

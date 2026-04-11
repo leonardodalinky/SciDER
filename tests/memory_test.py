@@ -12,6 +12,11 @@ from scider.core.memory import (
 )
 
 
+def _mock_walk(dirs):
+    """Return a patch that makes walk_up_dirs() return the given dirs."""
+    return patch("scider.core.scider_context.walk_up_dirs", return_value=[Path(d) for d in dirs])
+
+
 class TestReadAndTruncate:
     def test_normal_index(self, tmp_path):
         index = tmp_path / "MEMORY.md"
@@ -33,13 +38,11 @@ class TestReadAndTruncate:
         result = _read_and_truncate(index, str(tmp_path))
         assert "WARNING" in result
         assert "truncated" in result
-        # Should have at most MAX_INDEX_LINES content lines + header + warning
         content_lines = [l for l in result.split("\n") if l.startswith("- [")]
         assert len(content_lines) <= MAX_INDEX_LINES
 
     def test_byte_truncation(self, tmp_path):
         index = tmp_path / "MEMORY.md"
-        # Create a file with few lines but very long content
         long_line = "- [X](x.md) — " + "A" * 30_000
         index.write_text(long_line)
         result = _read_and_truncate(index, str(tmp_path))
@@ -49,35 +52,33 @@ class TestReadAndTruncate:
 
 class TestLoadMemoryIndex:
     def test_no_memory_dir(self, tmp_path):
-        with patch("scider.core.memory._PROJECT_MEMORY_DIR", str(tmp_path / "nonexistent")):
-            with patch("scider.core.memory._USER_MEMORY_DIR", tmp_path / "also_nonexistent"):
-                result = load_memory_index()
-                assert result == ""
+        with _mock_walk([tmp_path / "nonexistent"]):
+            result = load_memory_index()
+            assert result == ""
 
     def test_project_level(self, tmp_path):
-        mem_dir = tmp_path / "memory"
-        mem_dir.mkdir()
+        mem_dir = tmp_path / ".scider" / "memory"
+        mem_dir.mkdir(parents=True)
         (mem_dir / "MEMORY.md").write_text("- [Test](test.md) — Project memory\n")
 
-        with patch("scider.core.memory._PROJECT_MEMORY_DIR", str(mem_dir)):
+        with _mock_walk([tmp_path]):
             result = load_memory_index()
             assert "Project memory" in result
 
 
 class TestBuildMemoryPromptSection:
     def test_with_index(self, tmp_path):
-        mem_dir = tmp_path / "memory"
-        mem_dir.mkdir()
+        mem_dir = tmp_path / ".scider" / "memory"
+        mem_dir.mkdir(parents=True)
         (mem_dir / "MEMORY.md").write_text("- [Pref](pref.md) — User preference\n")
 
-        with patch("scider.core.memory._PROJECT_MEMORY_DIR", str(mem_dir)):
+        with _mock_walk([tmp_path]):
             section = build_memory_prompt_section()
             assert "User preference" in section
-            assert "Writing memories" in section  # guidance present
+            assert "Writing memories" in section
             assert "What NOT to save" in section
 
     def test_without_index(self, tmp_path):
-        with patch("scider.core.memory._PROJECT_MEMORY_DIR", str(tmp_path / "nope")):
-            with patch("scider.core.memory._USER_MEMORY_DIR", tmp_path / "also_nope"):
-                section = build_memory_prompt_section()
-                assert section == ""
+        with _mock_walk([tmp_path / "nope"]):
+            section = build_memory_prompt_section()
+            assert section == ""

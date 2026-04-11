@@ -1,0 +1,19 @@
+# Default model assignment for each agent role.
+#
+# Values are model ids from catalog.yaml. Append [key=val,...] to override
+# default_params inline:
+#   experiment: gemini-2.5-pro[reasoning_effort=high]
+#   data: gpt-5-mini[reasoning.effort=low]
+#
+# Frontend selections in ~/.scider/settings.json override these.
+
+defaults:
+  ideation: gemini-2.5-flash[reasoning_effort=low]
+  paper_search: gemini-2.5-flash[reasoning_effort=low]
+  metric_search: gemini-2.5-flash[reasoning_effort=low]
+  data: gemini-2.5-flash[reasoning_effort=low]
+  critic: gemini-2.5-pro[reasoning_effort=low,temperature=0.3]
+  history: gemini-2.5-flash
+  experiment: gemini-2.5-pro[reasoning_effort=low]
+  experiment_coding: gemini-2.5-pro[reasoning_effort=low]
+  embedding: text-embedding-3-small

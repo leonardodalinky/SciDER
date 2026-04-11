@@ -1,0 +1,12 @@
+# Gemini low-medium cost preset.
+# Uses catalog model ids with optional [override] syntax.
+
+defaults:
+  ideation: gemini-2.5-flash[reasoning_effort=low]
+  paper_search: gemini-2.5-flash-lite[reasoning_effort=low]
+  metric_search: gemini-2.5-flash-lite[reasoning_effort=low]
+  data: gemini-2.5-flash[reasoning_effort=low]
+  critic: gemini-2.5-flash[reasoning_effort=low,temperature=0.3]
+  history: gemini-2.5-flash-lite
+  experiment: gemini-2.5-flash[reasoning_effort=low]
+  experiment_coding: gemini-2.5-flash[reasoning_effort=low]

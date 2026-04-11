@@ -354,7 +354,9 @@ class HistoryState(BaseModel):
         """Replace all messages before current boundary with a compacted summary.
 
         Inserts a compact boundary marker followed by the summary messages.
-        Old messages are discarded.
+        Old messages are discarded from the live history but listeners
+        (e.g. ``capture_messages``) still see the boundary + summary so the
+        external log keeps a complete timeline.
         """
         current_messages = self.messages
         pre_tokens = sum(m.n_tokens for m in current_messages)
@@ -368,6 +370,15 @@ class HistoryState(BaseModel):
         # Complete replacement: boundary + summary + nothing else
         # (caller is responsible for keeping any messages that should survive)
         self.history = [boundary] + summary_messages
+
+        # Notify listeners of the new boundary + summary messages so external
+        # captures (history_export.capture_messages) can log the compaction.
+        for emitted in [boundary, *summary_messages]:
+            for listener in list(_message_listeners):
+                try:
+                    listener(emitted)
+                except Exception:
+                    pass
 
     def normalize_for_api(self) -> list[Message]:
         """Normalize message history for LLM API consumption.

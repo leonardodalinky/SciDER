@@ -15,7 +15,6 @@ class TestParseSkillFile:
             "---\n"
             "name: test-skill\n"
             "description: A test skill\n"
-            "when_to_use: When testing\n"
             "allowed_agents: [data, experiment]\n"
             "preload_for: [experiment]\n"
             "---\n\n"
@@ -25,7 +24,6 @@ class TestParseSkillFile:
         assert skill is not None
         assert skill.name == "test-skill"
         assert skill.description == "A test skill"
-        assert skill.when_to_use == "When testing"
         assert skill.allowed_agents == ["data", "experiment"]
         assert skill.preload_for == ["experiment"]
         assert "Skill content here." in skill.content
@@ -113,6 +111,75 @@ class TestSkillRegistry:
         assert "Full content here" in section  # preloaded: full content
         assert "Available Skills" in section  # on-demand: listing
         assert "lazy" in section
+
+    def test_register_skill_dirs_single(self, tmp_path):
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: my-skill\ndescription: A skill\n---\nContent\n"
+        )
+
+        count = SkillRegistry.instance().register_skill_dirs(
+            skill_dir,
+            allow=["experiment"],
+            preload_for=["experiment"],
+        )
+        assert count == 1
+        skill = SkillRegistry.instance().get_skill("my-skill")
+        assert skill is not None
+        assert skill.allowed_agents == ["experiment"]
+        assert skill.preload_for == ["experiment"]
+
+    def test_register_skill_dirs_list(self, tmp_path):
+        for name in ("skill-a", "skill-b"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {name}\n---\nx\n")
+
+        count = SkillRegistry.instance().register_skill_dirs(
+            [tmp_path / "skill-a", tmp_path / "skill-b"],
+            allow=["data", "ideation"],
+        )
+        assert count == 2
+        a = SkillRegistry.instance().get_skill("skill-a")
+        b = SkillRegistry.instance().get_skill("skill-b")
+        assert a.allowed_agents == ["data", "ideation"]
+        assert a.preload_for is None  # no preload
+        assert b.allowed_agents == ["data", "ideation"]
+
+    def test_register_skill_dirs_overrides_frontmatter(self, tmp_path):
+        """Non-None args override frontmatter; None args preserve it."""
+        skill_dir = tmp_path / "s"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: s\nallowed_agents: [critic]\npreload_for: [critic]\n---\nx\n"
+        )
+
+        SkillRegistry.instance().register_skill_dirs(
+            skill_dir,
+            allow=["experiment"],
+            preload_for=None,
+        )
+        skill = SkillRegistry.instance().get_skill("s")
+        assert skill.allowed_agents == ["experiment"]  # non-None → override
+        assert skill.preload_for == ["critic"]  # None → keep frontmatter
+
+    def test_register_skill_dirs_all_none_no_frontmatter(self, tmp_path):
+        """None args + no frontmatter → available to all agents, on-demand."""
+        skill_dir = tmp_path / "bare"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: bare\n---\nx\n")
+
+        SkillRegistry.instance().register_skill_dirs(skill_dir)
+        skill = SkillRegistry.instance().get_skill("bare")
+        assert skill.allowed_agents is None  # all agents
+        assert skill.preload_for is None  # on-demand
+
+    def test_register_skill_dirs_missing_skill_md(self, tmp_path):
+        empty = tmp_path / "empty-dir"
+        empty.mkdir()
+        count = SkillRegistry.instance().register_skill_dirs(empty, allow=["data"])
+        assert count == 0
 
 
 class TestSkillTool:

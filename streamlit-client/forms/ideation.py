@@ -19,10 +19,7 @@ def run_ideation(q, ideation_graph):
         out.append(
             "## Novelty Evaluation\n```json\n"
             + json.dumps(
-                {
-                    "novelty_score": rs.novelty_score,
-                    "feedback": rs.novelty_feedback,
-                },
+                {"novelty_score": rs.novelty_score},
                 indent=2,
             )
             + "\n```"

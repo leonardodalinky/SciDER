@@ -38,12 +38,35 @@ def capture_messages() -> Iterator[list[Message]]:
         yield captured
 
 
+def _restore_original_content(msg: Message) -> str | None:
+    """Get the original pre-compression content for a message.
+
+    - Level 2 snip: ``content_before_snip`` holds the original.
+    - Level 1 persist: the full content lives at ``persisted_content_path``.
+    - Otherwise: current ``content``.
+    """
+    if msg.content_before_snip is not None:
+        return msg.content_before_snip
+    if msg.persisted_content_path:
+        try:
+            return Path(msg.persisted_content_path).read_text(encoding="utf-8")
+        except Exception as e:
+            logger.warning(
+                "Failed to restore persisted content from {}: {}", msg.persisted_content_path, e
+            )
+    return msg.content
+
+
 def save_conversation_history(
     history: list[Message] | list,
     path: Path,
     agent_name: str = "agent",
 ) -> Path:
     """Save conversation history to a JSON file.
+
+    The saved history preserves:
+    - Compact boundary markers (so you can see where compaction happened)
+    - Original tool result content (pre-Level-1 persist and pre-Level-2 snip)
 
     Args:
         history: List of Message objects or dicts.
@@ -61,12 +84,17 @@ def save_conversation_history(
         if isinstance(msg, Message):
             record = {
                 "role": msg.role,
-                "content": msg.content,
+                "content": _restore_original_content(msg),
                 "agent_sender": msg.agent_sender,
                 "tool_name": msg.tool_name,
                 "tool_call_id": msg.tool_call_id,
                 "is_meta": msg.is_meta,
             }
+            # Preserve compact boundary markers in the saved log.
+            if msg.is_compact_boundary:
+                record["is_compact_boundary"] = True
+                if msg.compact_metadata:
+                    record["compact_metadata"] = msg.compact_metadata
             if msg.tool_calls:
                 record["tool_calls"] = [
                     {

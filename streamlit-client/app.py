@@ -46,12 +46,12 @@ from workflow.runner import WorkflowRunner
 
 from scider.agents import ideation_agent
 from scider.core import approval as approval_module
-from scider.core.llms import ModelRegistry
 from scider.core.types import set_on_message_callback
+from scider.default.models import ModelCatalog, parse_model_spec, register_role
 
 # ==================== Page config ====================
 
-st.set_page_config(page_title="SciDER Chat", layout="centered")
+st.set_page_config(page_title="SciDER Chat", page_icon="🍎", layout="centered")
 
 st.markdown(
     """
@@ -205,38 +205,81 @@ def render_chat_messages(messages: list[dict]):
 # ==================== Model registration ====================
 
 
-def register_all_models(settings: dict):
-    """Register models from saved settings. Returns True on success."""
-    api_key = settings.get("api_key")
-    if not api_key:
+def register_all_models(settings: dict) -> bool:
+    """Apply provider keys + register roles via the unified ModelCatalog.
+
+    Keys are passed directly to register_role() per session — never written to
+    os.environ (which is shared across all Streamlit sessions).
+    """
+    # Build {env_var: key} from this session's settings.
+    key_map: dict[str, str] = {}
+    for env_var, settings_key in (
+        ("GEMINI_API_KEY", "gemini_api_key"),
+        ("OPENAI_API_KEY", "openai_api_key"),
+        ("ANTHROPIC_API_KEY", "anthropic_api_key"),
+    ):
+        val = settings.get(settings_key, "")
+        if val:
+            key_map[env_var] = val
+
+    if not key_map:
         return False
+
+    ModelCatalog.load()
+
+    def _resolve_key(model_id: str) -> str | None:
+        """Resolve the API key for a catalog model from this session's keys."""
+        base_id, _ = parse_model_spec(model_id)
+        entry = ModelCatalog.get(base_id)
+        if entry is None:
+            return None
+        for env_var in entry.requires_env:
+            key = key_map.get(env_var) or os.getenv(env_var)
+            if key:
+                return key
+        return None
+
+    def _model_has_key(model_id: str) -> bool:
+        return _resolve_key(model_id) is not None
+
+    # Register role defaults (only those for which we have a key).
+    try:
+        import yaml
+
+        from scider.default.models.catalog import DEFAULT_ROLE_DEFAULTS_PATH
+
+        data = yaml.safe_load(DEFAULT_ROLE_DEFAULTS_PATH.read_text()) or {}
+        for role, model_spec in (data.get("defaults") or {}).items():
+            spec = str(model_spec)
+            if _model_has_key(spec):
+                register_role(role, spec, api_key=_resolve_key(spec))
+    except Exception as e:
+        from loguru import logger as _lg
+
+        _lg.warning("Failed to register role defaults: {}", e)
 
     role_models = settings.get("model_roles", {})
 
-    # Register each role with its assigned model
-    all_roles = [
-        "ideation",
-        "data",
-        "history",
-        "experiment",
-        "experiment_coding",
-        "paper_search",
-        "metric_search",
-        "critic",
-    ]
-    # For Claude SDK coding agent, set CLAUDE_MODEL env var from saved setting
+    # CLAUDE_SDK_MODEL env var drives the claude_sdk coding backend.
+    # This is the one env var we must set because the SDK reads it directly.
     coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
-    coding_model = role_models.get("experiment_coding", "")
-    if coding_version in ("v3", "claude_sdk") and coding_model:
-        os.environ["CLAUDE_MODEL"] = coding_model
+    coding_model_id = role_models.get("experiment_coding", "")
+    if coding_version in ("v3", "claude_sdk") and coding_model_id:
+        entry = ModelCatalog.get(coding_model_id)
+        if entry is not None:
+            os.environ["CLAUDE_SDK_MODEL"] = entry.litellm_id.split("/", 1)[-1]
 
-    for role in all_roles:
-        model = role_models.get(role)
-        if not model:
-            # Fallback: use first available model from provider
-            provider = settings.get("model_provider", "Gemini")
-            model = "gemini/gemini-2.5-flash-lite" if provider == "Gemini" else "gpt-5-nano"
-        ModelRegistry.register(name=role, model=model, api_key=api_key)
+    # Register user overrides.
+    for role, mid in role_models.items():
+        if not mid:
+            continue
+        key = _resolve_key(mid)
+        if key is None:
+            from loguru import logger as _lg
+
+            _lg.warning("Skipping role '{}' -> '{}': no API key available", role, mid)
+            continue
+        register_role(role, mid, api_key=key)
 
     return True
 
@@ -298,9 +341,9 @@ if st.session_state.get("show_settings"):
     if new_settings:
         save_settings(new_settings)
         st.session_state.show_settings = False
-        # Force re-initialization with new settings
-        if "initialized" in st.session_state:
-            del st.session_state.initialized
+        # Clear caches so next rerun re-registers models with new keys
+        st.session_state.pop("_settings_cache", None)
+        st.session_state.pop("ideation_graph", None)
         st.rerun()
     col_cancel, col_reset = st.columns(2)
     with col_cancel:
@@ -324,10 +367,6 @@ if st.session_state.get("show_settings"):
 
 # ==================== Apply settings ====================
 
-# Set env vars from saved settings
-if _settings.get("anthropic_api_key"):
-    os.environ["ANTHROPIC_API_KEY"] = _settings["anthropic_api_key"]
-
 # --- Title bar ---
 col_title, col_settings, col_reset = st.columns([4, 1.2, 1])
 with col_title:
@@ -350,27 +389,19 @@ with col_reset:
         st.session_state.show_workspace_result = False
         st.rerun()
 
-# --- One-time initialization ---
+# --- Per-session initialization ---
 if "initialized" not in st.session_state:
-    if not os.getenv("BRAIN_DIR"):
-        os.environ["BRAIN_DIR"] = str(Path.cwd() / "tmp_brain")
+    st.session_state.initialized = True
 
-    # Semantic Scholar API key
-    from scider.core import constant as _constant
+# Re-register models on EVERY rerun so each session uses its own keys.
+# ModelRegistry is a process-level singleton — without this, one user's
+# keys would leak into another user's session.
+if not register_all_models(_settings):
+    st.error("Failed to register models. Please check your API key in Settings.")
+    st.stop()
 
-    if _settings.get("s2_api_key"):
-        os.environ["S2_API_KEY"] = _settings["s2_api_key"]
-        _constant.S2_API_KEY = _settings["s2_api_key"]
-
-    # Ensure brain directory exists (for tool result persistence, etc.)
-    Path(os.environ.get("BRAIN_DIR", "tmp_brain")).mkdir(parents=True, exist_ok=True)
-
-    if register_all_models(_settings):
-        st.session_state.ideation_graph = ideation_agent.build().compile()
-        st.session_state.initialized = True
-    else:
-        st.error("Failed to register models. Please check your API key in Settings.")
-        st.stop()
+if "ideation_graph" not in st.session_state:
+    st.session_state.ideation_graph = ideation_agent.build().compile()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -564,8 +595,8 @@ if "workflow_runner" in st.session_state:
         )
         st.session_state.last_saved_memo = str(memo_dir)
 
-        # Show workspace browser for experiment/full workflows
-        if wc["type"] in ("experiment", "full"):
+        # Show workspace browser for any workflow that writes files (data/experiment/full)
+        if wc["type"] in ("data", "data_hypo", "experiment", "full"):
             st.session_state.show_workspace_result = True
 
         set_on_message_callback(None)

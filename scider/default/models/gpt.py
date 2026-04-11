@@ -1,35 +1,29 @@
+"""[Deprecated] Thin shims — use ``register_preset("gpt/medium_high")`` instead."""
+
 import logging
 import os
 import sys
 
-from scider.default.models.yaml_loader import register_from_yaml
+from scider.default.models.catalog import ModelCatalog, register_preset
 
 logger = logging.getLogger(__name__)
 
 
-def _resolve_key(openai_key: str | None = None) -> dict[str, str | None]:
-    """Resolve OpenAI API key from argument or environment variable."""
-    if openai_key is None:
-        openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key is None:
+def _ensure_openai_key(openai_key: str | None) -> None:
+    if openai_key is not None:
+        os.environ.setdefault("OPENAI_API_KEY", openai_key)
+    if not os.getenv("OPENAI_API_KEY"):
         logger.error("OPENAI_API_KEY is required but not provided.")
         sys.exit(1)
-    return {"openai": openai_key}
 
 
-def register_gpt_low_medium_models(
-    reasoning: str = "low",  # noqa: ARG001
-    openai_key: str | None = None,
-) -> None:
-    """Register GPT low and medium cost models from YAML config."""
-    keys = _resolve_key(openai_key)
-    register_from_yaml("gpt_low_medium.yaml", api_keys=keys)
+def register_gpt_low_medium_models(*, openai_key: str | None = None) -> None:
+    _ensure_openai_key(openai_key)
+    ModelCatalog.load()
+    register_preset("gpt/low_medium")
 
 
-def register_gpt_medium_high_models(
-    reasoning: str = "low",  # noqa: ARG001
-    openai_key: str | None = None,
-) -> None:
-    """Register GPT medium and high cost models from YAML config."""
-    keys = _resolve_key(openai_key)
-    register_from_yaml("gpt_medium_high.yaml", api_keys=keys)
+def register_gpt_medium_high_models(*, openai_key: str | None = None) -> None:
+    _ensure_openai_key(openai_key)
+    ModelCatalog.load()
+    register_preset("gpt/medium_high")

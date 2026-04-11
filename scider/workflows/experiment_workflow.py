@@ -170,7 +170,9 @@ class ExperimentWorkflow(BaseModel):
                 # Extract results
                 self.final_status = result_state.final_status
                 self.experiment_agent_intermediate_state = result_state.intermediate_state
-                self.experiment_agent_history = result_state.history
+                # Prefer captured (full pre-compact history) over result_state.history,
+                # which compact() would have truncated.
+                self.experiment_agent_history = list(captured)
                 self.final_summary = result_state.final_summary or result_state.output_summary or ""
                 self.current_phase = "complete"
 
@@ -185,33 +187,6 @@ class ExperimentWorkflow(BaseModel):
                 self.current_phase = "failed"
                 self.final_status = "failed"
                 return False
-
-    def _compose_summary(self, exp_state: ExperimentAgentState) -> str:
-        """Compose the final summary."""
-        DATA_SUMMARY_LIMITS = 2000
-        return f"""\
-=== Experiment Workflow Summary ===
-
-====== Data Analysis (Input) ======
-
-{self.data_summary[:DATA_SUMMARY_LIMITS]}{'...' if len(self.data_summary) > DATA_SUMMARY_LIMITS else ''}
-
----
-
-====== Workflow Metadata ======
-
-- **Workspace**: {self.workspace_path}
-- **Repo Source**: {self.repo_source or 'Not specified'}
-- **Final Status**: {self.final_status}
-- **Total Revisions**: {exp_state.current_revision}
-
----
-
-====== Experiment Results ======
-
-{exp_state.final_summary}
-
-"""
 
     def _finalize(self, success: bool):
         """Finalize the workflow."""

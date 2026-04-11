@@ -1,9 +1,8 @@
 ---
 name: uv-package-manager
-description: UV package manager for fast Python dependency management and virtual environments.
-when_to_use: When installing Python packages, managing dependencies, or setting up virtual environments.
-allowed_agents: [experiment]
-preload_for: [experiment]
+description: UV package manager for fast Python dependency management and virtual environments. Use when installing packages, managing dependencies, or setting up virtual environments.
+allowed_agents: [experiment, native_coding]
+preload_for: [experiment, native_coding]
 ---
 
 # UV Package Manager

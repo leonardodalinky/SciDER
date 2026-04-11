@@ -1,0 +1,11 @@
+# GPT medium-high cost preset.
+
+defaults:
+  ideation: gpt-5[reasoning.effort=low]
+  paper_search: gpt-5-mini[reasoning.effort=low]
+  metric_search: gpt-5-mini[reasoning.effort=low]
+  data: gpt-5-mini[reasoning.effort=low]
+  critic: gpt-5-mini[reasoning.effort=low,temperature=0.3]
+  history: gpt-5-mini[reasoning.effort=minimal]
+  experiment: gpt-5[reasoning.effort=low]
+  experiment_coding: gpt-5[reasoning.effort=low]
