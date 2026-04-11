@@ -39,8 +39,11 @@ def critic_review_node(agent_state):
         is_exp_agent=(agent_name == "experiment"),
     )
 
+    from scider.workflows.history_export import capture_messages
+
     try:
-        result = _critic_graph.invoke(critic_state, {"recursion_limit": 30})
+        with capture_messages() as critic_captured:
+            result = _critic_graph.invoke(critic_state, {"recursion_limit": 30})
         result_state = CriticAgentState(**result)
 
         # Extract critic feedback
@@ -51,13 +54,14 @@ def critic_review_node(agent_state):
         agent_state.critic_feedback = feedback
 
         # Persist critic's full conversation history under <workspace>/subagents/
+        # Use captured (pre-compact) messages instead of result_state.history.
         try:
             workspace = getattr(agent_state, "workspace", None)
             if workspace is not None and hasattr(workspace, "working_dir"):
                 from scider.workflows.history_export import save_subagent_history
 
                 save_subagent_history(
-                    history=result_state.history,
+                    history=list(critic_captured),
                     workspace_path=workspace.working_dir,
                     subagent_type="critic",
                 )

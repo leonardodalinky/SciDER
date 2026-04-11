@@ -170,7 +170,9 @@ class ExperimentWorkflow(BaseModel):
                 # Extract results
                 self.final_status = result_state.final_status
                 self.experiment_agent_intermediate_state = result_state.intermediate_state
-                self.experiment_agent_history = result_state.history
+                # Prefer captured (full pre-compact history) over result_state.history,
+                # which compact() would have truncated.
+                self.experiment_agent_history = list(captured)
                 self.final_summary = result_state.final_summary or result_state.output_summary or ""
                 self.current_phase = "complete"
 

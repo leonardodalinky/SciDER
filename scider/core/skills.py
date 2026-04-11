@@ -90,11 +90,22 @@ def _parse_skill_file(path: Path, source: str = "project") -> Skill | None:
 
     body = content.strip()
 
-    # For directory-format skills (name/SKILL.md), inject the base directory
-    # so the model can resolve relative file references via the Read tool.
+    # For directory-format skills (name/SKILL.md), prepend an explicit header
+    # explaining how to resolve relative file references (scripts/, references/,
+    # assets/, etc.) against the skill's on-disk location — NOT the workspace.
     if path.name == "SKILL.md":
         base_dir = str(path.parent.resolve())
-        body = f"Base directory for this skill: {base_dir}\n\n{body}"
+        header = (
+            f"Base directory for this skill: {base_dir}\n\n"
+            f"IMPORTANT: All relative paths in this skill (e.g. `scripts/foo.py`, "
+            f"`references/bar.md`, `assets/baz.md`) refer to files inside the base "
+            f"directory above — NOT the current workspace. When running scripts or "
+            f"reading reference files, you MUST prefix them with the base directory, "
+            f"for example:\n"
+            f"  python {base_dir}/scripts/foo.py <args>\n"
+            f"  Read({base_dir}/references/bar.md)\n"
+        )
+        body = f"{header}\n{body}"
 
     return Skill(
         name=name,

@@ -51,7 +51,7 @@ from scider.default.models import ModelCatalog, parse_model_spec, register_role
 
 # ==================== Page config ====================
 
-st.set_page_config(page_title="SciDER Chat", layout="centered")
+st.set_page_config(page_title="SciDER Chat", page_icon="🍎", layout="centered")
 
 st.markdown(
     """
@@ -595,8 +595,8 @@ if "workflow_runner" in st.session_state:
         )
         st.session_state.last_saved_memo = str(memo_dir)
 
-        # Show workspace browser for experiment/full workflows
-        if wc["type"] in ("experiment", "full"):
+        # Show workspace browser for any workflow that writes files (data/experiment/full)
+        if wc["type"] in ("data", "data_hypo", "experiment", "full"):
             st.session_state.show_workspace_result = True
 
         set_on_message_callback(None)

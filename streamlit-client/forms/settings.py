@@ -22,10 +22,12 @@ MODEL_ROLE_GROUPS = {
     },
     "Data Analysis": {
         "data": "Data analysis",
-        "critic": "Critic evaluation",
     },
     "Experiment": {
         "experiment": "Experiment agent",
+    },
+    "Critic": {
+        "critic": "Critic evaluation",
     },
     "System": {
         "history": "History compression",

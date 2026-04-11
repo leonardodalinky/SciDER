@@ -120,8 +120,9 @@ class DataWorkflow(BaseModel):
                 )
                 result_state = DataAgentState(**result)
 
-                # Prefer the result_state.history over captured (more complete)
-                self.data_agent_history = result_state.history
+                # Prefer `captured` (full pre-compact history via listener) over
+                # result_state.history, which compact() would have truncated.
+                self.data_agent_history = list(captured)
                 self.data_agent_intermediate_state = result_state.intermediate_state
                 self.data_summary = self._extract_data_summary(result_state)
 
