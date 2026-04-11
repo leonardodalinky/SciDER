@@ -164,12 +164,27 @@ def _execute_tool_calls(
         try:
             with ctx_mgr:
                 result = func(**args)
+
+            # ToolResult carries both text and image attachments; plain str
+            # results still work unchanged.
+            from ..tools.base import ToolResult as _ToolResult
+
+            if isinstance(result, _ToolResult):
+                text = result.text
+                images = [
+                    {"media_type": img.media_type, "data": img.data} for img in result.images
+                ] or None
+            else:
+                text = str(result)
+                images = None
+
             results.append(
                 Message(
                     role="tool",
                     tool_call_id=tool_call.id,
                     tool_name=tool_name,
-                    content=str(result),
+                    content=text,
+                    tool_result_images=images,
                 ).with_log()
             )
         except Exception as e:

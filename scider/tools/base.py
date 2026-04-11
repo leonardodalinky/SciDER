@@ -33,6 +33,30 @@ class ToolContext:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ToolImage:
+    """A single image attached to a tool result.
+
+    ``data`` is pure base64 (no ``data:...`` URL prefix).
+    """
+
+    media_type: str  # "image/png" | "image/jpeg" | "image/webp" | "image/gif"
+    data: str
+
+
+@dataclass
+class ToolResult:
+    """Structured tool result carrying both text and optional images.
+
+    Tools that only return text can still return a plain ``str`` from
+    ``call()``. Only tools that need to attach images (e.g. Read on a PNG)
+    need to return ``ToolResult``.
+    """
+
+    text: str
+    images: list[ToolImage] = field(default_factory=list)
+
+
 class BaseTool(ABC):
     """Base class for all new-style tools.
 
@@ -60,8 +84,12 @@ class BaseTool(ABC):
     prompt: ClassVar[str | None] = None
 
     @abstractmethod
-    def call(self, context: ToolContext, **kwargs) -> str:
-        """Execute the tool. kwargs come from validated input_schema."""
+    def call(self, context: ToolContext, **kwargs) -> "str | ToolResult":
+        """Execute the tool. kwargs come from validated input_schema.
+
+        Return a plain ``str`` for text-only results, or a ``ToolResult``
+        when the tool needs to attach images (e.g. reading an image file).
+        """
         ...
 
     def is_read_only(self, **kwargs) -> bool:

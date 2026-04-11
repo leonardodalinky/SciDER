@@ -67,7 +67,12 @@ def _get_agent_tools() -> list[str]:
 
 
 def _get_system_prompt() -> str:
-    return PROMPTS.experiment_agent.system_prompt.render(coding_backend=_get_coding_backend())
+    from scider.default.models.catalog import is_vision_model
+
+    return PROMPTS.experiment_agent.system_prompt.render(
+        coding_backend=_get_coding_backend(),
+        supports_vision=is_vision_model(LLM_NAME),
+    )
 
 
 def _build_system_context(agent_state: ExperimentAgentState) -> str:

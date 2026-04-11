@@ -21,6 +21,113 @@ class ZeroChoiceError(Exception):
     pass
 
 
+def _detect_provider(model_id: str) -> str:
+    """Infer the LLM provider family from a litellm model id.
+
+    Returns one of: ``"anthropic"``, ``"gemini"``, ``"openai"``, ``"other"``.
+    """
+    if not model_id:
+        return "other"
+    mid = model_id.lower()
+    if mid.startswith(("gemini/", "google/", "vertex_ai/")):
+        return "gemini"
+    if mid.startswith(("anthropic/", "claude-")) or "claude" in mid:
+        return "anthropic"
+    if mid.startswith(("openai/", "gpt-", "o1-", "o3-", "o4-")) or mid in {"o1", "o3", "o4"}:
+        return "openai"
+    return "other"
+
+
+def _serialize_messages_for_provider(
+    messages: "list[Message]",
+    litellm_model_id: str,
+) -> list:
+    """Serialize Message objects for the LLM Completion API, injecting
+    image attachments on tool results according to what each provider allows.
+
+    - Anthropic / Gemini: image blocks go inline on the tool message itself
+      as a multi-part ``content`` list. litellm maps ``image_url`` blocks to
+      each provider's native format.
+    - OpenAI (and unknown): tool messages only accept a text string, so the
+      tool result stays text-only and a synthetic user message carrying the
+      image is appended right after it.
+
+    Messages without ``tool_result_images`` go through the existing
+    ``to_ll_message()`` path unchanged.
+    """
+    provider = _detect_provider(litellm_model_id)
+    out: list = []
+    for msg in messages:
+        imgs = getattr(msg, "tool_result_images", None)
+        if msg.role == "tool" and imgs:
+            if provider in ("anthropic", "gemini"):
+                content_blocks: list[dict] = [{"type": "text", "text": msg.content or ""}]
+                for img in imgs:
+                    content_blocks.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                        }
+                    )
+                out.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": msg.tool_call_id,
+                        "content": content_blocks,
+                    }
+                )
+            else:
+                # OpenAI workaround: text-only tool result + synthetic user msg
+                out.append(msg.to_ll_message())
+                user_blocks: list[dict] = [
+                    {
+                        "type": "text",
+                        "text": f"[Image(s) from Read tool call {msg.tool_call_id}]",
+                    }
+                ]
+                for img in imgs:
+                    user_blocks.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                        }
+                    )
+                out.append({"role": "user", "content": user_blocks})
+        else:
+            out.append(msg.to_ll_message())
+    return out
+
+
+def _serialize_messages_for_responses_api(messages: "list[Message]") -> list:
+    """Serialize Message objects for OpenAI's Responses API input list.
+
+    Responses API only allows images in ``role: user`` message blocks, so a
+    tool result with attached images is emitted as the usual
+    ``function_call_output`` followed by a synthetic user message carrying
+    the images as ``input_image`` blocks.
+    """
+    out: list = []
+    for msg in messages:
+        imgs = getattr(msg, "tool_result_images", None)
+        out.extend(msg.to_ll_response_message())
+        if msg.role == "tool" and imgs:
+            content = [
+                {
+                    "type": "input_text",
+                    "text": f"[Image(s) from Read tool call {msg.tool_call_id}]",
+                }
+            ]
+            for img in imgs:
+                content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{img['media_type']};base64,{img['data']}",
+                    }
+                )
+            out.append({"type": "message", "role": "user", "content": content})
+    return out
+
+
 def function_to_json_schema(func_or_name: Callable | str) -> dict:
     if isinstance(func_or_name, str):
         tool = ToolRegistry.instance().tools[func_or_name]
@@ -160,9 +267,7 @@ class ModelRegistry:
                 .to_list()
             )
 
-            input = []
-            for msg in messages:
-                input.extend(msg.to_ll_response_message())
+            input = _serialize_messages_for_responses_api(messages)
 
             params = model_params.copy()
             params.update(kwargs)
@@ -251,7 +356,7 @@ class ModelRegistry:
             params.update(kwargs)
             params.update(
                 {
-                    "messages": (seq(messages).map(lambda msg: msg.to_ll_message()).to_list()),
+                    "messages": _serialize_messages_for_provider(messages, llm_model),
                     "tools": tools_json_schemas,
                     "tool_choice": tool_choice,
                 }

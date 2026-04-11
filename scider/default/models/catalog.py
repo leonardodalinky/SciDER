@@ -38,6 +38,9 @@ class ModelEntry:
     capabilities: list[str]
     requires_env: list[str] = field(default_factory=list)
     default_params: dict[str, Any] = field(default_factory=dict)
+    # ``True`` if the model accepts image inputs (multimodal vision).
+    # Used by agent prompts to conditionally advertise vision features.
+    supports_vision: bool = False
 
     def is_available(self) -> bool:
         return all(os.getenv(k) for k in self.requires_env)
@@ -71,6 +74,7 @@ class ModelCatalog:
                     capabilities=list(params.get("capabilities", [CAP_COMPLETION])),
                     requires_env=list(params.get("requires_env", [])),
                     default_params=dict(params.get("default_params", {}) or {}),
+                    supports_vision=bool(params.get("supports_vision", False)),
                 )
             cls._entries = entries
             cls._loaded_path = target
@@ -105,6 +109,40 @@ class ModelCatalog:
     def by_capability(cls, cap: str) -> list[ModelEntry]:
         cls._ensure_loaded()
         return [e for e in cls._entries.values() if cap in e.capabilities]
+
+    @classmethod
+    def by_litellm_id(cls, litellm_id: str) -> ModelEntry | None:
+        """Reverse lookup: find the catalog entry whose ``litellm_id`` matches.
+
+        Needed because ``ModelRegistry`` stores the litellm id rather than the
+        catalog id, so we can't go directly from a registered role back to the
+        original entry without this mapping.
+        """
+        cls._ensure_loaded()
+        for entry in cls._entries.values():
+            if entry.litellm_id == litellm_id:
+                return entry
+        return None
+
+
+def is_vision_model(role_name: str) -> bool:
+    """Return True iff the model currently registered for ``role_name``
+    supports multimodal image input.
+
+    Looks up ``role_name`` in the process-global ``ModelRegistry``, reads the
+    bound ``litellm_id``, and checks the catalog entry's ``supports_vision``
+    flag. Returns ``False`` if the role isn't registered yet or the model is
+    unknown to the catalog.
+    """
+    try:
+        params = ModelRegistry.instance().get_model_params(role_name)
+    except ValueError:
+        return False
+    litellm_id = params.get("model")
+    if not litellm_id:
+        return False
+    entry = ModelCatalog.by_litellm_id(litellm_id)
+    return bool(entry and entry.supports_vision)
 
 
 def parse_model_spec(spec: str) -> tuple[str, dict[str, Any]]:

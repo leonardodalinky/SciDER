@@ -47,10 +47,15 @@ AGENT_TOOLS = [
 def _get_system_prompt() -> str:
     """Get the stable system prompt (agent identity + guidelines).
 
-    This is the cacheable part — same for all sessions with this agent.
-    Loaded from YAML template with no dynamic variables.
+    The only dynamic variable is ``supports_vision``, which toggles the
+    visual-inspection guidance block based on whether the currently-bound
+    model for the ``data`` role accepts image inputs.
     """
-    return PROMPTS.data_agent.system_prompt.render()
+    from scider.default.models.catalog import is_vision_model
+
+    return PROMPTS.data_agent.system_prompt.render(
+        supports_vision=is_vision_model(LLM_NAME),
+    )
 
 
 def _build_system_context(agent_state: DataAgentState) -> str:

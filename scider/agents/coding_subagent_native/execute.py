@@ -34,7 +34,11 @@ AGENT_TOOLS = [
 
 
 def _get_system_prompt() -> str:
-    return PROMPTS.coding_subagent_native.system_prompt.render()
+    from scider.default.models.catalog import is_vision_model
+
+    return PROMPTS.coding_subagent_native.system_prompt.render(
+        supports_vision=is_vision_model(LLM_NAME),
+    )
 
 
 def _build_system_context(agent_state: NativeCodingAgentState) -> str:
