@@ -37,6 +37,7 @@ AgentName = Literal[
     "native_coding",
     "critic",
     "paper_search",
+    "writing",
 ]
 
 

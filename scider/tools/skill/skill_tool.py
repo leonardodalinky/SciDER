@@ -73,4 +73,10 @@ class SkillTool(BaseTool):
         if args:
             content = content.replace("$ARGUMENTS", args)
 
-        return f"## Skill: {s.name}\n\n{content}"
+        result = f"## Skill: {s.name}\n\n{content}"
+
+        # Cache the loaded skill so it survives autocompact.
+        if context.agent_state is not None:
+            context.agent_state.invoked_skills[s.name] = result
+
+        return result

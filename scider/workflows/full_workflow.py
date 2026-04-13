@@ -20,7 +20,9 @@ from pydantic import BaseModel, PrivateAttr
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
+from scider.workflows.paper_bootstrap import build_experimental_log, build_sparse_idea_from_query
 from scider.workflows.utils import get_separator
+from scider.workflows.writing_workflow import WritingWorkflow
 
 
 class FullWorkflow(BaseModel):
@@ -53,8 +55,18 @@ class FullWorkflow(BaseModel):
     experiment_agent_recursion_limit: int = 100
     data_desc: str | None = None  # Optional additional description of the data
 
+    # Paper writing phase (off by default)
+    run_paper_writing: bool = False
+    paper_workspace_path: Path | None = None
+    paper_template_dir_path: Path | None = None
+    paper_template_tex_path: Path | None = None
+    paper_conference_guidelines_path: Path | None = None
+    paper_agent_recursion_limit: int = 150
+
     # ==================== INTERNAL STATE ====================
-    current_phase: Literal["init", "data_analysis", "experiment", "complete", "failed"] = "init"
+    current_phase: Literal[
+        "init", "data_analysis", "experiment", "paper_writing", "complete", "failed"
+    ] = "init"
     data_summary: str = ""
     data_agent_history: list = []
 
@@ -70,9 +82,15 @@ class FullWorkflow(BaseModel):
     execution_results: list = []
     error_message: str | None = None
 
+    # Paper writing outputs (populated only if run_paper_writing=True)
+    paper_final_tex_path: Path | None = None
+    paper_final_pdf_path: Path | None = None
+    paper_writing_summary: str = ""
+
     # Internal: sub-workflows
     _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
+    _writing_workflow: "WritingWorkflow | None" = PrivateAttr(default=None)
 
     def run(self) -> "FullWorkflow":
         """
@@ -94,7 +112,11 @@ class FullWorkflow(BaseModel):
         # Step 2: Run ExperimentWorkflow
         self._run_experiment_phase()
 
-        # Step 3: Finalize
+        # Step 3: (Optional) Paper writing
+        if self.run_paper_writing and self.current_phase != "failed":
+            self._run_paper_writing_phase()
+
+        # Step 4: Finalize
         self._finalize()
 
         return self
@@ -175,6 +197,61 @@ class FullWorkflow(BaseModel):
             self.final_status = "failed"
             return False
 
+    def _run_paper_writing_phase(self) -> bool:
+        """Run the WritingWorkflow to turn the SciDER outputs into a paper."""
+        logger.info("Phase 3: Running WritingWorkflow for paper generation")
+        self.current_phase = "paper_writing"
+
+        idea_md = build_sparse_idea_from_query(self.user_query)
+        experiment_final_summary = (
+            self._experiment_workflow.final_summary if self._experiment_workflow else ""
+        )
+        experimental_log = build_experimental_log(
+            data_summary=self.data_summary,
+            experiment_summary=experiment_final_summary,
+            user_query=self.user_query,
+        )
+
+        return self._execute_writing_workflow(idea_md, experimental_log, experiment_final_summary)
+
+    def _execute_writing_workflow(
+        self, idea_md: str, experimental_log: str, experiment_summary: str
+    ) -> bool:
+        """Shared logic: instantiate, run, and extract results from WritingWorkflow."""
+        from scider.workflows.utils import run_paper_writing_phase
+
+        try:
+            self._writing_workflow = run_paper_writing_phase(
+                workspace_path=self.workspace_path,
+                idea_md=idea_md,
+                experimental_log=experimental_log,
+                user_query=self.user_query,
+                data_summary=self.data_summary,
+                experiment_summary=experiment_summary,
+                paper_workspace_path=self.paper_workspace_path,
+                paper_template_dir_path=self.paper_template_dir_path,
+                paper_template_tex_path=self.paper_template_tex_path,
+                paper_conference_guidelines_path=self.paper_conference_guidelines_path,
+                paper_agent_recursion_limit=self.paper_agent_recursion_limit,
+            )
+            if self._writing_workflow.final_status != "success":
+                self.error_message = (
+                    self._writing_workflow.error_message or "WritingWorkflow failed"
+                )
+                self.current_phase = "failed"
+                return False
+
+            self.paper_final_tex_path = self._writing_workflow.final_tex_path
+            self.paper_final_pdf_path = self._writing_workflow.final_pdf_path
+            self.paper_writing_summary = self._writing_workflow.final_summary
+            logger.info("WritingWorkflow completed successfully")
+            return True
+        except Exception as e:
+            logger.exception("WritingWorkflow failed")
+            self.error_message = f"WritingWorkflow failed: {e}"
+            self.current_phase = "failed"
+            return False
+
     def _compose_summary(self) -> str:
         """Compose the final summary."""
         exp_summary = (
@@ -183,6 +260,20 @@ class FullWorkflow(BaseModel):
         current_revision = (
             self._experiment_workflow.current_revision if self._experiment_workflow else 0
         )
+
+        paper_section = ""
+        if self.run_paper_writing and self._writing_workflow is not None:
+            paper_section = f"""
+
+---
+
+## Paper
+
+{self.paper_writing_summary or "(no writing report available)"}
+
+**Final LaTeX**: {self.paper_final_tex_path or "N/A"}
+**Final PDF**: {self.paper_final_pdf_path or "N/A"}
+"""
 
         return f"""# Full SciDER Workflow Summary
 
@@ -194,7 +285,7 @@ class FullWorkflow(BaseModel):
 
 ## Experiment Results
 
-{exp_summary}
+{exp_summary}{paper_section}
 
 ---
 
@@ -240,6 +331,12 @@ def run_full_workflow(
     experiment_agent_recursion_limit: int = 100,
     data_desc: str | None = None,
     user_approval_enabled: bool = False,
+    run_paper_writing: bool = False,
+    paper_workspace_path: str | Path | None = None,
+    paper_template_dir_path: str | Path | None = None,
+    paper_template_tex_path: str | Path | None = None,
+    paper_conference_guidelines_path: str | Path | None = None,
+    paper_agent_recursion_limit: int = 150,
 ) -> FullWorkflow:
     """
     Convenience function to run the full SciDER workflow.
@@ -278,6 +375,14 @@ def run_full_workflow(
         data_agent_recursion_limit=data_agent_recursion_limit,
         experiment_agent_recursion_limit=experiment_agent_recursion_limit,
         data_desc=data_desc,
+        run_paper_writing=run_paper_writing,
+        paper_workspace_path=Path(paper_workspace_path) if paper_workspace_path else None,
+        paper_template_dir_path=Path(paper_template_dir_path) if paper_template_dir_path else None,
+        paper_template_tex_path=Path(paper_template_tex_path) if paper_template_tex_path else None,
+        paper_conference_guidelines_path=(
+            Path(paper_conference_guidelines_path) if paper_conference_guidelines_path else None
+        ),
+        paper_agent_recursion_limit=paper_agent_recursion_limit,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

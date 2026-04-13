@@ -1,0 +1,55 @@
+\documentclass{article}
+
+% --- SciDER "simple" default LaTeX template ---
+% A minimal article-class skeleton with the sections the PaperOrchestra
+% pipeline expects. Swap this out by passing ``paper_template_tex_path`` to
+% the workflow when you want a venue-specific style file (NeurIPS, ICLR,
+% CVPR, etc.).
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{cleveref}
+
+\title{TODO: Paper Title}
+
+\author{Anonymous Author(s) \\
+Affiliation \\
+\texttt{email@example.com}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO: fill with Abstract content (Step 4 — section-writing-agent).
+\end{abstract}
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+% Section Writing Agent preserves this section verbatim from that file.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+% Preserved verbatim by Step 4.
+
+\section{Methodology}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\section{Experiments}
+% TODO: filled by Step 4 using experimental_log.md (Raw Numeric Data + booktabs
+% tables) and figures/ (multimodal input).
+
+\section{Conclusion}
+% TODO: filled by Step 4. Keep brief — summarize contributions and future work.
+
+\clearpage
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

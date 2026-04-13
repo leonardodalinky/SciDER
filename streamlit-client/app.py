@@ -96,6 +96,9 @@ _AGENT_LABELS = {
     "experiment": "🧪 Experiment Agent",
     "experiment_agent": "🧪 Experiment Agent",
     "experiment_coding": "💻 Coding Subagent",
+    # Writing
+    "writing": "📝 Writing Agent",
+    "writing_agent": "📝 Writing Agent",
     # Coding backends
     "claude_agent_sdk": "🤖 Claude Agent SDK",
     "claude_code": "🤖 Claude Code",

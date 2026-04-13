@@ -327,6 +327,10 @@ class HistoryState(BaseModel):
     history: list[Message] = []
     node_history: list[str] = [START]
 
+    # Skills invoked during this agent loop (name → content).
+    # Persisted across autocompact so the agent doesn't need to re-load them.
+    invoked_skills: dict[str, str] = {}
+
     @property
     def messages(self) -> list[Message]:
         """Return messages after the last compact boundary.

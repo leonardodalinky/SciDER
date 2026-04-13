@@ -8,6 +8,7 @@ This package contains different workflow implementations:
 - experiment_workflow: Partial workflow for experiment execution only (ExperimentAgent)
 - ideation_workflow: Partial workflow for research ideation only (IdeationAgent)
 - hypo_data_workflow: Generates synthetic data, then analyzes it
+- writing_workflow: Partial workflow for paper writing only (WritingAgent, PaperOrchestra)
 """
 
 from .data_workflow import DataWorkflow, run_data_workflow
@@ -16,6 +17,7 @@ from .full_workflow import FullWorkflow, run_full_workflow
 from .full_workflow_with_ideation import FullWorkflowWithIdeation, run_full_workflow_with_ideation
 from .hypo_data_workflow import HypoDataWorkflow, run_hypo_data_workflow
 from .ideation_workflow import IdeationWorkflow, run_ideation_workflow
+from .writing_workflow import WritingWorkflow, run_writing_workflow
 
 __all__ = [
     # Full workflows
@@ -32,4 +34,6 @@ __all__ = [
     "run_hypo_data_workflow",
     "ExperimentWorkflow",
     "run_experiment_workflow",
+    "WritingWorkflow",
+    "run_writing_workflow",
 ]
