@@ -33,7 +33,9 @@ def _get_system_prompt() -> str:
 
 
 def _build_system_context(agent_state: IdeationAgentState) -> str:
-    parts = [f"date: {datetime.now().strftime('%Y-%m-%d')}"]
+    from scider.core.utils import detect_python_runtime
+
+    parts = [f"date: {datetime.now().strftime('%Y-%m-%d')}", detect_python_runtime()]
     if agent_state.research_domain:
         parts.append(f"research_domain: {agent_state.research_domain}")
     return "<system-reminder>\n" + "\n".join(parts) + "\n</system-reminder>"

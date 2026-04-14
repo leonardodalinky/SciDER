@@ -56,10 +56,14 @@ def _get_system_prompt() -> str:
 
 def _build_system_context(agent_state: WritingAgentState) -> str:
     """Build per-session context: paper workspace + SciDER workspace + date."""
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+
     parts = [
         f"paper_workspace (cwd): {agent_state.workspace.working_dir}",
         f"scider_workspace (read-only source): {agent_state.scider_workspace}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        detect_python_runtime(),
+        detect_gpu_runtime(),
     ]
     return (
         "<system-reminder>\n"

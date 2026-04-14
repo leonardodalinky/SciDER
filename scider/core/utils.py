@@ -163,6 +163,105 @@ def array_to_bullets(arr: list[str]) -> str:
     return "\n".join([f"- {s}" for s in arr])
 
 
+_python_runtime_cache: str | None = None
+
+
+def detect_python_runtime() -> str:
+    """Detect the Python runtime environment (uv or plain python).
+
+    Probes once and caches the result. Returns a short string suitable for
+    injection into agent system context, e.g.:
+
+        "python_runtime: uv (use `uv run python ...` and `uv add ...`)"
+        "python_runtime: python (use `python ...` and `pip install ...`)"
+    """
+    global _python_runtime_cache
+    if _python_runtime_cache is not None:
+        return _python_runtime_cache
+
+    import shutil
+    import subprocess
+
+    if shutil.which("uv"):
+        try:
+            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
+            version = result.stdout.strip() if result.returncode == 0 else "uv"
+            _python_runtime_cache = (
+                f"python_runtime: {version}\n"
+                "  Use `uv run python script.py` to execute scripts (NOT `python script.py`).\n"
+                "  Use `uv add <package>` to install packages (NOT `pip install`).\n"
+                "  Use `uv run pytest` to run tests."
+            )
+        except Exception:
+            _python_runtime_cache = (
+                "python_runtime: uv (detected but version check failed)\n"
+                "  Use `uv run python script.py` and `uv add <package>`."
+            )
+    else:
+        _python_runtime_cache = (
+            "python_runtime: python\n"
+            "  Use `python script.py` to execute scripts.\n"
+            "  Use `pip install <package>` to install packages."
+        )
+
+    return _python_runtime_cache
+
+
+_gpu_runtime_cache: str | None = None
+
+
+def detect_gpu_runtime() -> str:
+    """Detect NVIDIA GPU availability via nvidia-smi.
+
+    Probes once and caches the result. Returns a short string suitable for
+    injection into agent system context.
+    """
+    global _gpu_runtime_cache
+    if _gpu_runtime_cache is not None:
+        return _gpu_runtime_cache
+
+    import shutil
+    import subprocess
+
+    if not shutil.which("nvidia-smi"):
+        _gpu_runtime_cache = "gpu: none detected (nvidia-smi not found). Use CPU-only code."
+        return _gpu_runtime_cache
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            _gpu_runtime_cache = "gpu: nvidia-smi failed. Assume CPU-only."
+            return _gpu_runtime_cache
+
+        lines = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+        if not lines:
+            _gpu_runtime_cache = "gpu: none detected. Use CPU-only code."
+            return _gpu_runtime_cache
+
+        gpu_count = len(lines)
+        gpu_descriptions = []
+        for i, line in enumerate(lines):
+            parts = [p.strip() for p in line.split(",")]
+            name = parts[0] if parts else "Unknown"
+            mem = f"{parts[1]} MiB" if len(parts) > 1 else "unknown memory"
+            gpu_descriptions.append(f"  GPU {i}: {name} ({mem})")
+
+        _gpu_runtime_cache = (
+            f"gpu: {gpu_count} NVIDIA GPU(s) available\n"
+            + "\n".join(gpu_descriptions)
+            + "\n  PyTorch/TensorFlow can use CUDA. Prefer GPU when training models."
+        )
+    except Exception:
+        _gpu_runtime_cache = "gpu: detection failed. Assume CPU-only."
+
+    return _gpu_runtime_cache
+
+
 def get_git_status(cwd: str | None = None, max_status_chars: int = 2000) -> str | None:
     """Get a git status snapshot for context injection.
 

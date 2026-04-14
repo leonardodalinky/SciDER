@@ -76,9 +76,13 @@ def _get_system_prompt() -> str:
 
 
 def _build_system_context(agent_state: ExperimentAgentState) -> str:
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        detect_python_runtime(),
+        detect_gpu_runtime(),
     ]
     if agent_state.repo_source:
         parts.append(f"repo_source: {agent_state.repo_source}")

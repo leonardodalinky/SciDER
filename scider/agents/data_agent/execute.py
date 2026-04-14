@@ -64,9 +64,13 @@ def _build_system_context(agent_state: DataAgentState) -> str:
     Injected as a <system-reminder> user message at the start of conversation.
     Contains environment info that changes per session.
     """
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        detect_python_runtime(),
+        detect_gpu_runtime(),
     ]
     return (
         "<system-reminder>\n"

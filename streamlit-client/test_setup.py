@@ -35,7 +35,6 @@ def test_imports():
         return False
 
     try:
-        from scider.core.brain import Brain
         from scider.core.llms import ModelRegistry
 
         print("  ✅ SciDER core modules imported successfully")
@@ -107,11 +106,8 @@ def test_streamlit_files():
     client_dir = Path(__file__).parent
     required_files = [
         "app.py",
-        "app_enhanced.py",
-        "display_components.py",
-        "workflow_monitor.py",
-        "requirements.txt",
-        "README.md",
+        "settings.py",
+        "utils.py",
     ]
 
     all_exist = True
@@ -173,7 +169,5 @@ def main():
         return 1
 
 
-if __name__ == "__main__":
-    sys.exit(main())
 if __name__ == "__main__":
     sys.exit(main())

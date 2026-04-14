@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 from contextlib import AbstractContextManager
 from pathlib import Path
 
@@ -26,6 +28,37 @@ class LocalEnv(AbstractContextManager, BaseModel):
                 self.working_dir.mkdir(parents=True, exist_ok=True)
             else:
                 raise FileNotFoundError(f"Directory {self.working_dir} does not exist")
+
+        # If uv is available and the workspace has no pyproject.toml yet,
+        # initialise an isolated Python project so that `uv run` / `uv add`
+        # operate on the workspace's own venv instead of SciDER's.
+        self._ensure_uv_project()
+
+    def _ensure_uv_project(self) -> None:
+        """If uv is available and the workspace lacks pyproject.toml, run `uv init`."""
+        if not shutil.which("uv"):
+            return
+        if (self.working_dir / "pyproject.toml").exists():
+            return
+        try:
+            result = subprocess.run(
+                ["uv", "init", "--no-readme", "--no-pin-python", "--vcs", "none"],
+                cwd=str(self.working_dir),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                # Remove default boilerplate files that uv init creates
+                for name in ("hello.py", "main.py"):
+                    p = self.working_dir / name
+                    if p.exists():
+                        p.unlink()
+                logger.debug("uv init: created isolated project in {}", self.working_dir)
+            else:
+                logger.debug("uv init failed (rc={}): {}", result.returncode, result.stderr.strip())
+        except Exception as e:
+            logger.debug("uv init skipped: {}", e)
 
     def __enter__(self) -> "LocalEnv":
         """Switch into the directory, and return the context."""
