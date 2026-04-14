@@ -47,10 +47,15 @@ AGENT_TOOLS = [
 def _get_system_prompt() -> str:
     """Get the stable system prompt (agent identity + guidelines).
 
-    This is the cacheable part — same for all sessions with this agent.
-    Loaded from YAML template with no dynamic variables.
+    The only dynamic variable is ``supports_vision``, which toggles the
+    visual-inspection guidance block based on whether the currently-bound
+    model for the ``data`` role accepts image inputs.
     """
-    return PROMPTS.data_agent.system_prompt.render()
+    from scider.default.models.catalog import is_vision_model
+
+    return PROMPTS.data_agent.system_prompt.render(
+        supports_vision=is_vision_model(LLM_NAME),
+    )
 
 
 def _build_system_context(agent_state: DataAgentState) -> str:
@@ -59,9 +64,13 @@ def _build_system_context(agent_state: DataAgentState) -> str:
     Injected as a <system-reminder> user message at the start of conversation.
     Contains environment info that changes per session.
     """
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        detect_python_runtime(),
+        detect_gpu_runtime(),
     ]
     return (
         "<system-reminder>\n"

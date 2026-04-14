@@ -17,6 +17,7 @@ class Prompts:
     critic_agent: "CriticAgentPrompts"
     ideation_agent: "IdeationAgentPrompts"
     experiment_agent: "ExperimentAgentPrompts"
+    writing_agent: "WritingAgentPrompts"
     coding_subagent_native: "NativeCodingSubagentPrompts"
     history: "HistoryPrompts"
     paper_subagent: "PaperSubagentPrompts"
@@ -46,6 +47,13 @@ class IdeationAgentPrompts:
 
 @dataclass
 class ExperimentAgentPrompts:
+    system_prompt: Template
+    summary_system_prompt: Template
+    summary_user_prompt: Template
+
+
+@dataclass
+class WritingAgentPrompts:
     system_prompt: Template
     summary_system_prompt: Template
     summary_user_prompt: Template
@@ -103,6 +111,9 @@ def init():
         ),
         experiment_agent=parse_yaml_as_templates(
             ExperimentAgentPrompts, DIR / "experiment_agent_prompt.yaml"
+        ),
+        writing_agent=parse_yaml_as_templates(
+            WritingAgentPrompts, DIR / "writing_agent_prompt.yaml"
         ),
         coding_subagent_native=parse_yaml_as_templates(
             NativeCodingSubagentPrompts, DIR / "coding_subagent_native_prompt.yaml"

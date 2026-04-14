@@ -69,8 +69,14 @@ class StreamlitApprovalHandler(ApprovalHandler):
         is_meta: bool = False,
         is_tool: bool = False,
         tool_name: str | None = None,
+        images: list[dict] | None = None,
     ) -> None:
-        """Push a message for the UI thread to display (thread-safe)."""
+        """Push a message for the UI thread to display (thread-safe).
+
+        ``images`` is the tool-result image list — each entry is
+        ``{"media_type": "image/png", "data": "<base64>"}`` — and is only
+        set for tool results produced by image-aware tools like Read.
+        """
         with self._lock:
             self._live_messages.append(
                 {
@@ -80,6 +86,7 @@ class StreamlitApprovalHandler(ApprovalHandler):
                     "is_meta": is_meta,
                     "is_tool": is_tool,
                     "tool_name": tool_name,
+                    "images": images,
                 }
             )
 

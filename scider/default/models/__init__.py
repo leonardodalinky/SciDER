@@ -6,6 +6,7 @@ from scider.default.models.catalog import (
     PRESETS_DIR,
     ModelCatalog,
     ModelEntry,
+    is_vision_model,
     parse_model_spec,
     register_defaults_from_yaml,
     register_preset,
@@ -25,6 +26,7 @@ __all__ = [
     # Unified catalog API (preferred)
     "ModelCatalog",
     "ModelEntry",
+    "is_vision_model",
     "parse_model_spec",
     "register_role",
     "register_defaults_from_yaml",

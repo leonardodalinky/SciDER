@@ -4,6 +4,10 @@
 # provider. Each entry declares its provider, LiteLLM model id, what it can do
 # (capabilities), which env vars are required, and any default LiteLLM kwargs.
 #
+# ``supports_vision: true`` means the model accepts image inputs. When a role's
+# registered model has vision, the corresponding agent's system prompt includes
+# extra guidance about using Read on images and verifying matplotlib plots.
+#
 # Add a new model: drop a new entry here, then optionally point a role at it
 # via model_settings/role_defaults.yaml or via the frontend Settings page.
 
@@ -13,6 +17,7 @@ models:
     provider: gemini
     litellm_id: gemini/gemini-2.5-flash-lite
     capabilities: [completion]
+    supports_vision: true
     requires_env: [GEMINI_API_KEY]
     default_params:
       reasoning_effort: low
@@ -21,6 +26,7 @@ models:
     provider: gemini
     litellm_id: gemini/gemini-2.5-flash
     capabilities: [completion]
+    supports_vision: true
     requires_env: [GEMINI_API_KEY]
     default_params:
       reasoning_effort: low
@@ -29,6 +35,16 @@ models:
     provider: gemini
     litellm_id: gemini/gemini-2.5-pro
     capabilities: [completion]
+    supports_vision: true
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-3.1-flash-lite-preview:
+    provider: gemini
+    litellm_id: gemini/gemini-3.1-flash-lite-preview
+    capabilities: [completion]
+    supports_vision: true
     requires_env: [GEMINI_API_KEY]
     default_params:
       reasoning_effort: low
@@ -37,14 +53,16 @@ models:
     provider: gemini
     litellm_id: gemini/gemini-3-flash-preview
     capabilities: [completion]
+    supports_vision: true
     requires_env: [GEMINI_API_KEY]
     default_params:
       reasoning_effort: low
 
-  gemini-3-pro-preview:
+  gemini-3.1-pro-preview:
     provider: gemini
-    litellm_id: gemini/gemini-3-pro-preview
+    litellm_id: gemini/gemini-3.1-pro-preview
     capabilities: [completion]
+    supports_vision: true
     requires_env: [GEMINI_API_KEY]
     default_params:
       reasoning_effort: low
@@ -54,6 +72,7 @@ models:
     provider: openai
     litellm_id: gpt-5-nano
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
     default_params:
       reasoning:
@@ -63,6 +82,7 @@ models:
     provider: openai
     litellm_id: gpt-5-mini
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
     default_params:
       reasoning:
@@ -72,6 +92,7 @@ models:
     provider: openai
     litellm_id: gpt-5
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
     default_params:
       reasoning:
@@ -81,6 +102,7 @@ models:
     provider: openai
     litellm_id: gpt-5-pro
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
     default_params:
       reasoning:
@@ -90,63 +112,74 @@ models:
     provider: openai
     litellm_id: gpt-5-chat
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
 
   o1-mini:
     provider: openai
     litellm_id: o1-mini
     capabilities: [completion]
+    supports_vision: false  # text-only; vision never shipped for o1-mini
     requires_env: [OPENAI_API_KEY]
 
   o3-mini:
     provider: openai
     litellm_id: o3-mini
     capabilities: [completion]
+    supports_vision: false  # o3-mini is text-only per OpenAI docs
     requires_env: [OPENAI_API_KEY]
 
   o3:
     provider: openai
     litellm_id: o3
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
 
   o4-mini:
     provider: openai
     litellm_id: o4-mini
     capabilities: [completion]
+    supports_vision: true
     requires_env: [OPENAI_API_KEY]
 
   # ---- Anthropic (completion) ----
   # Used by experiment_coding role when CODING_AGENT_VERSION=claude_sdk, but
   # also callable directly via litellm if you'd rather mix Claude in elsewhere.
+  # All current Claude 4.x models accept image inputs.
   claude-haiku-4-5:
     provider: anthropic
     litellm_id: anthropic/claude-haiku-4-5
     capabilities: [completion]
+    supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
 
   claude-sonnet-4-5:
     provider: anthropic
     litellm_id: anthropic/claude-sonnet-4-5
     capabilities: [completion]
+    supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
 
   claude-sonnet-4-6:
     provider: anthropic
     litellm_id: anthropic/claude-sonnet-4-6
     capabilities: [completion]
+    supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
 
   claude-opus-4-5:
     provider: anthropic
     litellm_id: anthropic/claude-opus-4-5
     capabilities: [completion]
+    supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
 
   claude-opus-4-6:
     provider: anthropic
     litellm_id: anthropic/claude-opus-4-6
     capabilities: [completion]
+    supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
 
   # ---- Embedding ----

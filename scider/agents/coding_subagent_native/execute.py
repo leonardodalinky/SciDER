@@ -34,13 +34,21 @@ AGENT_TOOLS = [
 
 
 def _get_system_prompt() -> str:
-    return PROMPTS.coding_subagent_native.system_prompt.render()
+    from scider.default.models.catalog import is_vision_model
+
+    return PROMPTS.coding_subagent_native.system_prompt.render(
+        supports_vision=is_vision_model(LLM_NAME),
+    )
 
 
 def _build_system_context(agent_state: NativeCodingAgentState) -> str:
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        detect_python_runtime(),
+        detect_gpu_runtime(),
     ]
     return (
         "<system-reminder>\n"

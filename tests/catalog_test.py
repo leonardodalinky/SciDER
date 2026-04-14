@@ -11,6 +11,7 @@ from scider.default.models import (
     CAP_COMPLETION,
     CAP_EMBEDDING,
     ModelCatalog,
+    is_vision_model,
     parse_model_spec,
     register_defaults_from_yaml,
     register_role,
@@ -152,3 +153,58 @@ def test_register_role_with_inline_overrides(monkeypatch):
     assert params["model"] == "gemini/gemini-2.5-pro"
     assert params["reasoning_effort"] == "high"
     assert params["temperature"] == 0.3
+
+
+# --- vision capability tests ---
+
+
+class TestVisionCapability:
+    """``supports_vision`` is loaded from catalog.yaml and surfaced via
+    ``ModelEntry.supports_vision`` + ``is_vision_model(role_name)``.
+    """
+
+    def test_vision_flag_loaded_from_yaml(self):
+        # Representative models from each provider known to have vision.
+        for mid in (
+            "gemini-2.5-pro",
+            "gemini-3.1-pro-preview",
+            "gpt-5",
+            "gpt-5-mini",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6",
+            "o3",
+            "o4-mini",
+        ):
+            entry = ModelCatalog.get(mid)
+            assert entry is not None, f"{mid} missing from catalog"
+            assert entry.supports_vision is True, f"{mid} expected vision=True"
+
+    def test_text_only_models_flagged_false(self):
+        for mid in ("o1-mini", "o3-mini"):
+            entry = ModelCatalog.get(mid)
+            assert entry is not None
+            assert entry.supports_vision is False, f"{mid} expected vision=False"
+
+    def test_embedding_models_have_no_vision_flag(self):
+        entry = ModelCatalog.get("text-embedding-3-small")
+        assert entry is not None
+        assert entry.supports_vision is False
+
+    def test_by_litellm_id_reverse_lookup(self):
+        entry = ModelCatalog.by_litellm_id("gemini/gemini-2.5-pro")
+        assert entry is not None
+        assert entry.id == "gemini-2.5-pro"
+
+        # Unknown litellm id returns None
+        assert ModelCatalog.by_litellm_id("no/such-model") is None
+
+    def test_is_vision_model_for_registered_role(self, monkeypatch):
+        _set_env(monkeypatch, GEMINI_API_KEY="g", OPENAI_API_KEY="o")
+        register_role("experiment", "gemini-2.5-pro")
+        register_role("experiment_coding", "o3-mini")
+
+        assert is_vision_model("experiment") is True
+        assert is_vision_model("experiment_coding") is False
+
+    def test_is_vision_model_for_unregistered_role(self):
+        assert is_vision_model("definitely_not_a_registered_role") is False

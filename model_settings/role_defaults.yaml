@@ -16,4 +16,7 @@ defaults:
   history: gemini-2.5-flash
   experiment: gemini-2.5-pro[reasoning_effort=low]
   experiment_coding: gemini-2.5-pro[reasoning_effort=low]
+  # Paper writing agent — requires a vision model to read generated figures
+  # and embed them in LaTeX (section-writing-agent's multimodal call).
+  writing: gemini-3-flash-preview[reasoning_effort=medium]
   embedding: text-embedding-3-small

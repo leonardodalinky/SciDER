@@ -1,4 +1,52 @@
+from __future__ import annotations
+
 import shutil
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from loguru import logger
+
+if TYPE_CHECKING:
+    from scider.workflows.writing_workflow import WritingWorkflow
+
+
+def run_paper_writing_phase(
+    *,
+    workspace_path: Path,
+    idea_md: str,
+    experimental_log: str,
+    user_query: str,
+    data_summary: str,
+    experiment_summary: str,
+    paper_workspace_path: Path | None,
+    paper_template_dir_path: Path | None,
+    paper_template_tex_path: Path | None,
+    paper_conference_guidelines_path: Path | None,
+    paper_agent_recursion_limit: int,
+) -> "WritingWorkflow":
+    """Shared paper writing phase used by both FullWorkflow and FullWorkflowWithIdeation.
+
+    Returns the completed WritingWorkflow instance.
+    Raises on failure (caller should catch and set error state).
+    """
+    from scider.workflows.writing_workflow import WritingWorkflow
+
+    wf = WritingWorkflow(
+        scider_workspace_path=workspace_path,
+        paper_workspace_path=paper_workspace_path,
+        idea_summary=idea_md,
+        experimental_log=experimental_log,
+        user_query=user_query,
+        template_dir_path=paper_template_dir_path,
+        template_tex_path=paper_template_tex_path,
+        conference_guidelines_path=paper_conference_guidelines_path,
+        figures_src_path=workspace_path / "imgs",
+        data_summary=data_summary,
+        experiment_summary=experiment_summary,
+        recursion_limit=paper_agent_recursion_limit,
+    )
+    wf.run()
+    return wf
 
 
 def get_separator(margin: int = 4, char: str = "=") -> str:

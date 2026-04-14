@@ -115,6 +115,7 @@ class Message(LLMessage):
         "persisted_content_path",
         "content_before_snip",
         "finish_reason",
+        "tool_result_images",
     ]
 
     # --- tool call fields ---
@@ -142,6 +143,11 @@ class Message(LLMessage):
     # Original content before Level 2 snip replaced it with a placeholder.
     # Kept in memory for debugging — not sent to LLM.
     content_before_snip: str | None = None
+    # Images attached to a tool result (role=="tool"). Each entry is
+    # ``{"media_type": "image/png", "data": "<pure base64>"}``. Excluded from
+    # the raw LLMessage dict; injected into the LLM payload by the
+    # provider-aware serializer in ``scider/core/llms.py``.
+    tool_result_images: list[dict] | None = None
 
     @classmethod
     def from_ll_message(cls, msg: LLMessage) -> "Message":
@@ -320,6 +326,10 @@ class HistoryState(BaseModel):
     # Autocompact replaces messages in-place (boundary marker + summary).
     history: list[Message] = []
     node_history: list[str] = [START]
+
+    # Skills invoked during this agent loop (name → content).
+    # Persisted across autocompact so the agent doesn't need to re-load them.
+    invoked_skills: dict[str, str] = {}
 
     @property
     def messages(self) -> list[Message]:

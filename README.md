@@ -36,6 +36,7 @@ pinned: false
 - [Development Guide](#development-guide)
 - [Benchmarks](#benchmarks)
 - [Feedback and Contributions](#feedback-and-contributions)
+- [Reference](#reference)
 
 ## Installation
 
@@ -232,3 +233,19 @@ See [BENCHMARKS](./benchmarks) for details on the benchmarks we have conducted t
 We welcome contributions to improve SciDER. Please open an issue or submit a pull request on our GitHub repository.
 
 Also, any feedback on the project is greatly appreciated. You can fill the [feedback form](https://forms.gle/Vz4K55J8ePTEs6TU8) to rate this app and help to improve the project.
+
+## Reference
+
+If you find SciDER useful in your research, please consider citing our paper:
+
+```bibtex
+@article{lin2026scider,
+  title={SciDER: Scientific Data-centric End-to-end Researcher},
+  author={Lin, Ke and Lu, Yilin and Bhat, Shreyas and Guo, Xuehang and Oliva, Junier and Wang, Qingyun},
+  journal={arXiv preprint arXiv:2603.01421},
+  year={2026},
+  doi={10.48550/arXiv.2603.01421}
+}
+```
+
+Paper: [arXiv:2603.01421](https://arxiv.org/abs/2603.01421) · DOI: [10.48550/arXiv.2603.01421](https://doi.org/10.48550/arXiv.2603.01421)

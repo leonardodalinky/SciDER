@@ -29,6 +29,9 @@ MODEL_ROLE_GROUPS = {
     "Critic": {
         "critic": "Critic evaluation",
     },
+    "Paper Writing": {
+        "writing": "Writing agent",
+    },
     "System": {
         "history": "History compression",
     },

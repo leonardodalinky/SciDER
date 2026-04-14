@@ -9,12 +9,15 @@ Modeled after Claude Code's FileReadTool. Key features:
 
 from __future__ import annotations
 
+import base64
+import io
 import os
 from pathlib import Path
 
+from loguru import logger
 from pydantic import BaseModel, Field
 
-from ...base import BaseTool, ToolContext
+from ...base import BaseTool, ToolContext, ToolImage, ToolResult
 from .._utils import TEXT_TYPES, guess_file_type
 
 # Default and maximum line limits
@@ -24,6 +27,24 @@ MAX_LINE_LIMIT = 10000
 MAX_FILE_SIZE_BYTES = 256 * 1024
 # Max file size for streaming read path (10 MB)
 MAX_STREAM_FILE_SIZE_BYTES = 10 * 1024 * 1024
+
+# Image payload limit — payload larger than this is compressed before being
+# attached to the tool result. Matches typical per-image limits of Claude and
+# Gemini APIs.
+MAX_IMAGE_PAYLOAD_BYTES = 5 * 1024 * 1024
+
+# Extensions SciDER knows how to encode and send as an image to the LLM.
+# Other image extensions (BMP, TIFF, SVG, ICO) fall back to text metadata.
+SUPPORTED_IMAGE_MIME: dict[str, str] = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
+
+# JPEG quality ladder for compression — tried in order until payload fits.
+_JPEG_QUALITY_LADDER = [90, 80, 70, 60, 50, 40]
 
 # Binary extensions that should not be read as text
 BINARY_EXTENSIONS = {
@@ -95,9 +116,12 @@ class ReadFileTool(BaseTool):
     name = "Read"
     description = (
         "Read a file from the filesystem. "
-        "Output includes line numbers prefixed as 'N\\tLINE'. "
-        "Use offset and limit for large files. "
-        "Binary files (images, archives, etc.) return metadata only."
+        "Text files: output includes line numbers prefixed as 'N\\tLINE'; "
+        "use offset and limit for large files. "
+        "Image files (PNG/JPEG/WebP/GIF): if your model supports vision, "
+        "the actual image is attached to the tool result so you can see it; "
+        "oversized images are auto-compressed. "
+        "Other binary files (archives, PDFs, audio, video) return text metadata only."
     )
     input_schema = ReadFileInput
     _always_read_only = True
@@ -108,8 +132,12 @@ class ReadFileTool(BaseTool):
         "- Use Read to read files instead of Bash with cat/head/tail.\n"
         "- Output includes line numbers. For large files, use `offset` and `limit` to read specific sections.\n"
         "- `offset` is 1-indexed (first line is 1). Default limit is 2000 lines.\n"
-        "- Binary files (images, archives) return metadata, not content.\n"
         "- Files larger than 256KB are rejected — use offset/limit to read in sections.\n"
+        "- **Images** (PNG, JPEG, WebP, GIF): if your model has vision, Read attaches "
+        "the actual image to the tool result and you will see its visual content alongside "
+        "text metadata (dimensions, file size). Oversized images (>5 MB) are auto-compressed. "
+        "Use this to inspect plots, figures, screenshots, and any image data in the workspace.\n"
+        "- Other binary files (archives, PDFs, media) return text metadata only — no content.\n"
     )
 
     def call(
@@ -119,7 +147,7 @@ class ReadFileTool(BaseTool):
         file_path: str,
         offset: int | None = None,
         limit: int | None = None,
-    ) -> str:
+    ) -> "str | ToolResult":
         file_path = os.path.expandvars(os.path.expanduser(file_path))
 
         # Validate file exists
@@ -267,8 +295,17 @@ def _read_large_file(file_path: str, start_line: int, max_lines: int, file_size:
     return "\n".join(parts)
 
 
-def _handle_binary_file(file_path: str, ext: str) -> str:
-    """Return metadata for binary files."""
+def _handle_binary_file(file_path: str, ext: str) -> "str | ToolResult":
+    """Return metadata for binary files.
+
+    For supported image formats (PNG/JPEG/WebP/GIF) the result is a
+    ``ToolResult`` carrying both text metadata and a base64-encoded image
+    block so the LLM can actually see the image. All other binary formats
+    return a text-only metadata string as before.
+    """
+    if ext in SUPPORTED_IMAGE_MIME:
+        return _handle_image_file(file_path, ext)
+
     file_size = os.path.getsize(file_path)
     parts = [
         f"[File: {file_path}]",
@@ -277,7 +314,9 @@ def _handle_binary_file(file_path: str, ext: str) -> str:
     ]
 
     if ext in IMAGE_EXTENSIONS:
+        # Known image format we don't pass to the LLM (BMP, TIFF, SVG, ICO, ...)
         parts.append("[Binary image file]")
+        parts.append("[Format not supported for model viewing — metadata only]")
         try:
             from PIL import Image
 
@@ -295,6 +334,134 @@ def _handle_binary_file(file_path: str, ext: str) -> str:
         parts.append("[Binary file — content not displayed]")
 
     return "\n".join(parts)
+
+
+def _handle_image_file(file_path: str, ext: str) -> "ToolResult | str":
+    """Read an image file, compress if needed, and return a ToolResult.
+
+    The tool result includes both a text metadata block (so the model can
+    cite dimensions and file size) and a base64-encoded image block.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.warning("Pillow not installed — falling back to text metadata for image")
+        return _image_metadata_text(file_path, ext, extra="[Pillow not installed]")
+
+    file_size = os.path.getsize(file_path)
+    try:
+        raw_bytes = Path(file_path).read_bytes()
+    except Exception as e:
+        return _image_metadata_text(file_path, ext, extra=f"[Failed to read: {e}]")
+
+    # Collect dimensions via PIL for the metadata block; do not fail if it doesn't open.
+    dims_text = ""
+    pil_format: str | None = None
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            dims_text = f"[Dimensions: {img.size[0]}x{img.size[1]}, format: {img.format}]"
+            pil_format = img.format
+    except Exception as e:
+        logger.debug("PIL could not read {}: {}", file_path, e)
+
+    media_type = SUPPORTED_IMAGE_MIME[ext]
+    payload_bytes = raw_bytes
+    compression_note = ""
+
+    if len(payload_bytes) > MAX_IMAGE_PAYLOAD_BYTES:
+        compressed = _compress_image_to_limit(raw_bytes, MAX_IMAGE_PAYLOAD_BYTES)
+        if compressed is None:
+            return _image_metadata_text(
+                file_path,
+                ext,
+                extra=(
+                    f"[Image {file_size:,} bytes — could not compress under "
+                    f"{MAX_IMAGE_PAYLOAD_BYTES:,} bytes, not attached]"
+                ),
+            )
+        payload_bytes, media_type = compressed
+        compression_note = (
+            f"[Compressed from {file_size:,} to {len(payload_bytes):,} bytes "
+            f"({media_type}) to fit under the {MAX_IMAGE_PAYLOAD_BYTES:,}-byte limit]"
+        )
+
+    b64 = base64.b64encode(payload_bytes).decode("ascii")
+
+    text_parts = [
+        f"[File: {file_path}]",
+        f"[Size: {file_size:,} bytes]",
+        f"[Type: {ext}]",
+    ]
+    if dims_text:
+        text_parts.append(dims_text)
+    if compression_note:
+        text_parts.append(compression_note)
+    text_parts.append("[Image attached for model viewing]")
+
+    return ToolResult(
+        text="\n".join(text_parts),
+        images=[ToolImage(media_type=media_type, data=b64)],
+    )
+
+
+def _image_metadata_text(file_path: str, ext: str, *, extra: str = "") -> str:
+    """Text-only fallback when an image cannot be attached."""
+    try:
+        file_size = os.path.getsize(file_path)
+    except OSError:
+        file_size = 0
+    parts = [
+        f"[File: {file_path}]",
+        f"[Size: {file_size:,} bytes]",
+        f"[Type: {ext}]",
+    ]
+    if extra:
+        parts.append(extra)
+    return "\n".join(parts)
+
+
+def _compress_image_to_limit(
+    raw_bytes: bytes,
+    limit: int,
+) -> tuple[bytes, str] | None:
+    """Compress an image until its byte size is <= ``limit``.
+
+    Strategy:
+    1. Re-encode as JPEG with a decreasing quality ladder.
+    2. If JPEG at the lowest quality is still too large, iteratively resize
+       the image by 0.8x and retry the quality ladder.
+    3. Give up after a handful of resize rounds to avoid pathological loops.
+
+    Returns ``(compressed_bytes, media_type)`` or ``None`` on failure.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            img.load()
+            # Normalize to RGB for JPEG (drops alpha). Acceptable because this
+            # path only fires when the raw payload is already too big to send.
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+
+            current = img
+            for _ in range(8):  # up to 8 resize rounds → (0.8)^8 ≈ 0.17x
+                for quality in _JPEG_QUALITY_LADDER:
+                    buf = io.BytesIO()
+                    current.save(buf, format="JPEG", quality=quality, optimize=True)
+                    data = buf.getvalue()
+                    if len(data) <= limit:
+                        return data, "image/jpeg"
+                # Still too big — shrink and retry.
+                new_size = (max(1, int(current.size[0] * 0.8)), max(1, int(current.size[1] * 0.8)))
+                if new_size == current.size:
+                    break
+                current = current.resize(new_size, Image.LANCZOS)
+    except Exception as e:
+        logger.warning("Image compression failed: {}", e)
+        return None
+
+    return None
 
 
 def _suggest_similar_file(file_path: str) -> str | None:

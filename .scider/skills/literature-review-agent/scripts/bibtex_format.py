@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""
+bibtex_format.py — Generate refs.bib from a verified citation pool.
+
+Reads citation_pool.json (output of dedupe_by_id.py) and emits a BibTeX file
+with deterministic citation keys derived from the first author + year +
+first significant title word.
+
+Never invents fields. Only writes fields that are actually present in the
+S2 metadata. Writes one of:
+    @article{ ... }      — when venue looks like a journal
+    @inproceedings{ ... }— when venue looks like a conference
+    @misc{ ... }         — fallback (e.g., arXiv-only papers)
+
+Usage:
+    python bibtex_format.py --pool citation_pool.json --out refs.bib
+"""
+import argparse
+import json
+import re
+import sys
+
+CONFERENCE_HINTS = {
+    "neurips",
+    "nips",
+    "icml",
+    "iclr",
+    "cvpr",
+    "iccv",
+    "eccv",
+    "aaai",
+    "ijcai",
+    "acl",
+    "emnlp",
+    "naacl",
+    "kdd",
+    "www",
+    "sigir",
+    "uai",
+    "siggraph",
+    "interspeech",
+    "icassp",
+    "miccai",
+    "wacv",
+    "bmvc",
+    "coling",
+    "conll",
+}
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "the",
+    "of",
+    "for",
+    "to",
+    "with",
+    "on",
+    "in",
+    "by",
+    "from",
+    "as",
+    "is",
+    "are",
+    "be",
+    "via",
+    "into",
+    "their",
+    "our",
+    "we",
+    "this",
+    "that",
+    "using",
+    "use",
+    "about",
+    "at",
+    "or",
+    "if",
+}
+
+
+def normalize(s: str) -> str:
+    return re.sub(r"[^a-z]", "", s.lower())
+
+
+def first_significant_word(title: str) -> str:
+    for w in re.findall(r"[A-Za-z][A-Za-z\-]*", title):
+        wn = w.lower()
+        if wn not in STOPWORDS and len(wn) > 2:
+            return normalize(wn)
+    return "paper"
+
+
+def first_author_lastname(authors: list[dict]) -> str:
+    if not authors:
+        return "anon"
+    name = authors[0].get("name", "").strip()
+    if not name:
+        return "anon"
+    parts = name.replace(",", "").split()
+    return normalize(parts[-1]) or "anon"
+
+
+def make_key(paper: dict) -> str:
+    last = first_author_lastname(paper.get("authors") or [])
+    year = paper.get("year") or "0000"
+    word = first_significant_word(paper.get("title", ""))
+    return f"{last}{year}{word}"
+
+
+def is_conference(venue: str) -> bool:
+    if not venue:
+        return False
+    v = venue.lower()
+    return any(h in v for h in CONFERENCE_HINTS)
+
+
+def escape_bibtex(s: str) -> str:
+    if not s:
+        return ""
+    return s.replace("{", "\\{").replace("}", "\\}").replace("&", "\\&")
+
+
+def author_field(authors: list[dict]) -> str:
+    names = [a.get("name", "").strip() for a in authors if a.get("name")]
+    return " and ".join(escape_bibtex(n) for n in names)
+
+
+def format_entry(paper: dict, key: str) -> str:
+    venue = paper.get("venue") or ""
+    if is_conference(venue):
+        kind = "inproceedings"
+        venue_key = "booktitle"
+    elif venue:
+        kind = "article"
+        venue_key = "journal"
+    else:
+        kind = "misc"
+        venue_key = None
+
+    lines = [f"@{kind}{{{key},"]
+    if title := paper.get("title"):
+        lines.append(f"  title    = {{{escape_bibtex(title)}}},")
+    if authors := paper.get("authors"):
+        lines.append(f"  author   = {{{author_field(authors)}}},")
+    if year := paper.get("year"):
+        lines.append(f"  year     = {{{year}}},")
+    if venue and venue_key:
+        lines.append(f"  {venue_key:8s} = {{{escape_bibtex(venue)}}},")
+    ext = paper.get("externalIds") or {}
+    if doi := ext.get("DOI"):
+        lines.append(f"  doi      = {{{doi}}},")
+    if arxiv := ext.get("ArXiv"):
+        lines.append(f"  eprint   = {{{arxiv}}},")
+        lines.append(f"  archivePrefix = {{arXiv}},")
+    # Strip trailing comma on last field
+    if lines[-1].endswith(","):
+        lines[-1] = lines[-1].rstrip(",")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--pool", required=True, help="citation_pool.json")
+    p.add_argument("--out", required=True, help="output refs.bib")
+    args = p.parse_args()
+
+    with open(args.pool) as f:
+        pool = json.load(f)
+    papers = pool.get("papers", [])
+    if not papers:
+        print("ERROR: pool contains no papers", file=sys.stderr)
+        return 1
+
+    keys_used: dict[str, int] = {}
+    entries: list[str] = []
+    paper_keys: list[str] = []
+
+    for paper in papers:
+        base_key = make_key(paper)
+        # Disambiguate collisions with letter suffix
+        if base_key in keys_used:
+            keys_used[base_key] += 1
+            suffix = chr(ord("a") + keys_used[base_key] - 1)
+            key = base_key + suffix
+        else:
+            keys_used[base_key] = 1
+            key = base_key
+        paper["bibtex_key"] = key
+        paper_keys.append(key)
+        entries.append(format_entry(paper, key))
+
+    with open(args.out, "w") as f:
+        f.write("% Generated by paper-orchestra literature-review-agent/bibtex_format.py\n")
+        f.write(f"% {len(entries)} entries from citation_pool.json\n\n")
+        f.write("\n\n".join(entries))
+        f.write("\n")
+
+    # Write the keys back into the pool so the writing step has the
+    # citation_checklist mapping. (Idempotent — overwrites with same data.)
+    with open(args.pool, "w") as f:
+        json.dump(pool, f, indent=2, ensure_ascii=False)
+
+    print(f"OK: {len(entries)} BibTeX entries → {args.out}")
+    print(f"    keys: {', '.join(paper_keys[:5])}{'...' if len(paper_keys) > 5 else ''}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

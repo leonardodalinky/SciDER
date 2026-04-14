@@ -96,6 +96,9 @@ _AGENT_LABELS = {
     "experiment": "🧪 Experiment Agent",
     "experiment_agent": "🧪 Experiment Agent",
     "experiment_coding": "💻 Coding Subagent",
+    # Writing
+    "writing": "📝 Writing Agent",
+    "writing_agent": "📝 Writing Agent",
     # Coding backends
     "claude_agent_sdk": "🤖 Claude Agent SDK",
     "claude_code": "🤖 Claude Code",
@@ -114,6 +117,23 @@ def _agent_label(agent: str | None) -> str:
     return _AGENT_LABELS.get(agent, agent)
 
 
+def _render_tool_images(images: list[dict]) -> None:
+    """Decode base64 tool-result images and render them under the chat bubble."""
+    import base64 as _b64
+
+    for i, img in enumerate(images):
+        data = img.get("data")
+        media_type = img.get("media_type", "image/png")
+        if not data:
+            continue
+        try:
+            raw = _b64.b64decode(data)
+        except Exception:
+            st.caption(f"(image {i + 1} could not be decoded)")
+            continue
+        st.image(raw, caption=f"{media_type} ({len(raw):,} bytes)")
+
+
 def render_chat_message(
     role: str,
     content: str,
@@ -121,6 +141,7 @@ def render_chat_message(
     is_meta: bool = False,
     is_tool: bool = False,
     tool_name: str | None = None,
+    images: list[dict] | None = None,
 ):
     """Render a single chat message as a Streamlit chat_message with markdown."""
     # Map role for st.chat_message (only supports "user", "assistant", "ai", "human")
@@ -151,8 +172,12 @@ def render_chat_message(
             label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
             with st.expander(f"{label}...", expanded=False):
                 st.markdown(content)
-        else:
+        elif content:
             st.markdown(content)
+
+        # Tool-result images (e.g. from Read on a PNG) rendered below text
+        if images:
+            _render_tool_images(images)
 
 
 def render_chat_messages(messages: list[dict]):
@@ -186,6 +211,7 @@ def render_chat_messages(messages: list[dict]):
                 is_meta=m.get("is_meta", False),
                 is_tool=m.get("is_tool", False),
                 tool_name=m.get("tool_name"),
+                images=m.get("images"),
             )
         else:
             # Multiple consecutive messages from same agent — collapse
@@ -199,6 +225,7 @@ def render_chat_messages(messages: list[dict]):
                         is_meta=m.get("is_meta", False),
                         is_tool=m.get("is_tool", False),
                         tool_name=m.get("tool_name"),
+                        images=m.get("images"),
                     )
 
 
@@ -534,14 +561,16 @@ if workflow_config and "workflow_runner" not in st.session_state:
 
     # Hook every add_message() call to push to UI
     def _on_msg(msg):
-        if msg.content:
+        images = getattr(msg, "tool_result_images", None)
+        if msg.content or images:
             handler.push_message(
                 msg.role or "assistant",
-                msg.content,
+                msg.content or "",
                 getattr(msg, "agent_sender", None),
                 is_meta=getattr(msg, "is_meta", False),
                 is_tool=msg.role == "tool",
                 tool_name=getattr(msg, "tool_name", None),
+                images=images,
             )
 
     set_on_message_callback(_on_msg)

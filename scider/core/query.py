@@ -164,12 +164,27 @@ def _execute_tool_calls(
         try:
             with ctx_mgr:
                 result = func(**args)
+
+            # ToolResult carries both text and image attachments; plain str
+            # results still work unchanged.
+            from ..tools.base import ToolResult as _ToolResult
+
+            if isinstance(result, _ToolResult):
+                text = result.text
+                images = [
+                    {"media_type": img.media_type, "data": img.data} for img in result.images
+                ] or None
+            else:
+                text = str(result)
+                images = None
+
             results.append(
                 Message(
                     role="tool",
                     tool_call_id=tool_call.id,
                     tool_name=tool_name,
-                    content=str(result),
+                    content=text,
+                    tool_result_images=images,
                 ).with_log()
             )
         except Exception as e:
@@ -387,6 +402,9 @@ def query(
     consecutive_error_turns = 0
     prev_turn_had_errors = False  # track if last tool execution had any errors
     gave_up_nudges = 0  # how many times we nudged the model to retry after giving up
+    empty_response_nudges = (
+        0  # how many times we nudged after empty (no content + no tools) response
+    )
     compact_state = CompactState()
 
     # --- Set tool results dir to workspace if available ---
@@ -588,6 +606,33 @@ def query(
                 prev_turn_had_errors = False
                 continue
 
+            # Empty response guard: if the model returned no content AND no
+            # tool calls (not truncation), it may be a transient API glitch
+            # rather than an intentional end-turn. Nudge it to continue.
+            if (
+                not assistant_msg.content or not assistant_msg.content.strip()
+            ) and empty_response_nudges < 2:
+                empty_response_nudges += 1
+                logger.info(
+                    "Empty response (no content, no tool calls) — nudging agent to continue ({}/2)",
+                    empty_response_nudges,
+                )
+                nudge_msg = Message(
+                    role="user",
+                    content=(
+                        "<system-reminder>\n"
+                        "Your previous response was empty (no text and no tool calls). "
+                        "This was likely a transient error. Continue working on the task "
+                        "from where you left off. Use tools to make progress.\n"
+                        "</system-reminder>"
+                    ),
+                    agent_sender=agent_name,
+                    is_meta=True,
+                )
+                agent_state.add_message(nudge_msg)
+                all_messages.append(nudge_msg)
+                continue
+
             # Before ending: check if background tasks are still running.
             # If so, wait for them and inject notifications so the agent can
             # see the results and continue working.
@@ -636,6 +681,7 @@ def query(
         prev_turn_had_errors = any_errors
         if not any_errors:
             gave_up_nudges = 0  # reset on clean turn
+            empty_response_nudges = 0
 
         # --- Step 4: Consecutive error circuit breaker ---
         if all_errors:

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -72,8 +73,8 @@ def _get_tool_results_dir() -> str:
 
 
 # Level 2: keep the N most recent tool results intact; snip older ones
-SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 5))
-SNIP_PLACEHOLDER = "[Old tool result content cleared]"
+SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 8))
+SNIP_PREVIEW_CHARS = 200  # keep first N chars as summary when snipping
 
 # Level 3: trigger autocompact when total tokens exceed this ratio of the threshold
 AUTOCOMPACT_TOKEN_THRESHOLD = int(os.getenv("COMPACT_AUTOCOMPACT_TOKEN_THRESHOLD", 128_000))
@@ -83,6 +84,34 @@ AUTOCOMPACT_KEEP_FIRST_N = int(os.getenv("COMPACT_AUTOCOMPACT_KEEP_FIRST_N", 4))
 AUTOCOMPACT_MODEL = os.getenv("COMPACT_AUTOCOMPACT_MODEL", "history")
 
 MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
+
+
+@contextmanager
+def override_compact_settings(**overrides):
+    """Temporarily override compact module-level settings.
+
+    Usage::
+
+        with override_compact_settings(AUTOCOMPACT_TOKEN_THRESHOLD=768_000):
+            query(...)  # runs with higher threshold
+
+    Supported keys: any module-level ALL_CAPS constant defined above
+    (e.g. ``AUTOCOMPACT_TOKEN_THRESHOLD``, ``SNIP_KEEP_RECENT_TOOL_RESULTS``,
+    ``AUTOCOMPACT_KEEP_RATIO``, etc.).
+    """
+    import scider.core.compact as _mod
+
+    saved = {}
+    for key, value in overrides.items():
+        if not hasattr(_mod, key):
+            raise AttributeError(f"compact module has no setting '{key}'")
+        saved[key] = getattr(_mod, key)
+        setattr(_mod, key, value)
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            setattr(_mod, key, value)
 
 
 @dataclass
@@ -207,10 +236,17 @@ def apply_history_snip(history: list[Message]) -> tuple[list[Message], int]:
     tokens_freed = 0
     for idx in indices_to_snip:
         msg = history[idx]
-        if msg.content and msg.content != SNIP_PLACEHOLDER:
+        if msg.content and not msg.content.startswith("[Snipped]"):
             old_tokens = msg.n_tokens
             msg.content_before_snip = msg.content
-            msg.content = SNIP_PLACEHOLDER
+            # Keep a short preview so the compression LLM can still extract
+            # key outcomes (e.g. "Output written on paper.pdf (5 pages)").
+            preview = msg.content[:SNIP_PREVIEW_CHARS].rstrip()
+            if len(msg.content) > SNIP_PREVIEW_CHARS:
+                msg.content = f"[Snipped] {preview} ..."
+            # else: content is short enough, no need to snip
+            else:
+                continue
             msg._n_tokens = None  # invalidate cache
             new_tokens = msg.n_tokens
             tokens_freed += max(old_tokens - new_tokens, 0)
@@ -223,6 +259,61 @@ def apply_history_snip(history: list[Message]) -> tuple[list[Message], int]:
         )
 
     return history, tokens_freed
+
+
+# ---------------------------------------------------------------------------
+# Skill reminder (re-inject invoked skills after compaction)
+# ---------------------------------------------------------------------------
+
+# Token budget for re-injected skills. Each skill is truncated to this limit;
+# if the total exceeds the budget, least-recently-added skills are dropped.
+_SKILL_REMINDER_MAX_PER_SKILL = 5_000  # chars (~1.5k tokens)
+_SKILL_REMINDER_TOTAL_BUDGET = 25_000  # chars (~7.5k tokens)
+
+
+def _build_skill_reminder(agent_state: HistoryState) -> Message | None:
+    """Build a meta user message containing invoked skill contents.
+
+    Returns None if no skills have been invoked.
+    """
+    if not agent_state.invoked_skills:
+        return None
+
+    # Inject the first skill (often the orchestrator / master roadmap) and
+    # the most recently loaded skill (the one the agent is currently working
+    # with). This ensures the agent retains high-level pipeline awareness
+    # while staying focused on the current step.
+    items = list(agent_state.invoked_skills.items())
+
+    def _truncate(content: str) -> str:
+        if len(content) <= _SKILL_REMINDER_MAX_PER_SKILL:
+            return content
+        return content[:_SKILL_REMINDER_MAX_PER_SKILL] + (
+            "\n\n... (truncated — load the skill again for the full content)"
+        )
+
+    parts: list[str] = []
+    first_name, first_content = items[0]
+    parts.append(_truncate(first_content))
+
+    if len(items) > 1:
+        last_name, last_content = items[-1]
+        parts.append(_truncate(last_content))
+
+    text = (
+        "<system-reminder>\n"
+        "The following skills were loaded earlier in this session. "
+        "Continue to follow their guidelines:\n\n"
+        + "\n\n---\n\n".join(parts)
+        + "\n</system-reminder>"
+    )
+
+    return Message(
+        role="user",
+        content=text,
+        agent_sender="compact",
+        is_meta=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -360,17 +451,32 @@ def apply_autocompact(
             is_meta=True,
         ).with_log()
 
-        # Complete array replacement: boundary + summary + kept messages
+        # Build the post-compact message list: summary + skill reminder + kept
+        post_messages = [summary_message]
+
+        # Re-inject invoked skills so the agent doesn't need to re-load them.
+        skill_reminder = _build_skill_reminder(agent_state)
+        if skill_reminder is not None:
+            post_messages.append(skill_reminder)
+
+        post_messages.extend(to_keep)
+
+        # Complete array replacement: boundary + post_messages
         agent_state.compact(
-            summary_messages=[summary_message] + to_keep,
+            summary_messages=post_messages,
             trigger="auto",
         )
 
         compact_state.consecutive_autocompact_failures = 0
         logger.info(
-            "Autocompact: compressed {} messages, kept {} messages",
+            "Autocompact: compressed {} messages, kept {} messages{}",
             len(to_compress),
             len(to_keep),
+            (
+                f", re-injected {len(agent_state.invoked_skills)} skill(s)"
+                if agent_state.invoked_skills
+                else ""
+            ),
         )
         return True
 

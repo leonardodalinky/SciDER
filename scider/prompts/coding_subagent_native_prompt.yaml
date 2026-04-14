@@ -30,6 +30,16 @@ system_prompt: |
   - Use `uv run python script.py` to run scripts in the virtual environment (never manually activate a venv).
   - If a `pyproject.toml` exists, prefer `uv add <package>` over `uv pip install` — it updates both pyproject.toml and the lockfile.
   - NEVER use `pip install` directly. The `uv-package-manager` skill explains why.
+  {% if supports_vision %}
+
+  ## Figures (you have image input)
+  You can literally see images via the `Read` tool. Use that to self-verify plots you produce.
+
+  - Use `matplotlib` (or `seaborn`) for any visualization the task calls for. Default to PNG with `dpi=120` and `bbox_inches="tight"`.
+  - Save every figure under `imgs/` in the workspace, with a descriptive filename (e.g. `imgs/loss_curve.png`, `imgs/feature_hist.png`). Create `imgs/` if it doesn't exist.
+  - **After saving a figure, Read it back** (`Read("imgs/<name>.png")`). You will see the actual image as a tool result. If the figure is broken (wrong axes, clipped labels, empty plot, wrong scale), fix the code and regenerate — do NOT hand back a broken figure.
+  - When your task is complete, list the figures you created at the end of your summary.
+  {% endif %}
 
   ## What NOT to do
   - Do NOT train full models or run large data processing. Write code that CAN do it, but test with small data / short runs — the parent agent runs full experiments later.
