@@ -5,6 +5,7 @@ Flow: init → agent_loop → parse_verdict → END
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -181,8 +182,51 @@ def agent_loop_node(agent_state: ApprovalSubagentState) -> ApprovalSubagentState
     return agent_state
 
 
+# Last-ditch fallback: even when the whole response fails to parse as JSON,
+# recover a verdict from the literal keyword pair in raw text. This protects
+# against a clear REJECT being silently swallowed by fail-open.
+_VERDICT_KEYWORD_RE = re.compile(r'"verdict"\s*:\s*"(approve|reject)"', re.IGNORECASE)
+
+
+def _extract_verdict_dict(text: str) -> dict | None:
+    """Pull a ``{"verdict": ..., "feedback": ...}`` dict out of the final
+    assistant message. Returns None only when no verdict signal exists at all.
+
+    Strategy:
+      1. Delegate JSON extraction to ``parse_json_from_text`` (prefers the last
+         fenced ```json``` block, then falls back to the whole text).
+      2. If the parser returned a list (LLM or ``json_repair`` sometimes wraps
+         the dict in a list), find the last entry with a ``verdict`` key.
+      3. If JSON parsing fails entirely, regex-recover just the verdict keyword
+         from the raw text so a clear REJECT is never silently dropped.
+    """
+    try:
+        parsed = parse_json_from_text(text)
+    except ValueError:
+        parsed = None
+
+    if isinstance(parsed, dict) and isinstance(parsed.get("verdict"), str):
+        return parsed
+    if isinstance(parsed, list):
+        for item in reversed(parsed):
+            if isinstance(item, dict) and isinstance(item.get("verdict"), str):
+                return item
+
+    # Regex keyword fallback (no feedback recovered in this path).
+    kw = _VERDICT_KEYWORD_RE.findall(text)
+    if kw:
+        return {"verdict": kw[-1].lower(), "feedback": None}
+    return None
+
+
 def parse_verdict_node(agent_state: ApprovalSubagentState) -> ApprovalSubagentState:
-    """Extract verdict JSON from the final assistant message. Fail-open on error."""
+    """Extract verdict JSON from the final assistant message.
+
+    Fail-open approve only when we can find NO signal at all. If the LLM
+    clearly said "reject" somewhere, honor that even if the overall JSON
+    shape is garbled — a wrongly-approved result is worse than an extra
+    retry.
+    """
     logger.debug("parse_verdict_node of Agent {}", AGENT_NAME)
     agent_state.add_node_history("parse_verdict")
 
@@ -197,19 +241,21 @@ def parse_verdict_node(agent_state: ApprovalSubagentState) -> ApprovalSubagentSt
         agent_state.verdict = "approve"
         return agent_state
 
-    try:
-        parsed = parse_json_from_text(last_assistant.content or "")
-        if not isinstance(parsed, dict):
-            raise ValueError(f"expected dict, got {type(parsed).__name__}")
-        verdict = parsed.get("verdict", "").strip().lower()
-        if verdict not in ("approve", "reject"):
-            raise ValueError(f"invalid verdict: {verdict!r}")
-        agent_state.verdict = verdict  # type: ignore[assignment]
-        agent_state.feedback = parsed.get("feedback") or None
-    except Exception as e:
-        logger.warning("parse_verdict: failed to parse ({}), fail-open approve", e)
+    parsed = _extract_verdict_dict(last_assistant.content or "")
+    if parsed is None:
+        logger.warning("parse_verdict: no verdict signal found, fail-open approve")
         agent_state.verdict = "approve"
         agent_state.feedback = None
+    else:
+        verdict = str(parsed.get("verdict", "")).strip().lower()
+        if verdict not in ("approve", "reject"):
+            logger.warning("parse_verdict: invalid verdict {!r}, fail-open approve", verdict)
+            agent_state.verdict = "approve"
+            agent_state.feedback = None
+        else:
+            agent_state.verdict = verdict  # type: ignore[assignment]
+            feedback = parsed.get("feedback")
+            agent_state.feedback = feedback if isinstance(feedback, str) and feedback else None
 
     agent_state.intermediate_state.append(
         {

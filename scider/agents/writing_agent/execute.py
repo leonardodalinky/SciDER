@@ -62,7 +62,7 @@ def _build_system_context(agent_state: WritingAgentState) -> str:
         f"paper_workspace (cwd): {agent_state.workspace.working_dir}",
         f"scider_workspace (read-only source): {agent_state.scider_workspace}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
-        detect_python_runtime(),
+        detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
     return (

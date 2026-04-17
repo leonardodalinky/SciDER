@@ -42,7 +42,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from scider.agents import writing_agent
 from scider.agents.writing_agent.state import WritingAgentState
-from scider.core.code_env import LocalEnv
+from scider.core.code_env import LocalEnv, WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.paper_bootstrap import bootstrap_paper_workspace
 from scider.workflows.utils import get_separator
@@ -92,6 +92,9 @@ class WritingWorkflow(BaseModel):
     experiment_summary: str = ""
 
     recursion_limit: int = 150
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Override to
+    # point agents at a prebuilt venv or to skip `uv init` in the workspace.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "bootstrap", "writing", "complete", "failed"] = "init"
@@ -191,7 +194,7 @@ class WritingWorkflow(BaseModel):
         self.current_phase = "writing"
 
         writing_state = WritingAgentState(
-            workspace=LocalEnv(self.paper_workspace_path),
+            workspace=LocalEnv(self.paper_workspace_path, init_config=self.workspace_init_config),
             scider_workspace=self.scider_workspace_path,
             user_query=self.user_query,
             idea_summary=self.idea_summary,
@@ -417,6 +420,7 @@ def run_writing_workflow(
     experiment_summary: str | Path = "",
     recursion_limit: int = 150,
     user_approval_enabled: bool = False,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> WritingWorkflow:
     """
     Convenience function to run the paper writing workflow.
@@ -456,6 +460,8 @@ def run_writing_workflow(
         experiment_summary: Optional SciDER experiment summary (or file path).
         recursion_limit: Recursion limit for WritingAgent (default=150).
         user_approval_enabled: Forwarded to ``override_user_approval``.
+        workspace_init_config: Override LocalEnv init behaviour (uv init, PATH
+            injection, env manager). Leave ``None`` for historical defaults.
 
     Returns:
         WritingWorkflow: Completed workflow with results.
@@ -482,6 +488,7 @@ def run_writing_workflow(
         data_summary=data_summary_text,
         experiment_summary=experiment_summary_text,
         recursion_limit=recursion_limit,
+        workspace_init_config=workspace_init_config,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

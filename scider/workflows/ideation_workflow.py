@@ -17,6 +17,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from scider.agents import ideation_agent
 from scider.agents.ideation_agent.state import IdeationAgentState
+from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.core.llms import ModelRegistry
 from scider.workflows.utils import get_separator
@@ -44,6 +45,10 @@ class IdeationWorkflow(BaseModel):
     workspace_path: Path
     research_domain: str | None = None  # Optional research domain specification
     recursion_limit: int = 50  # Recursion limit for IdeationAgent
+    # Accepted for API uniformity with the other workflows; the ideation agent
+    # has no LocalEnv so the config has no direct effect here, but orchestrator
+    # workflows can pass the same config through all stages without branching.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "ideation", "complete", "failed"] = "init"
@@ -246,6 +251,7 @@ def run_ideation_workflow(
     research_domain: str | None = None,
     recursion_limit: int = 50,
     user_approval_enabled: bool = False,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> IdeationWorkflow:
     """
     Convenience function to run the ideation workflow.
@@ -255,23 +261,18 @@ def run_ideation_workflow(
         workspace_path: Workspace directory for the workflow
         research_domain: Optional research domain specification
         recursion_limit: Recursion limit for IdeationAgent (default=50)
+        workspace_init_config: Accepted for API uniformity; has no direct
+            effect on the ideation agent (no LocalEnv).
 
     Returns:
         IdeationWorkflow: Completed workflow with results
-
-    Example:
-        >>> result = run_ideation_workflow(
-        ...     user_query="transformer models",
-        ...     research_domain="machine learning",
-        ...     workspace_path="workspace",
-        ... )
-        >>> print(result.ideation_summary)
     """
     workflow = IdeationWorkflow(
         user_query=user_query,
         workspace_path=Path(workspace_path),
         research_domain=research_domain,
         recursion_limit=recursion_limit,
+        workspace_init_config=workspace_init_config,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

@@ -15,7 +15,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from scider.agents import experiment_agent
 from scider.agents.experiment_agent.state import ExperimentAgentState
-from scider.core.code_env import LocalEnv
+from scider.core.code_env import LocalEnv, WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.utils import get_separator
 
@@ -47,6 +47,9 @@ class ExperimentWorkflow(BaseModel):
     repo_source: str | None = None
     max_revisions: int = 5
     recursion_limit: int = 100
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Override to
+    # point agents at a prebuilt venv or to skip `uv init` in the workspace.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "experiment", "complete", "failed"] = "init"
@@ -81,6 +84,7 @@ class ExperimentWorkflow(BaseModel):
         repo_source: str | None = None,
         max_revisions: int = 5,
         recursion_limit: int = 100,
+        workspace_init_config: WorkspaceInitConfig | None = None,
     ) -> "ExperimentWorkflow":
         """
         Create ExperimentWorkflow by loading data summary from file.
@@ -118,6 +122,7 @@ class ExperimentWorkflow(BaseModel):
             repo_source=repo_source,
             max_revisions=max_revisions,
             recursion_limit=recursion_limit,
+            workspace_init_config=workspace_init_config,
         )
 
     def run(self) -> "ExperimentWorkflow":
@@ -151,10 +156,11 @@ class ExperimentWorkflow(BaseModel):
         self.current_phase = "experiment"
 
         exp_state = ExperimentAgentState(
-            workspace=LocalEnv(self.workspace_path),
+            workspace=LocalEnv(self.workspace_path, init_config=self.workspace_init_config),
             data_summary=self.data_summary,
             user_query=self.user_query,
             repo_source=self.repo_source,
+            max_critic_retries=self.max_revisions,
         )
 
         from scider.workflows.history_export import capture_messages
@@ -231,6 +237,7 @@ def run_experiment_workflow(
     max_revisions: int = 5,
     recursion_limit: int = 100,
     user_approval_enabled: bool = False,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> ExperimentWorkflow:
     """
     Convenience function to run the experiment workflow.
@@ -243,24 +250,11 @@ def run_experiment_workflow(
         repo_source: Optional repository source (local path or git URL)
         max_revisions: Maximum revision loops for experiment agent
         recursion_limit: Recursion limit for ExperimentAgent (default=100)
+        workspace_init_config: Override LocalEnv init behaviour (uv init, PATH
+            injection, env manager). Leave ``None`` for historical defaults.
 
     Returns:
         ExperimentWorkflow: Completed workflow with results
-
-    Example:
-        >>> # Option 1: Load from file
-        >>> result = run_experiment_workflow(
-        ...     workspace_path="workspace",
-        ...     user_query="Train an SVR model to predict prices",
-        ... )
-        >>>
-        >>> # Option 2: Pass data summary directly
-        >>> result = run_experiment_workflow(
-        ...     workspace_path="workspace",
-        ...     user_query="Train an SVR model",
-        ...     data_summary="The dataset contains 1000 rows...",
-        ... )
-        >>> print(result.final_summary)
     """
     if data_summary is not None:
         workflow = ExperimentWorkflow(
@@ -270,6 +264,7 @@ def run_experiment_workflow(
             repo_source=repo_source,
             max_revisions=max_revisions,
             recursion_limit=recursion_limit,
+            workspace_init_config=workspace_init_config,
         )
     else:
         workflow = ExperimentWorkflow.from_data_analysis_file(
@@ -279,6 +274,7 @@ def run_experiment_workflow(
             repo_source=repo_source,
             max_revisions=max_revisions,
             recursion_limit=recursion_limit,
+            workspace_init_config=workspace_init_config,
         )
 
     with override_user_approval(user_approval_enabled):

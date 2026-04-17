@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from scider.core.code_env import WorkspaceInitConfig
     from scider.workflows.writing_workflow import WritingWorkflow
 
 
@@ -23,6 +24,7 @@ def run_paper_writing_phase(
     paper_template_tex_path: Path | None,
     paper_conference_guidelines_path: Path | None,
     paper_agent_recursion_limit: int,
+    workspace_init_config: "WorkspaceInitConfig | None" = None,
 ) -> "WritingWorkflow":
     """Shared paper writing phase used by both FullWorkflow and FullWorkflowWithIdeation.
 
@@ -44,6 +46,7 @@ def run_paper_writing_phase(
         data_summary=data_summary,
         experiment_summary=experiment_summary,
         recursion_limit=paper_agent_recursion_limit,
+        workspace_init_config=workspace_init_config,
     )
     wf.run()
     return wf

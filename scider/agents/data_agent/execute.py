@@ -69,7 +69,7 @@ def _build_system_context(agent_state: DataAgentState) -> str:
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
         f"date: {datetime.now().strftime('%Y-%m-%d')}",
-        detect_python_runtime(),
+        detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
     return (

@@ -14,7 +14,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from scider.agents import data_agent
 from scider.agents.data_agent.state import DataAgentState
-from scider.core.code_env import LocalEnv
+from scider.core.code_env import LocalEnv, WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.prompts import PROMPTS
 from scider.workflows.utils import get_separator
@@ -41,6 +41,12 @@ class DataWorkflow(BaseModel):
     workspace_path: Path
     recursion_limit: int = 100
     data_desc: str | None = None  # Optional additional description of the data
+    # Hard upper bound on critic/approval retry loops. The approval subagent
+    # may still early-stop before hitting this (that's the whole point).
+    max_revisions: int = 2
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Override to
+    # point agents at a prebuilt venv or to skip `uv init` in the workspace.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "data_analysis", "complete", "failed"] = "init"
@@ -105,9 +111,10 @@ class DataWorkflow(BaseModel):
 
         # Prepare state
         data_state = DataAgentState(
-            workspace=LocalEnv(self.workspace_path),
+            workspace=LocalEnv(self.workspace_path, init_config=self.workspace_init_config),
             user_query=data_query,
             data_desc=self.data_desc,
+            max_critic_retries=self.max_revisions,
         )
 
         from scider.workflows.history_export import capture_messages
@@ -195,6 +202,8 @@ def run_data_workflow(
     recursion_limit: int = 100,
     data_desc: str | None = None,
     user_approval_enabled: bool = False,
+    max_revisions: int = 2,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> DataWorkflow:
     """
     Convenience function to run the data analysis workflow.
@@ -204,30 +213,22 @@ def run_data_workflow(
         workspace_path: Workspace directory for the analysis
         recursion_limit: Recursion limit for DataAgent (default=100)
         data_desc: Optional additional description of the data
+        max_revisions: Hard upper bound on critic/approval retries. The
+            approval subagent may early-stop before this when the output
+            looks good enough.
+        workspace_init_config: Override LocalEnv init behaviour (uv init, PATH
+            injection, env manager). Leave ``None`` for historical defaults.
 
     Returns:
         DataWorkflow: Completed workflow with results
-
-    Example:
-        >>> result = run_data_workflow(
-        ...     data_path="data/data.csv",
-        ...     workspace_path="workspace",
-        ... )
-        >>> print(result.data_summary)
-
-        >>> # With provided directories (e.g., from FullWorkflow)
-        >>> result = run_data_workflow(
-        ...     data_path="data/data.csv",
-        ...     workspace_path="workspace",
-        ... )
-
-    Note:
     """
     workflow = DataWorkflow(
         data_path=Path(data_path),
         workspace_path=Path(workspace_path),
         recursion_limit=recursion_limit,
         data_desc=data_desc,
+        max_revisions=max_revisions,
+        workspace_init_config=workspace_init_config,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

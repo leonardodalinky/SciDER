@@ -86,3 +86,49 @@ class TestParseVerdict:
         st.add_message(Message(role="user", content="q"))
         parse_verdict_node(st)
         assert st.verdict == "approve"
+
+    def test_parse_prose_then_fenced_json(self):
+        """Regression: LLM prefixes critique prose before the fenced JSON block.
+        Previous parser fed the whole blob to json_repair, got a list back, and
+        fail-open approved a clear reject."""
+        content = (
+            "The user's query explicitly requested the 2D spatial intensity map, "
+            "but the agent only produced a 1D spectral fit. Furthermore, the input "
+            "`cut_o3b.pkl` is missing from the workspace.\n\n"
+            "The agent failed to address the primary visualization task.\n\n"
+            "```json\n"
+            '{"verdict": "reject", "feedback": "Did not generate the 2D map."}\n'
+            "```"
+        )
+        st = self._state_with_assistant(content)
+        parse_verdict_node(st)
+        assert st.verdict == "reject"
+        assert "2D map" in (st.feedback or "")
+
+    def test_parse_list_wrapped_dict(self):
+        """json_repair sometimes wraps the verdict dict in a list."""
+        st = self._state_with_assistant(
+            '[{"note": "prose"}, {"verdict": "reject", "feedback": "broken"}]'
+        )
+        parse_verdict_node(st)
+        assert st.verdict == "reject"
+        assert "broken" in (st.feedback or "")
+
+    def test_parse_keyword_fallback(self):
+        """Even if no parseable JSON object, a verdict keyword pair should be honored."""
+        st = self._state_with_assistant(
+            'Malformed output with lots of issues but eventually "verdict": "reject" somewhere'
+        )
+        parse_verdict_node(st)
+        assert st.verdict == "reject"
+
+    def test_parse_prose_mentions_reject_but_final_is_approve(self):
+        """The critique may discuss 'reject' as hypothesis but conclude approve.
+        The LAST JSON object wins."""
+        content = (
+            "I considered whether to reject this, but on balance the result is adequate.\n\n"
+            '```json\n{"verdict": "approve", "feedback": ""}\n```'
+        )
+        st = self._state_with_assistant(content)
+        parse_verdict_node(st)
+        assert st.verdict == "approve"

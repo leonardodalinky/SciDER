@@ -17,6 +17,7 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
+from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
@@ -62,6 +63,10 @@ class FullWorkflow(BaseModel):
     paper_template_tex_path: Path | None = None
     paper_conference_guidelines_path: Path | None = None
     paper_agent_recursion_limit: int = 150
+
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Forwarded to
+    # the nested DataWorkflow / ExperimentWorkflow / WritingWorkflow.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal[
@@ -136,6 +141,7 @@ class FullWorkflow(BaseModel):
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
             data_desc=self.data_desc,
+            workspace_init_config=self.workspace_init_config,
         )
 
         try:
@@ -175,6 +181,7 @@ class FullWorkflow(BaseModel):
             repo_source=self.repo_source,
             max_revisions=self.max_revisions,
             recursion_limit=self.experiment_agent_recursion_limit,
+            workspace_init_config=self.workspace_init_config,
         )
 
         try:
@@ -233,6 +240,7 @@ class FullWorkflow(BaseModel):
                 paper_template_tex_path=self.paper_template_tex_path,
                 paper_conference_guidelines_path=self.paper_conference_guidelines_path,
                 paper_agent_recursion_limit=self.paper_agent_recursion_limit,
+                workspace_init_config=self.workspace_init_config,
             )
             if self._writing_workflow.final_status != "success":
                 self.error_message = (
@@ -337,6 +345,7 @@ def run_full_workflow(
     paper_template_tex_path: str | Path | None = None,
     paper_conference_guidelines_path: str | Path | None = None,
     paper_agent_recursion_limit: int = 150,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> FullWorkflow:
     """
     Convenience function to run the full SciDER workflow.
@@ -383,6 +392,7 @@ def run_full_workflow(
             Path(paper_conference_guidelines_path) if paper_conference_guidelines_path else None
         ),
         paper_agent_recursion_limit=paper_agent_recursion_limit,
+        workspace_init_config=workspace_init_config,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

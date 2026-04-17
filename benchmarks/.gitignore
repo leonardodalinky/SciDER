@@ -3,6 +3,10 @@
 pyproject.toml
 uv.lock
 .python-version
+
+# scider workspace
+workspace/
+
 # auto-generated main.py
 datascibench/main.py
 mlebench/main.py

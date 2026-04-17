@@ -115,96 +115,171 @@ def unwrap_dict_from_toon(toon_str: str) -> dict:
         raise ValueError(f"Failed to decode TOON: {e}") from e
 
 
-def parse_json_from_llm_response(llm_response: str | Message, tgt_type: Type[T]) -> T:
-    if isinstance(llm_response, Message):
-        text = llm_response.content
-    else:
-        text = llm_response
-    json_match = re.search(
-        r"(?:```\s*)?(?:json\s*)?(.*)(?:```)?", text, flags=re.DOTALL | re.IGNORECASE
-    )  # must find something, at least return the entire text
-    if not json_match:
-        raise ValueError("Failed to find JSON in LLM response")
-    json_str = json_match.group(1).strip()
-    json_str = repair_json(json_str)
-    return tgt_type.model_validate_json(json_str)
+# Non-greedy fenced-block regex — finds `` ```lang\n...\n``` `` correctly even
+# when the LLM mixes prose with multiple code blocks. ``findall`` + last-match
+# lets us honor the final block (where LLMs usually put the definitive answer).
+_FENCED_BLOCK_RE = re.compile(r"```([a-zA-Z0-9_-]*)\s*([\s\S]*?)```")
+
+
+def _extract_fenced_blocks(text: str, lang: str | None = None) -> list[str]:
+    """Return every fenced code block's body, optionally filtered by language.
+
+    When ``lang`` is given we accept:
+      - exact-match language tag (``json`` / ``markdown``)
+      - empty tag (untagged ```...``` blocks are common from LLMs)
+    """
+    blocks: list[str] = []
+    for tag, body in _FENCED_BLOCK_RE.findall(text):
+        if lang is None or tag.lower() == lang.lower() or tag == "":
+            blocks.append(body.strip())
+    return blocks
+
+
+def _coerce_json_str(raw: str) -> str:
+    """Return a JSON string parseable by ``json.loads``, using ``repair_json``
+    only if strict parsing fails."""
+    try:
+        json.loads(raw)
+        return raw
+    except Exception:
+        return repair_json(raw)
+
+
+def parse_json_from_llm_response(
+    llm_response: str | Message, tgt_type: Type[T] | None = None
+) -> T | object:
+    """Parse JSON from an LLM response (str or ``Message``).
+
+    Thin wrapper around :func:`parse_json_from_text` that accepts a ``Message``
+    and extracts ``.content``. When ``tgt_type`` is ``None`` the raw dict/list
+    is returned; otherwise the result is validated as that Pydantic model.
+    """
+    text = llm_response.content if isinstance(llm_response, Message) else llm_response
+    return parse_json_from_text(text or "", tgt_type=tgt_type)
 
 
 def parse_markdown_from_llm_response(llm_response: str | Message) -> str:
-    if isinstance(llm_response, Message):
-        text = llm_response.content
-    else:
-        text = llm_response
-    markdown_match = re.search(
-        r"(?:```\s*)?(?:markdown\s*)?(.*)(?:```)?",
-        text,
-        flags=re.DOTALL | re.IGNORECASE,
-    )  # must find something, at least return the entire text
-    if not markdown_match:
-        raise ValueError("Failed to find markdown in LLM response")
-    markdown_str = markdown_match.group(1).strip()
-    return markdown_str
+    """Strip a single surrounding ```markdown`` ``` (or plain ``` ``` ```) fence
+    if present; otherwise return the text as-is. Intended for extracting the
+    model's narrative output when it decides to wrap the whole response.
+    """
+    text = llm_response.content if isinstance(llm_response, Message) else llm_response
+    if text is None:
+        raise ValueError("Failed to find markdown in LLM response: empty text")
+
+    blocks = _extract_fenced_blocks(text, lang="markdown")
+    if blocks:
+        # Use the LAST fenced block (matches "prose preamble, then final answer" shape).
+        return blocks[-1]
+    return text.strip()
 
 
 def parse_json_from_text(text: str, tgt_type: Type[T] | None = None) -> T | object:
-    json_match = re.search(
-        r"(?:```\s*)?(?:json\s*)?(.*)(?:```)?", text, flags=re.DOTALL | re.IGNORECASE
-    )  # must find something, at least return the entire text
-    if not json_match:
-        raise ValueError("Failed to find JSON in text")
-    json_str = json_match.group(1).strip()
-    json_str = repair_json(json_str)
-    if tgt_type is not None:
-        return tgt_type.model_validate_json(json_str)
-    return json.loads(json_str)
+    if not text or not text.strip():
+        raise ValueError("Failed to find JSON in text: empty")
+
+    # Prefer the LAST fenced JSON block; fall back to the whole stripped body.
+    candidates = _extract_fenced_blocks(text, lang="json")
+    candidates.reverse()
+    candidates.append(text.strip())
+
+    last_err: Exception | None = None
+    for snippet in candidates:
+        if not snippet:
+            continue
+        try:
+            parsed_str = _coerce_json_str(snippet)
+            if tgt_type is not None:
+                return tgt_type.model_validate_json(parsed_str)
+            return json.loads(parsed_str)
+        except Exception as e:
+            last_err = e
+            continue
+    raise ValueError(f"Failed to parse JSON from text: {last_err}")
 
 
 def array_to_bullets(arr: list[str]) -> str:
     return "\n".join([f"- {s}" for s in arr])
 
 
-_python_runtime_cache: str | None = None
+# Cache keyed by WorkspaceInitConfig.cache_key() so different configs don't
+# collide. Kept as a dict rather than lru_cache because the fn is called from
+# many call sites and the key space is tiny (~3 distinct configs in practice).
+_python_runtime_cache: dict[tuple, str] = {}
 
 
-def detect_python_runtime() -> str:
-    """Detect the Python runtime environment (uv or plain python).
+def detect_python_runtime(config=None) -> str:
+    """Detect the Python runtime environment string for agent system context.
 
-    Probes once and caches the result. Returns a short string suitable for
-    injection into agent system context, e.g.:
+    The returned text depends on the caller's `WorkspaceInitConfig`:
 
-        "python_runtime: uv (use `uv run python ...` and `uv add ...`)"
-        "python_runtime: python (use `python ...` and `pip install ...`)"
+    - `env_manager="uv"` (default): tells the agent to use `uv run python` /
+      `uv add`, and probes the installed uv version.
+    - `env_manager="python"` with `venv_path=None`: bare python + `pip install`.
+    - `env_manager="python"` with `venv_path` set: bare python in a prepared
+      venv; forbids `uv add` / `pip install` so the agent doesn't try to install
+      into a pre-built environment.
+
+    The result is cached per-config so repeated calls are free.
     """
-    global _python_runtime_cache
-    if _python_runtime_cache is not None:
-        return _python_runtime_cache
+    from scider.core.code_env import DEFAULT_WORKSPACE_INIT_CONFIG, WorkspaceInitConfig
+
+    if config is None:
+        config = DEFAULT_WORKSPACE_INIT_CONFIG
+    elif not isinstance(config, WorkspaceInitConfig):
+        raise TypeError(f"config must be WorkspaceInitConfig or None, got {type(config).__name__}")
+
+    key = config.cache_key()
+    cached = _python_runtime_cache.get(key)
+    if cached is not None:
+        return cached
 
     import shutil
     import subprocess
 
-    if shutil.which("uv"):
-        try:
-            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
-            version = result.stdout.strip() if result.returncode == 0 else "uv"
-            _python_runtime_cache = (
-                f"python_runtime: {version}\n"
-                "  Use `uv run python script.py` to execute scripts (NOT `python script.py`).\n"
-                "  Use `uv add <package>` to install packages (NOT `pip install`).\n"
-                "  Use `uv run pytest` to run tests."
+    if config.env_manager == "uv":
+        if shutil.which("uv"):
+            try:
+                result = subprocess.run(
+                    ["uv", "--version"], capture_output=True, text=True, timeout=5
+                )
+                version = result.stdout.strip() if result.returncode == 0 else "uv"
+                text = (
+                    f"python_runtime: {version}\n"
+                    "  Use `uv run python script.py` to execute scripts (NOT `python script.py`).\n"
+                    "  Use `uv add <package>` to install packages (NOT `pip install`).\n"
+                    "  Use `uv run pytest` to run tests."
+                )
+            except Exception:
+                text = (
+                    "python_runtime: uv (detected but version check failed)\n"
+                    "  Use `uv run python script.py` and `uv add <package>`."
+                )
+        else:
+            # Config asked for uv but it's not installed; fall back to python text.
+            text = (
+                "python_runtime: python (uv requested but not found)\n"
+                "  Use `python script.py` to execute scripts.\n"
+                "  Use `pip install <package>` to install packages."
             )
-        except Exception:
-            _python_runtime_cache = (
-                "python_runtime: uv (detected but version check failed)\n"
-                "  Use `uv run python script.py` and `uv add <package>`."
+    else:  # env_manager == "python"
+        if config.venv_path is not None:
+            text = (
+                f"python_runtime: python (prebuilt venv at {config.venv_path})\n"
+                "  Use `python script.py` to execute scripts — the correct "
+                "interpreter is already on PATH.\n"
+                "  Do NOT run `uv add` / `pip install` / `uv pip install`: all "
+                "dependencies are preinstalled in the venv."
             )
-    else:
-        _python_runtime_cache = (
-            "python_runtime: python\n"
-            "  Use `python script.py` to execute scripts.\n"
-            "  Use `pip install <package>` to install packages."
-        )
+        else:
+            text = (
+                "python_runtime: python\n"
+                "  Use `python script.py` to execute scripts.\n"
+                "  Use `pip install <package>` to install packages."
+            )
 
-    return _python_runtime_cache
+    _python_runtime_cache[key] = text
+    return text
 
 
 _gpu_runtime_cache: str | None = None

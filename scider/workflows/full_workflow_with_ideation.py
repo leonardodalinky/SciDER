@@ -18,6 +18,7 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
 
+from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
@@ -94,6 +95,10 @@ class FullWorkflowWithIdeation(BaseModel):
 
     # Session management
     data_desc: str | None = None  # Optional additional description of the data
+
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Forwarded to
+    # nested IdeationWorkflow / DataWorkflow / ExperimentWorkflow / WritingWorkflow.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal[
@@ -194,6 +199,7 @@ class FullWorkflowWithIdeation(BaseModel):
             workspace_path=self.workspace_path,
             research_domain=self.research_domain,
             recursion_limit=self.ideation_agent_recursion_limit,
+            workspace_init_config=self.workspace_init_config,
         )
 
         try:
@@ -246,6 +252,7 @@ class FullWorkflowWithIdeation(BaseModel):
             workspace_path=self.workspace_path,
             recursion_limit=self.data_agent_recursion_limit,
             data_desc=enriched_desc or None,
+            workspace_init_config=self.workspace_init_config,
         )
 
         try:
@@ -304,6 +311,7 @@ class FullWorkflowWithIdeation(BaseModel):
             repo_source=self.repo_source,
             max_revisions=self.max_revisions,
             recursion_limit=self.experiment_agent_recursion_limit,
+            workspace_init_config=self.workspace_init_config,
         )
 
         try:
@@ -368,6 +376,7 @@ class FullWorkflowWithIdeation(BaseModel):
                 paper_template_tex_path=self.paper_template_tex_path,
                 paper_conference_guidelines_path=self.paper_conference_guidelines_path,
                 paper_agent_recursion_limit=self.paper_agent_recursion_limit,
+                workspace_init_config=self.workspace_init_config,
             )
             if self._writing_workflow.final_status != "success":
                 self.error_message = (
@@ -524,6 +533,7 @@ def run_full_workflow_with_ideation(
     paper_template_tex_path: str | Path | None = None,
     paper_conference_guidelines_path: str | Path | None = None,
     paper_agent_recursion_limit: int = 150,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> FullWorkflowWithIdeation:
     """
     Convenience function to run the full SciDER workflow with ideation.
@@ -586,6 +596,7 @@ def run_full_workflow_with_ideation(
             Path(paper_conference_guidelines_path) if paper_conference_guidelines_path else None
         ),
         paper_agent_recursion_limit=paper_agent_recursion_limit,
+        workspace_init_config=workspace_init_config,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

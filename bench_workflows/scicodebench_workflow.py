@@ -11,18 +11,33 @@ from loguru import logger
 # Add parent directory to path to find scider and bench modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bench_workflows.register_models.gemini import (
-    register_gemini3_medium_high_models,
-    register_gemini_low_medium_models,
-    register_gemini_medium_high_models,
-)
-from bench_workflows.register_models.gpt import (
-    register_gpt_low_medium_models,
-    register_gpt_medium_high_models,
-)
-from scider.agents.experiment_agent.coding_subagent_v3_claude import build
-from scider.agents.experiment_agent.coding_subagent_v3_claude.state import ClaudeCodingAgentState
+from scider.agents.coding_subagent_claude.build import build
+from scider.agents.coding_subagent_claude.state import ClaudeCodingAgentState
 from scider.core.code_env import LocalEnv
+from scider.default.models import register_defaults_from_yaml
+
+# Model presets live under model_settings/presets/ as yaml files. The
+# --models CLI flag picks one of these; to add a new preset, drop a yaml
+# file in the corresponding directory and add an entry below.
+PROJECT_ROOT = Path(__file__).parent.parent
+PRESETS_DIR = PROJECT_ROOT / "model_settings" / "presets"
+PRESET_MAP: dict[str, Path] = {
+    "gemini-low-medium": PRESETS_DIR / "gemini" / "low_medium.yaml",
+    "gemini-medium-high": PRESETS_DIR / "gemini" / "medium_high.yaml",
+    "gemini3-medium-high": PRESETS_DIR / "gemini" / "gemini3_medium_high.yaml",
+    "gpt-low-medium": PRESETS_DIR / "gpt" / "low_medium.yaml",
+    "gpt-medium-high": PRESETS_DIR / "gpt" / "medium_high.yaml",
+}
+
+
+def _register_models_from_yaml(preset: str) -> None:
+    """Load role assignments from the yaml file for ``preset``."""
+    yaml_path = PRESET_MAP[preset]
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"Preset yaml missing at {yaml_path}")
+    logger.info("Registering roles from {}", yaml_path)
+    registered = register_defaults_from_yaml(yaml_path)
+    logger.info("Registered {} roles: {}", len(registered), sorted(registered))
 
 
 def run_coding_workflow(user_query: str, workspace_dir: str | Path | None = None) -> str:
@@ -144,19 +159,8 @@ Examples:
 
     args = parser.parse_args()
 
-    # Register models based on choice
-    logger.info(f"Registering models: {args.models}")
-    match args.models:
-        case "gpt-low-medium":
-            register_gpt_low_medium_models()
-        case "gpt-medium-high":
-            register_gpt_medium_high_models()
-        case "gemini-low-medium":
-            register_gemini_low_medium_models()
-        case "gemini-medium-high":
-            register_gemini_medium_high_models()
-        case "gemini3-medium-high":
-            register_gemini3_medium_high_models()
+    # Register models from yaml preset.
+    _register_models_from_yaml(args.models)
 
     # Get user query
     if args.query:

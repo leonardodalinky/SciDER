@@ -99,18 +99,13 @@ READ_ONLY_COMMANDS = {
     "sha1sum",
 }
 
-# Commands that are always dangerous — deny
-DANGEROUS_COMMANDS = {
+# Dangerous compound patterns — matched as substrings because the composition
+# itself is the danger signal (e.g. "rm -rf /" never appears legitimately).
+DANGEROUS_COMPOUND_PATTERNS = {
     "rm -rf /",
     "rm -rf /*",
     "rm -rf ~",
-    "mkfs",
     "dd if=",
-    "format",
-    "shutdown",
-    "reboot",
-    "halt",
-    "poweroff",
     "chmod 777",
     "chmod -R 777",
     "> /dev/sda",
@@ -118,9 +113,35 @@ DANGEROUS_COMMANDS = {
     "curl | bash",
     "wget | sh",
     "wget | bash",
-    "eval",
     ":(){:|:&};:",  # fork bomb
 }
+
+# Dangerous command NAMES — matched only at shell-command boundaries so that
+# `.format()` / `literal_eval` / `# Frame format:` etc. inside Python code
+# don't trigger false positives. Previously these were substring-matched,
+# which blocked harmless Python one-liners.
+DANGEROUS_COMMAND_NAMES = {
+    "mkfs",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "eval",  # shell `eval "..."`, not Python eval()
+}
+
+# Regex matches any of the dangerous command names at a shell-command
+# boundary: start-of-string OR after whitespace/; /& /| /`, AND followed by
+# the same or end-of-string. `(?:^|...)` is non-capturing so only the name
+# itself lands in group 1.
+# Suffix allows `.` so `mkfs.ext4` / `mkfs.xfs` still match the `mkfs`
+# family. Prefix deliberately does NOT include `.` — that's what keeps
+# Python's `.format()` / `.literal_eval` from triggering.
+_DANGEROUS_NAME_RE = re.compile(
+    r"(?:^|[\s;&|`])("
+    + "|".join(re.escape(n) for n in DANGEROUS_COMMAND_NAMES)
+    + r")(?=[\s;&|`.]|$)",
+    re.IGNORECASE,
+)
 
 # Dangerous environment variables that should never be set
 DANGEROUS_ENV_VARS = {
@@ -152,10 +173,14 @@ def _classify_command(command: str) -> str:
     cmd = command.strip()
     cmd_lower = cmd.lower()
 
-    # Check dangerous patterns first
-    for pattern in DANGEROUS_COMMANDS:
+    # Compound patterns (substring): the phrasing IS the signal.
+    for pattern in DANGEROUS_COMPOUND_PATTERNS:
         if pattern in cmd_lower:
             return "dangerous"
+
+    # Command names at shell-command boundaries only.
+    if _DANGEROUS_NAME_RE.search(cmd):
+        return "dangerous"
 
     # Check for dangerous env var manipulation
     for var in DANGEROUS_ENV_VARS:

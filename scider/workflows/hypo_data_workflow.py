@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from scider.core import constant
 from scider.core.approval import ApprovalResult, _get_handler
+from scider.core.code_env import WorkspaceInitConfig
 from scider.core.hypo_data_gen import (
     DataGenSpec,
     format_spec_for_review,
@@ -42,6 +43,9 @@ class HypoDataWorkflow(BaseModel):
     num_rows: int = 1000
     user_query: str = ""
     recursion_limit: int = 100
+    # None → LocalEnv's default (uv-managed, auto `uv init`). Forwarded to the
+    # wrapped DataWorkflow.
+    workspace_init_config: WorkspaceInitConfig | None = None
 
     # Memory directories (optional)
 
@@ -96,6 +100,7 @@ class HypoDataWorkflow(BaseModel):
                 workspace_path=self.workspace_path,
                 recursion_limit=self.recursion_limit,
                 data_desc=data_desc,
+                workspace_init_config=self.workspace_init_config,
             )
             data_workflow.run()
 
@@ -166,6 +171,7 @@ def run_hypo_data_workflow(
     user_query: str = "",
     recursion_limit: int = 100,
     user_approval_enabled: bool = True,
+    workspace_init_config: WorkspaceInitConfig | None = None,
 ) -> HypoDataWorkflow:
     """Convenience function to run the hypothetical data workflow."""
     from scider.core.constant import override_user_approval
@@ -177,6 +183,7 @@ def run_hypo_data_workflow(
             num_rows=num_rows,
             user_query=user_query,
             recursion_limit=recursion_limit,
+            workspace_init_config=workspace_init_config,
         )
         w.run()
     return w
