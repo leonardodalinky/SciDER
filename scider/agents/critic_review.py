@@ -13,7 +13,7 @@ from loguru import logger
 
 from scider.agents.critic_agent import build as critic_build
 from scider.agents.critic_agent.state import CriticAgentState
-from scider.core.approval import ApprovalResult, _get_handler
+from scider.core.approval import ApprovalContext, ApprovalResult, _get_handler
 from scider.core.types import Message
 
 # Compile critic graph once at import time
@@ -132,10 +132,23 @@ def user_review_node(agent_state):
         )
 
     handler = _get_handler()
+    workspace = getattr(agent_state, "workspace", None)
+    workspace_dir = getattr(workspace, "working_dir", None) if workspace is not None else None
+    user_query = (
+        getattr(agent_state, "user_query", "") or getattr(agent_state, "data_desc", "") or ""
+    )
+    context = ApprovalContext(
+        parent_state=agent_state,
+        parent_agent=("data" if hasattr(agent_state, "data_desc") else "experiment"),
+        workspace_dir=workspace_dir,
+        critic_feedback=feedback,
+        user_query=user_query,
+    )
     response = handler.request_approval(
         node_name="user_review",
         summary=summary,
         title="Review critic feedback — any additional changes?",
+        context=context,
     )
 
     if response.result == ApprovalResult.APPROVED:

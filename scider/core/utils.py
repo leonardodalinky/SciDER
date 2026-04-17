@@ -248,7 +248,14 @@ def detect_gpu_runtime() -> str:
         for i, line in enumerate(lines):
             parts = [p.strip() for p in line.split(",")]
             name = parts[0] if parts else "Unknown"
-            mem = f"{parts[1]} MiB" if len(parts) > 1 else "unknown memory"
+            raw_mem = parts[1] if len(parts) > 1 else ""
+            if "GB10" in name:
+                # GB10 uses Grace Blackwell unified memory; nvidia-smi reports [N/A].
+                mem = "Hybrid 128 GiB (unified CPU+GPU memory)"
+            elif raw_mem and raw_mem != "[N/A]":
+                mem = f"{raw_mem} MiB"
+            else:
+                mem = "unknown memory"
             gpu_descriptions.append(f"  GPU {i}: {name} ({mem})")
 
         _gpu_runtime_cache = (

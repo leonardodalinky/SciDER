@@ -153,6 +153,8 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
+    default_params:
+      reasoning_effort: low
 
   claude-sonnet-4-5:
     provider: anthropic
@@ -160,6 +162,8 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
+    default_params:
+      reasoning_effort: low
 
   claude-sonnet-4-6:
     provider: anthropic
@@ -167,6 +171,8 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
+    default_params:
+      reasoning_effort: low
 
   claude-opus-4-5:
     provider: anthropic
@@ -174,6 +180,8 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
+    default_params:
+      reasoning_effort: low
 
   claude-opus-4-6:
     provider: anthropic
@@ -181,6 +189,8 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [ANTHROPIC_API_KEY]
+    default_params:
+      reasoning_effort: low
 
   # ---- Embedding ----
   text-embedding-3-small:

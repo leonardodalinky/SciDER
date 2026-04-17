@@ -1,7 +1,6 @@
 {
     "sync-rsync.local": "/home/link/github/SciEvo",
-    // "sync-rsync.remote": "klin07@astral-8xA30-jump:~/rsync/SciDER",
-    "sync-rsync.remote": "ubuntu@64.181.243.108:~/SciEvo",
+    "sync-rsync.remote": "klin@ai4scientist-spark:~/rsync/SciEvo",
     "sync-rsync.onSave": false,
     "sync-rsync.onSaveIndividual": false,
     "sync-rsync.delete": false,
@@ -19,7 +18,12 @@
         // project specific
         "sth_large/",
         "*.h5",
-        "**/*.h5"
+        "**/*.h5",
+        // aiideabench
+        "**/dataset_temple/",
+        "**/target_paper_data.json",
+        "**/papers_data/",
+        "**/model_output/"
     ],
     "sync-rsync.useWSL": true
 }

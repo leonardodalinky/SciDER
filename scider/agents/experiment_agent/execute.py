@@ -47,17 +47,17 @@ def _get_coding_backend() -> str:
     import os
 
     raw = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
-    return {"v3": "claude_sdk", "v2": "openhands", "native": "native"}.get(raw, raw)
+    return {"v3": "claude_sdk", "native": "native"}.get(raw, raw)
 
 
 # Backends that delegate coding to a subagent (experiment agent gets no write tools)
-_SUBAGENT_BACKENDS = {"claude_sdk", "openhands", "native"}
+_SUBAGENT_BACKENDS = {"claude_sdk", "native"}
 
 
 def _get_agent_tools() -> list[str]:
     """Return tool list based on coding backend.
 
-    When a dedicated coding subagent is configured (claude_sdk, openhands, native),
+    When a dedicated coding subagent is configured (claude_sdk, native),
     FileEdit/FileWrite are removed — all code writing goes through the subagent.
     """
     backend = _get_coding_backend()

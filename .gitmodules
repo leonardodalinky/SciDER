@@ -7,3 +7,6 @@
 [submodule "benchmarks/aiideabench/AI_Idea_Bench"]
 	path = benchmarks/aiideabench/AI_Idea_Bench
 	url = git@github.com:leonardodalinky/AI_Idea_Bench_2025.git
+[submodule "benchmarks/astrovisbench/AstroVisBench"]
+	path = benchmarks/astrovisbench/AstroVisBench
+	url = git@github.com:leonardodalinky/AstroVisBench.git

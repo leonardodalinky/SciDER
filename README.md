@@ -127,13 +127,12 @@ docker run -d \
 
 ## Coding Backend
 
-The experiment agent delegates code implementation to a coding subagent. Three backends are available, selectable via the `CODING_AGENT_VERSION` environment variable:
+The experiment agent delegates code implementation to a coding subagent. Two backends are available, selectable via the `CODING_AGENT_VERSION` environment variable:
 
 | Backend | Value | Description |
 |---|---|---|
 | Claude Agent SDK (default) | `claude_sdk` | Delegates to Claude Agent SDK. Requires `pip install claude-agent-sdk` and `ANTHROPIC_API_KEY`. |
 | Native | `native` | SciDER's built-in coding agent. Uses the `experiment_coding` model role with any LiteLLM-supported provider. No external dependencies. Pick this if you want a non-Claude provider (Gemini, GPT, etc.). |
-| OpenHands | `openhands` | Delegates to OpenHands sandbox. Requires `SCIDER_ENABLE_OPENHANDS=1`. |
 
 Set `CODING_AGENT_VERSION` in `.env` to switch backends.
 

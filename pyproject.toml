@@ -12,7 +12,7 @@ authors = [
     { name = "Yilin Lu", email = "lu000661@umn.edu" }
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.14.2",
     "claude-agent-sdk>=0.1.33",
@@ -24,8 +24,11 @@ dependencies = [
     "langgraph>=1.0.2",
     "litellm>=1.79.0,<1.80.0",
     "loguru>=0.7.3",
-    "numpy>=2.3.4",
-    "pandas>=2.3.3",
+    # numpy 2.3 / pandas 2.3 dropped Python 3.10 support; pin to 2.2.x to
+    # keep requires-python>=3.10. They are only used by scider/core/hypo_data_gen.py
+    # to spawn a generation subprocess in SciDER's own venv.
+    "numpy>=2.0,<2.3",
+    "pandas>=2.2,<2.3",
     "pillow>=12.0.0",
     "pydantic>=2.12.3",
     "pyfunctional>=1.5.0",
@@ -55,10 +58,6 @@ cu128 = [
 mac = [
     "torch>=2.9.0",
     "torchvision",
-]
-openhands = [
-    "openhands-sdk==1.3.0",
-    "openhands-tools==1.3.0",
 ]
 streamlit = [
     "streamlit>=1.30.0",

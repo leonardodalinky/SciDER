@@ -22,6 +22,7 @@ class Prompts:
     history: "HistoryPrompts"
     paper_subagent: "PaperSubagentPrompts"
     hypo_data_gen: "HypoDataGenPrompts"
+    approval_subagent: "ApprovalSubagentPrompts"
 
 
 @dataclass
@@ -86,6 +87,11 @@ class HypoDataGenPrompts:
     user_prompt: Template
 
 
+@dataclass
+class ApprovalSubagentPrompts:
+    system_prompt: Template
+
+
 def parse_yaml_as_templates(model_type: Type[T], path: str | Path) -> T:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
@@ -124,6 +130,9 @@ def init():
         ),
         hypo_data_gen=parse_yaml_as_templates(
             HypoDataGenPrompts, DIR / "hypo_data_gen_prompt.yaml"
+        ),
+        approval_subagent=parse_yaml_as_templates(
+            ApprovalSubagentPrompts, DIR / "approval_subagent_prompt.yaml"
         ),
     )
 

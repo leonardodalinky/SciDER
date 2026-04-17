@@ -23,7 +23,6 @@ except Exception:
     pass
 
 os.environ.setdefault("CODING_AGENT_VERSION", "claude_sdk")
-os.environ.setdefault("SCIDER_ENABLE_OPENHANDS", "0")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
@@ -102,7 +101,6 @@ _AGENT_LABELS = {
     # Coding backends
     "claude_agent_sdk": "🤖 Claude Agent SDK",
     "claude_code": "🤖 Claude Code",
-    "openhands": "🤖 OpenHands",
     "summary_node": "📝 Summary",
     # Critic & system
     "critic": "🧐 Critic Agent",

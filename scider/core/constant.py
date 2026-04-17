@@ -24,6 +24,10 @@ HF_DATASET_MAX_SIZE_MB = int(os.getenv("HF_DATASET_MAX_SIZE_MB", 100))
 
 # User Approval
 USER_APPROVAL_ENABLED = str_to_bool(os.getenv("USER_APPROVAL_ENABLED", True))
+# When auto-approval is on (USER_APPROVAL_ENABLED=false), route critic's
+# user_review through an LLM subagent that judges result quality
+# (not process errors). Set to false to fall back to blind auto-approve.
+APPROVAL_SUBAGENT_ENABLED = str_to_bool(os.getenv("APPROVAL_SUBAGENT_ENABLED", True))
 
 
 @contextlib.contextmanager

@@ -1,6 +1,6 @@
 """Native coding subagent — uses SciDER's query() loop with full tool access.
 
-No external dependencies (no Claude Agent SDK, no OpenHands).
+No external dependencies (no Claude Agent SDK).
 Works with any LiteLLM-supported model via the experiment_coding role.
 """
 

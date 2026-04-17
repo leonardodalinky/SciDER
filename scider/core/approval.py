@@ -7,7 +7,9 @@ feedback at critical agent steps. Controlled by USER_APPROVAL_ENABLED env var.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
@@ -36,17 +38,40 @@ class ApprovalResponse:
         self.selected_index = selected_index  # For single-item selection approvals
 
 
+@dataclass
+class ApprovalContext:
+    """Context for result-style approvals — passed to subagent-capable handlers.
+
+    Only populated by call sites that want a potential LLM approval subagent
+    to have access to the parent agent's artifacts. Other handlers ignore it.
+    """
+
+    parent_state: Any | None = None  # HistoryState subclass
+    parent_agent: str = ""  # "data" | "experiment" | ...
+    workspace_dir: Path | None = None
+    critic_feedback: str | None = None
+    user_query: str = ""
+
+
 class ApprovalHandler(ABC):
     """Abstract base class for approval handlers."""
 
     @abstractmethod
-    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
+    def request_approval(
+        self,
+        node_name: str,
+        summary: str,
+        title: str = "",
+        *,
+        context: ApprovalContext | None = None,
+    ) -> ApprovalResponse:
         """Request user approval. Blocks until user responds.
 
         Args:
             node_name: Name of the node that produced the output.
             summary: Human-readable summary of the output to review.
             title: Short abstract/title describing what this approval is about.
+            context: Optional parent-state context for subagent-capable handlers.
 
         Returns:
             ApprovalResponse with the user's decision and optional feedback.
@@ -75,7 +100,14 @@ class ApprovalHandler(ABC):
 class CLIApprovalHandler(ApprovalHandler):
     """CLI-based approval handler using input() for blocking user interaction."""
 
-    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
+    def request_approval(
+        self,
+        node_name: str,
+        summary: str,
+        title: str = "",
+        *,
+        context: ApprovalContext | None = None,
+    ) -> ApprovalResponse:
         separator = "=" * 60
         print(f"\n{separator}")
         print(f"  User Approval Required: [{node_name}]")
@@ -163,7 +195,14 @@ class CLIApprovalHandler(ApprovalHandler):
 class JupyterApprovalHandler(ApprovalHandler):
     """Jupyter notebook approval handler with rich display."""
 
-    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
+    def request_approval(
+        self,
+        node_name: str,
+        summary: str,
+        title: str = "",
+        *,
+        context: ApprovalContext | None = None,
+    ) -> ApprovalResponse:
         from IPython.display import Markdown, display
 
         title_line = f"\n**{title}**\n" if title else ""
@@ -237,7 +276,14 @@ class JupyterApprovalHandler(ApprovalHandler):
 class AutoApprovalHandler(ApprovalHandler):
     """Auto-approval handler. Always approves without user interaction."""
 
-    def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
+    def request_approval(
+        self,
+        node_name: str,
+        summary: str,
+        title: str = "",
+        *,
+        context: ApprovalContext | None = None,
+    ) -> ApprovalResponse:
         logger.debug("Auto-approved [{}]", node_name)
         return ApprovalResponse(result=ApprovalResult.APPROVED)
 
@@ -245,6 +291,67 @@ class AutoApprovalHandler(ApprovalHandler):
         self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         logger.debug("Auto-approved [{}], selected first item", node_name)
+        return ApprovalResponse(
+            result=ApprovalResult.APPROVED,
+            selected_index=0 if items else None,
+        )
+
+
+class SubagentApprovalHandler(ApprovalHandler):
+    """Invoke an LLM approval subagent for whitelisted nodes,
+    auto-approve everything else.
+
+    Currently only ``user_review`` (critic's result approval) is hooked.
+    Non-hookable nodes and selection-style approvals fall through to
+    blind APPROVED (matches AutoApprovalHandler semantics), which keeps
+    backwards compatibility for ``AskUserQuestion`` and plan-style approvals.
+    """
+
+    HOOKED_NODES: set[str] = {"user_review"}
+
+    def request_approval(
+        self,
+        node_name: str,
+        summary: str,
+        title: str = "",
+        *,
+        context: ApprovalContext | None = None,
+    ) -> ApprovalResponse:
+        if node_name not in self.HOOKED_NODES or context is None:
+            logger.debug("SubagentApprovalHandler: passthrough [{}]", node_name)
+            return ApprovalResponse(result=ApprovalResult.APPROVED)
+
+        # Lazy import to avoid circular dependency (approval <- subagent <- query).
+        from scider.agents.approval_subagent import run_approval_subagent
+
+        try:
+            verdict, feedback = run_approval_subagent(
+                node_name=node_name,
+                summary=summary,
+                title=title,
+                context=context,
+            )
+        except Exception as e:
+            logger.warning("Approval subagent failed ({}), fail-open APPROVED", e)
+            return ApprovalResponse(result=ApprovalResult.APPROVED)
+
+        logger.info("Approval subagent verdict [{}]: {}", node_name, verdict)
+        if verdict == "approve":
+            return ApprovalResponse(result=ApprovalResult.APPROVED)
+        return ApprovalResponse(
+            result=ApprovalResult.FEEDBACK,
+            feedback=feedback or "Approval subagent requested revisions.",
+        )
+
+    def request_approval_with_selection(
+        self, node_name: str, summary: str, items: list[dict], title: str = ""
+    ) -> ApprovalResponse:
+        # Selection-style approvals (AskUserQuestion) are never hooked in this
+        # release. Preserve AutoApprovalHandler semantics: APPROVED + first item.
+        logger.debug(
+            "SubagentApprovalHandler: selection passthrough [{}], picking first item",
+            node_name,
+        )
         return ApprovalResponse(
             result=ApprovalResult.APPROVED,
             selected_index=0 if items else None,
@@ -268,8 +375,15 @@ def get_default_handler() -> ApprovalHandler:
     """Get the default approval handler based on USER_APPROVAL_ENABLED setting.
 
     Auto-detects Jupyter environment and uses JupyterApprovalHandler if applicable.
+    When auto-approval is on, uses SubagentApprovalHandler (LLM judge for
+    user_review) if APPROVAL_SUBAGENT_ENABLED, else AutoApprovalHandler.
     """
     if not constant.USER_APPROVAL_ENABLED:
+        if constant.APPROVAL_SUBAGENT_ENABLED:
+            logger.debug(
+                "Auto-approval on + APPROVAL_SUBAGENT_ENABLED — using SubagentApprovalHandler"
+            )
+            return SubagentApprovalHandler()
         return AutoApprovalHandler()
     if _is_jupyter():
         logger.debug("Jupyter environment detected, using JupyterApprovalHandler")

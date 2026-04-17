@@ -1,11 +1,10 @@
 """Register the coding subagent in AgentRegistry.
 
-Wraps the existing Claude Agent SDK / OpenHands / Native coding subagent
-so it can be invoked via `Agent(prompt="...", subagent_type="coding")`.
+Wraps the Claude Agent SDK or Native coding subagent so it can be invoked
+via `Agent(prompt="...", subagent_type="coding")`.
 
 Supported CODING_AGENT_VERSION values:
   - "claude_sdk" or "v3" (default): Claude Agent SDK
-  - "openhands" or "v2": OpenHands (requires SCIDER_ENABLE_OPENHANDS=1)
   - "native": SciDER built-in coding subagent
 """
 
@@ -17,12 +16,10 @@ from loguru import logger
 
 from scider.tools.agent_tool import AgentRegistry, AgentType
 
-# Normalize version names: accept both old (v2/v3) and new names
+# Normalize version names: accept legacy alias v3 → claude_sdk
 _VERSION_ALIASES = {
     "v3": "claude_sdk",
-    "v2": "openhands",
     "claude_sdk": "claude_sdk",
-    "openhands": "openhands",
     "native": "native",
 }
 
@@ -45,12 +42,6 @@ def register_coding_subagent() -> str | None:
     Returns the registered backend name, or None if registration failed.
     """
     coding_agent_version = _resolve_version()
-    _OPENHANDS_ENABLED = os.getenv("SCIDER_ENABLE_OPENHANDS", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "y",
-    }
 
     match coding_agent_version:
         case "native":
@@ -60,17 +51,6 @@ def register_coding_subagent() -> str | None:
             )
 
             compiled_graph = coding_build_fn().compile()
-        case "openhands":
-            if not _OPENHANDS_ENABLED:
-                logger.warning(
-                    "CODING_AGENT_VERSION=openhands requires SCIDER_ENABLE_OPENHANDS=1. "
-                    "Coding subagent not registered."
-                )
-                return None
-            from scider.agents.coding_subagent_openhands import build as coding_build
-            from scider.agents.coding_subagent_openhands.state import CodingAgentState
-
-            compiled_graph = coding_build().compile()
         case "claude_sdk":
             from scider.agents.coding_subagent_claude.build import build as coding_build_fn
             from scider.agents.coding_subagent_claude.state import (
@@ -102,7 +82,7 @@ def register_coding_subagent() -> str | None:
             "user_query": prompt,
             "data_summary": data_summary,
         }
-        # Claude/OpenHands subagents skip summary (experiment agent generates its own);
+        # Claude subagent skips summary (experiment agent generates its own);
         # native subagent always generates summary via LLM.
         if coding_agent_version != "native":
             kwargs["skip_summary"] = True

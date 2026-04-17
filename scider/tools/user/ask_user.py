@@ -83,9 +83,11 @@ class AskUserQuestionTool(BaseTool):
         *,
         questions: list[dict],
     ) -> str:
+        from scider.core import constant
         from scider.core.approval import _get_handler
 
         handler = _get_handler()
+        is_auto = not constant.USER_APPROVAL_ENABLED
         answers: dict[str, str] = {}
 
         for q_data in questions:
@@ -102,7 +104,16 @@ class AskUserQuestionTool(BaseTool):
                 )
 
                 if response.selected_index is not None and response.selected_index < len(q.options):
-                    answers[q.question] = q.options[response.selected_index].label
+                    chosen = q.options[response.selected_index].label
+                    if is_auto:
+                        answers[q.question] = (
+                            f"[Non-interactive mode — no human available to answer] "
+                            f"Default choice: '{chosen}'. Proceed with it, OR with "
+                            f"any other option you judge optimal. Do NOT ask this "
+                            f"question again — make a decision and execute."
+                        )
+                    else:
+                        answers[q.question] = chosen
                 elif response.feedback:
                     answers[q.question] = response.feedback
                 else:
@@ -119,7 +130,15 @@ class AskUserQuestionTool(BaseTool):
                 if response.feedback:
                     answers[q.question] = response.feedback
                 elif response.result.value == "approved":
-                    answers[q.question] = "(approved without specific answer)"
+                    if is_auto:
+                        answers[q.question] = (
+                            "[Non-interactive mode — no human available to answer] "
+                            "Proceed with the first approach you proposed, OR "
+                            "whatever you judge optimal given the context. Do NOT "
+                            "ask this question again — make a decision and execute."
+                        )
+                    else:
+                        answers[q.question] = "(approved without specific answer)"
                 else:
                     answers[q.question] = "(rejected)"
 

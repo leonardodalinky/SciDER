@@ -7,3 +7,12 @@ uv.lock
 datascibench/main.py
 mlebench/main.py
 scicodebench/main.py
+astrovisbench/main.py
+# astrovisbench downloads (bench env, caches, queries JSON) — can be ~100 GB
+astrovisbench/data/
+
+.pdf
+.png
+.jpg
+.jpeg
+.gif
