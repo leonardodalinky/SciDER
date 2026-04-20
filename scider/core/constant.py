@@ -17,6 +17,12 @@ LOG_SYSTEM_PROMPT = str_to_bool(os.getenv("LOG_SYSTEM_PROMPT", False))
 # Semantic Scholar
 S2_API_KEY = os.getenv("S2_API_KEY", "")
 
+# Web Search backend — selects which SDK the WebSearch tool uses.
+# Supported: "duckduckgo" (default, no key needed) or "tavily" (requires
+# TAVILY_API_KEY). Mirrors the CODING_AGENT_VERSION pattern.
+WEB_SEARCH_VERSION = os.getenv("WEB_SEARCH_VERSION", "duckduckgo").lower()
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
 # HuggingFace Dataset Download
 HF_DATASET_DOWNLOAD_ENABLED = str_to_bool(os.getenv("HF_DATASET_DOWNLOAD_ENABLED", False))
 HF_DATASET_CACHE_DIR = os.getenv("HF_DATASET_CACHE_DIR", "tmp_hf_datasets")

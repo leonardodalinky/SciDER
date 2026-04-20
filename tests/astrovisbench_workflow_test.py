@@ -116,24 +116,21 @@ class TestStageInputs:
 
 
 class TestBuildUserQuery:
-    def test_contains_all_sections_and_underspecs(self, fake_query):
+    def test_contains_all_recipe_sections(self, fake_query):
         q = mod._build_user_query(fake_query, var_names=["train_data", "train_labels"])
-        # All upstream README §"Visualization" recipe inputs are present.
-        assert "Setup description" in q
+        # README §"Visualization" recipe inputs are all present.
         assert fake_query["setup_query"].strip().splitlines()[0] in q
         assert "import numpy as np" in q
-        assert "Processing description" in q
-        assert "Processing code" in q
+        assert "Processing" in q  # processing_query + code labelled
         assert "Processing underspecifications" in q
         assert "per-star" in q  # from processing_underspec
-        # Task + vis underspec included (user req #1).
+        # Task + vis underspec included.
         assert "Plot a 4x4 grid" in q
         assert "Visualization underspecifications" in q
         assert "red for flares" in q
-        # Pickle recipe / forbid installs.
+        # Pickle recipe.
         assert "./inputs/train_data.pkl" in q
         assert "./inputs/train_labels.pkl" in q
-        assert "do NOT" in q.lower() or "do not" in q.lower()
         # Output contract.
         assert mod.OUTPUT_IMAGE_FILENAME in q
         assert "plt.savefig" in q
@@ -145,6 +142,40 @@ class TestBuildUserQuery:
         out = mod._build_user_query(q, var_names=["train_data"])
         assert "Processing underspecifications" not in out
         assert "Visualization underspecifications" not in out
+
+    def test_core_dont_do_this_instructions_present(self, fake_query):
+        """The prompt must still tell the agent: no package installs, no
+        re-running processing. (Network/filesystem access is now allowed
+        via ``bench_env_root``.)"""
+        q = mod._build_user_query(fake_query, var_names=["x"])
+        low = q.lower()
+        assert "do not install" in low
+        assert "do not re-run" in low
+
+    def test_bench_env_section_absent_by_default(self, fake_query):
+        """No --bench-env-root flag → no mention of bench environment."""
+        q = mod._build_user_query(fake_query, var_names=["x"])
+        assert "bench_env" not in q.lower()
+        assert "Additional resource" not in q
+
+    def test_bench_env_section_included_when_root_provided(self, fake_query):
+        """With --bench-env-root set, prompt points at the right subdir and
+        explains the _comped.tar.gz + .ipynb layout."""
+        fake_query["nb_path"] = "Classifying_TESS_flares_with_CNNs.ipynb"
+        q = mod._build_user_query(
+            fake_query,
+            var_names=["x"],
+            bench_env_root=Path("/opt/bench_environment"),
+        )
+        # Section headline.
+        assert "Additional resource" in q
+        # Per-nb subdir path is rendered correctly.
+        assert "/opt/bench_environment/Classifying_TESS_flares_with_CNNs/" in q
+        # Tarball name + how to extract.
+        assert "Classifying_TESS_flares_with_CNNs_comped.tar.gz" in q
+        assert "tarfile" in q and "extractall" in q
+        # Still forbids HTTP — local bench_env is the escape hatch, not downloads.
+        assert "do not download" in q.lower() or "NOT download" in q
 
 
 class TestBuildDataSummary:
@@ -419,6 +450,18 @@ class TestValidatePickles:
             Path("/nonexistent/python"),
         )
         assert "anything.pkl" in out
+
+    def test_pointer_pickles_are_not_rejected(self, tmp_path: Path):
+        """Since the agent can now resolve filename/path pickles via
+        ``bench_env_root``, ``validate_pickles`` must NOT reject them."""
+        import sys
+        from pathlib import PosixPath as _PP
+
+        name_pkl = self._picklable_temp(tmp_path, "hst_7656_foo.fits", "stis_coadd_filename.pkl")
+        dir_pkl = self._picklable_temp(tmp_path, _PP("stis_products"), "stis_products_dir.pkl")
+
+        out = mod.validate_pickles([name_pkl, dir_pkl], Path(sys.executable))
+        assert out == {}, "Pointer pickles must load-OK now — bench_env_root handles them."
 
 
 # --------------------------------------------------------------------------- #

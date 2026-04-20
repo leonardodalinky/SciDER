@@ -10,3 +10,6 @@
 [submodule "benchmarks/astrovisbench/AstroVisBench"]
 	path = benchmarks/astrovisbench/AstroVisBench
 	url = git@github.com:leonardodalinky/AstroVisBench.git
+[submodule "benchmarks/airsbench/airs-bench"]
+	path = benchmarks/airsbench/airs-bench
+	url = git@github.com:leonardodalinky/airs-bench.git

@@ -19,7 +19,7 @@ pinned: false
     <br/>
     <a href="https://arxiv.org/abs/2603.01421"><img src="https://img.shields.io/badge/arXiv-2603.01421-brightred?color=B31B1B&logo=arXiv&style=for-the-badge" alt="ArXiv"></a>
     <br/>
-    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%E2%89%A53.12-blue?logo=python&style=for-the-badge" alt="Python 3.12">
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%E2%89%A53.10-blue?logo=python&style=for-the-badge" alt="Python 3.10">
     </a>
     <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&style=for-the-badge" alt="pre-commit">
     </a>

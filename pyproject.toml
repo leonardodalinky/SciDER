@@ -24,11 +24,8 @@ dependencies = [
     "langgraph>=1.0.2",
     "litellm>=1.79.0,<1.80.0",
     "loguru>=0.7.3",
-    # numpy 2.3 / pandas 2.3 dropped Python 3.10 support; pin to 2.2.x to
-    # keep requires-python>=3.10. They are only used by scider/core/hypo_data_gen.py
-    # to spawn a generation subprocess in SciDER's own venv.
-    "numpy>=2.0,<2.3",
-    "pandas>=2.2,<2.3",
+    "numpy>=2.0",
+    "pandas>=2.0",
     "pillow>=12.0.0",
     "pydantic>=2.12.3",
     "pyfunctional>=1.5.0",
@@ -37,6 +34,7 @@ dependencies = [
     "rich>=14.2.0",
     "tiktoken>=0.12.0",
     "ddgs>=9.13.0",
+    "tavily-python>=0.5.0",
     "matplotlib>=3.10.8",
 ]
 

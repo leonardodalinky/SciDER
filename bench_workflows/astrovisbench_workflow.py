@@ -35,9 +35,10 @@ is good enough — if yes, we skip the revision round.
 Usage
 -----
     python -m bench_workflows.astrovisbench_workflow \\
-        --cache-root  /home/klin/data/SciDER/AstroVisBench/gt_processing_cache \\
-        --output-root benchmarks/astrovisbench/workspace \\
-        --astrovis-venv benchmarks/astrovisbench/.venv \\
+        --cache-root     /home/klin/data/SciDER/AstroVisBench/gt_processing_cache \\
+        --output-root    benchmarks/astrovisbench/workspace \\
+        --astrovis-venv  benchmarks/astrovisbench/.venv \\
+        --bench-env-root /home/klin/data/SciDER/AstroVisBench/bench_environment \\
         --skip-existing
 """
 
@@ -157,10 +158,15 @@ def _stage_inputs(workspace: Path, pickles: list[Path]) -> list[str]:
     return names
 
 
-# Tiny subprocess probe — tries `pickle.load` on each argv path, prints
+# Subprocess probe — tries `pickle.load` on each argv path, prints
 # {filename: "ErrType: msg"} for failures (empty dict if all OK). Runs in the
 # astrovis venv so the right `lightkurve` / `astropy` / etc. classes are
 # importable; SciDER's own venv doesn't have those.
+#
+# Pointer-valued pickles (filename strings, PosixPaths) are NOT rejected
+# here — they're legitimately used by upstream queries, and the prompt now
+# points the agent at ``bench_env_root`` so it can resolve the referenced
+# files itself.
 _VALIDATE_PICKLE_PROBE = (
     "import pickle, sys, json\n"
     "broken = {}\n"
@@ -197,8 +203,6 @@ def validate_pickles(pickles: list[Path], python_exec: Path) -> dict[str, str]:
         return {p.name: f"probe interpreter unavailable: {e}" for p in pickles}
 
     if r.returncode != 0:
-        # Probe itself crashed — treat as all broken rather than risk handing
-        # half-broken data to the agent.
         err_tail = (r.stderr or r.stdout or "")[-300:]
         return {p.name: f"probe crashed (rc={r.returncode}): {err_tail}" for p in pickles}
 
@@ -217,15 +221,24 @@ def validate_pickles(pickles: list[Path], python_exec: Path) -> dict[str, str]:
 # --------------------------------------------------------------------------- #
 
 
-def _build_user_query(query: dict, var_names: list[str]) -> str:
-    """Assemble the experiment-agent task prompt per upstream AstroVisBench
-    README §"Using the Benchmark" (the Visualization recipe), adapted for our
-    pre-pickled bridge variables and fixed output file."""
+def _build_user_query(
+    query: dict,
+    var_names: list[str],
+    bench_env_root: Path | None = None,
+) -> str:
+    """Assemble the experiment-agent task prompt.
+
+    When ``bench_env_root`` is provided, an extra section points the agent
+    at ``<bench_env_root>/<nb_stem>/`` where the notebook's working-directory
+    state lives (FITS files etc. referenced by pickle filenames). Without
+    that hint, the agent would wander the filesystem hunting for those
+    files — see the astrovis log for the real case that motivated this.
+    """
     pkl_list = "\n".join(f"  - `./{INPUTS_SUBDIR}/{name}.pkl` → `{name}`" for name in var_names)
     proc_underspec = (query.get("processing_underspecifications") or "").strip()
     vis_underspec = (query.get("visualization_underspecifications") or "").strip()
 
-    parts = [
+    parts: list[str] = [
         "# AstroVisBench Visualization Task",
         "",
         f"Your deliverable is a single PNG file at `./{OUTPUT_IMAGE_FILENAME}` "
@@ -239,9 +252,43 @@ def _build_user_query(query: dict, var_names: list[str]) -> str:
         "",
         pkl_list,
         "",
-        "Do NOT try to re-run the processing code, download data, or install "
-        "packages. All necessary Python deps (astropy, matplotlib, numpy, ...) "
-        "are already available on PATH.",
+        "Do NOT re-run the processing code and do NOT install packages. All "
+        "necessary Python deps (astropy, matplotlib, numpy, ...) are already "
+        "available on PATH.",
+    ]
+
+    if bench_env_root is not None:
+        nb_stem = Path(query.get("nb_path") or "").stem or "<unknown>"
+        parts += [
+            "",
+            "## Additional resource — notebook bench environment",
+            "",
+            "Some pickles are filename strings or `Path` objects pointing at "
+            "files that were produced at notebook-execution time (FITS files, "
+            "downloaded data, intermediate outputs) and not themselves "
+            "picklable. The notebook's working-directory state for THIS query "
+            "is available locally at:",
+            "",
+            f"    `{bench_env_root}/{nb_stem}/`",
+            "",
+            "Inside that directory you will typically find:",
+            "",
+            f"  - `{nb_stem}_comped.tar.gz` — compressed snapshot of the "
+            "working dir used when processing was run. If a pickle holds a "
+            "relative filename/path, the referenced file is almost certainly "
+            "inside this tarball. Extract it to a temp dir (e.g. "
+            "`tarfile.open(...).extractall(tmp_dir)`) and read what you need.",
+            f"  - `{nb_stem}.ipynb` — the original notebook (reference only; " "don't rerun it).",
+            "",
+            "Use this path ONLY when the pickles alone aren't enough. For "
+            "queries whose pickles already contain the plotting data (arrays, "
+            "tables, dataframes), there's no need to touch bench_env.",
+            "",
+            "Do NOT download anything from the internet — everything you need "
+            "is either in `./inputs/` or under that bench_env path.",
+        ]
+
+    parts += [
         "",
         "## Notebook context",
         "",
@@ -278,7 +325,7 @@ def _build_user_query(query: dict, var_names: list[str]) -> str:
         "",
         f"- Save the figure as `./{OUTPUT_IMAGE_FILENAME}` (exact name, workspace root).",
         "- Use the matplotlib Agg backend: `matplotlib.use('Agg')`.",
-        "- Call `plt.savefig('generated_image.png', dpi=150, bbox_inches='tight')`.",
+        f"- Call `plt.savefig('{OUTPUT_IMAGE_FILENAME}', dpi=150, bbox_inches='tight')`.",
         "- Do NOT call `plt.show()`.",
         f"- Verify the produced file is a valid non-empty PNG (e.g. `Read {OUTPUT_IMAGE_FILENAME}` "
         "returns an image) before finishing.",
@@ -310,6 +357,7 @@ def run_one_query(
     astrovis_venv: Path | None,
     max_revisions: int,
     recursion_limit: int,
+    bench_env_root: Path | None = None,
 ) -> dict:
     """Run experiment_agent on one AstroVisBench query. Returns a record dict.
 
@@ -344,7 +392,7 @@ def run_one_query(
                     raise RuntimeError(f"Broken pickles in cache for uid={uid}: {broken}")
 
         var_names = _stage_inputs(workspace, pickles)
-        user_query = _build_user_query(query, var_names)
+        user_query = _build_user_query(query, var_names, bench_env_root=bench_env_root)
         data_summary = _build_data_summary(var_names)
 
         # Persist the prompt so the run is reproducible / debuggable.
@@ -424,6 +472,16 @@ def _main() -> None:
         "(<output_root>/<uid>/generated_image.png).",
     )
     parser.add_argument(
+        "--bench-env-root",
+        default=None,
+        help="Path to the extracted upstream bench_environment/ directory "
+        "(i.e. the contents of bench_env.tar.gz). When set, the agent is "
+        "told it can find per-notebook working-dir state under "
+        "<bench_env_root>/<nb_stem>/ — used for queries whose pickles hold "
+        "filenames/paths instead of actual data (FITS files etc.). Leave "
+        "unset if you only have gt_processing_cache/.",
+    )
+    parser.add_argument(
         "--astrovis-venv",
         default=None,
         help="Path to the astrovisbench Python 3.10 venv (e.g. "
@@ -483,6 +541,13 @@ def _main() -> None:
             "happen but the agent may not find the expected interpreter.",
             astrovis_venv,
         )
+    bench_env_root = Path(args.bench_env_root).resolve() if args.bench_env_root else None
+    if bench_env_root is not None and not bench_env_root.is_dir():
+        logger.warning(
+            "bench_env_root={} is not a directory — agent will be told about a "
+            "path that doesn't exist. Fix the flag or leave it unset.",
+            bench_env_root,
+        )
 
     # 3. --skip-existing: filter out uids that already have a valid PNG on disk.
     if args.skip_existing:
@@ -522,6 +587,7 @@ def _main() -> None:
             astrovis_venv=astrovis_venv,
             max_revisions=args.max_revisions,
             recursion_limit=args.recursion_limit,
+            bench_env_root=bench_env_root,
         )
         # Dedup by uid on successive runs.
         results = [r for r in results if r.get("uid") != record["uid"]]

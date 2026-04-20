@@ -137,19 +137,25 @@ uv run python -m bench_workflows.astrovisbench_workflow \
 
 ### Spark-server one-liner
 
-On `ai4scientist-spark` the cache lives outside the repo. Typical invocation
-after `rsync`ing the code:
+On `ai4scientist-spark` the cache and extracted bench_environment live
+outside the repo. Typical invocation after `rsync`ing the code:
 
 ```bash
 ssh klin@ai4scientist-spark
 cd ~/rsync/SciEvo
 set -a && source .env && set +a
 .venv/bin/python -m bench_workflows.astrovisbench_workflow \
-  --cache-root    /home/klin/data/SciDER/AstroVisBench/gt_processing_cache \
-  --output-root   ~/rsync/SciEvo/benchmarks/astrovisbench/workspace \
-  --astrovis-venv ~/rsync/SciEvo/benchmarks/astrovisbench/.venv \
+  --cache-root     /home/klin/data/SciDER/AstroVisBench/gt_processing_cache \
+  --bench-env-root /home/klin/data/SciDER/AstroVisBench/bench_environment \
+  --output-root    ~/rsync/SciEvo/benchmarks/astrovisbench/workspace \
+  --astrovis-venv  ~/rsync/SciEvo/benchmarks/astrovisbench/.venv \
   --skip-existing
 ```
+
+`--bench-env-root` is the directory containing the extracted contents of
+upstream's `bench_env.tar.gz` (one subdir per notebook, each with the
+`*_comped.tar.gz` snapshot inside). When a query's pickles hold filenames
+rather than arrays, the agent is told to resolve them under that path.
 
 ## 4. Optional: upstream full-eval path
 
