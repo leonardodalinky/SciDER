@@ -17,7 +17,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from ...base import BaseTool, ToolContext, ToolImage, ToolResult
+from ...base import BaseTool, ToolContext, ToolDocument, ToolImage, ToolResult
 from .._utils import TEXT_TYPES, guess_file_type
 
 # Default and maximum line limits
@@ -45,6 +45,11 @@ SUPPORTED_IMAGE_MIME: dict[str, str] = {
 
 # JPEG quality ladder for compression — tried in order until payload fits.
 _JPEG_QUALITY_LADDER = [90, 80, 70, 60, 50, 40]
+
+# Max PDF payload bytes sent to the model. Gemini inline PDFs cap out at 20MB;
+# Anthropic and OpenAI are more generous but we keep the same ceiling for
+# predictable behavior across providers.
+MAX_PDF_PAYLOAD_BYTES = 20 * 1024 * 1024
 
 # Binary extensions that should not be read as text
 BINARY_EXTENSIONS = {
@@ -121,7 +126,11 @@ class ReadFileTool(BaseTool):
         "Image files (PNG/JPEG/WebP/GIF): if your model supports vision, "
         "the actual image is attached to the tool result so you can see it; "
         "oversized images are auto-compressed. "
-        "Other binary files (archives, PDFs, audio, video) return text metadata only."
+        "PDF files: attached as a native document block for Claude / Gemini / "
+        "GPT-5 (Responses API) so the model reads the PDF directly; "
+        f"up to {MAX_PDF_PAYLOAD_BYTES // (1024 * 1024)} MB, larger PDFs "
+        "return text metadata only. "
+        "Other binary files (archives, audio, video) return text metadata only."
     )
     input_schema = ReadFileInput
     _always_read_only = True
@@ -137,7 +146,12 @@ class ReadFileTool(BaseTool):
         "the actual image to the tool result and you will see its visual content alongside "
         "text metadata (dimensions, file size). Oversized images (>5 MB) are auto-compressed. "
         "Use this to inspect plots, figures, screenshots, and any image data in the workspace.\n"
-        "- Other binary files (archives, PDFs, media) return text metadata only — no content.\n"
+        "- **PDFs**: attached as a native document block for Claude, Gemini, and GPT-5 "
+        "(Responses API). The model reads the PDF contents directly (text + visuals, "
+        "including scanned PDFs). Up to 20 MB — larger PDFs return text metadata only. "
+        "Chat-Completions-only OpenAI endpoints cannot view PDF content and fall back "
+        "to metadata.\n"
+        "- Other binary files (archives, media) return text metadata only — no content.\n"
     )
 
     def call(
@@ -305,6 +319,8 @@ def _handle_binary_file(file_path: str, ext: str) -> "str | ToolResult":
     """
     if ext in SUPPORTED_IMAGE_MIME:
         return _handle_image_file(file_path, ext)
+    if ext == "pdf":
+        return _handle_pdf_file(file_path)
 
     file_size = os.path.getsize(file_path)
     parts = [
@@ -324,8 +340,6 @@ def _handle_binary_file(file_path: str, ext: str) -> "str | ToolResult":
                 parts.append(f"[Dimensions: {img.size[0]}x{img.size[1]}, format: {img.format}]")
         except Exception:
             pass
-    elif ext == "pdf":
-        parts.append("[PDF document — use appropriate PDF tools to read]")
     elif ext in {"zip", "tar", "gz", "bz2", "xz", "7z", "rar"}:
         parts.append("[Archive file — use appropriate tools to extract]")
     elif ext in {"mp3", "mp4", "avi", "mkv", "mov", "flac", "wav", "ogg"}:
@@ -401,6 +415,56 @@ def _handle_image_file(file_path: str, ext: str) -> "ToolResult | str":
     return ToolResult(
         text="\n".join(text_parts),
         images=[ToolImage(media_type=media_type, data=b64)],
+    )
+
+
+def _handle_pdf_file(file_path: str) -> "ToolResult | str":
+    """Read a PDF and attach it as a native document to the tool result.
+
+    Providers that accept PDF inputs (Anthropic, Gemini, OpenAI Responses)
+    will see the PDF bytes directly. Providers that don't (OpenAI Chat
+    Completions path) will see text metadata plus a note — no extraction.
+    PDFs above ``MAX_PDF_PAYLOAD_BYTES`` fall back to text metadata only.
+    """
+    try:
+        file_size = os.path.getsize(file_path)
+    except OSError as e:
+        return f"[File: {file_path}]\n[Error reading file: {e}]"
+
+    text_parts = [
+        f"[File: {file_path}]",
+        f"[Size: {file_size:,} bytes]",
+        "[Type: pdf]",
+    ]
+
+    if file_size > MAX_PDF_PAYLOAD_BYTES:
+        text_parts.append(
+            f"[PDF exceeds {MAX_PDF_PAYLOAD_BYTES:,}-byte attach limit — metadata only]"
+        )
+        return "\n".join(text_parts)
+
+    try:
+        raw_bytes = Path(file_path).read_bytes()
+    except Exception as e:
+        text_parts.append(f"[Failed to read bytes: {e}]")
+        return "\n".join(text_parts)
+
+    try:
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
+    except Exception as e:
+        text_parts.append(f"[Failed to encode: {e}]")
+        return "\n".join(text_parts)
+
+    text_parts.append("[PDF attached for model viewing]")
+    return ToolResult(
+        text="\n".join(text_parts),
+        documents=[
+            ToolDocument(
+                media_type="application/pdf",
+                data=b64,
+                filename=os.path.basename(file_path),
+            )
+        ],
     )
 
 

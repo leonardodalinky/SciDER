@@ -174,9 +174,18 @@ def _execute_tool_calls(
                 images = [
                     {"media_type": img.media_type, "data": img.data} for img in result.images
                 ] or None
+                documents = [
+                    {
+                        "media_type": doc.media_type,
+                        "data": doc.data,
+                        "filename": doc.filename,
+                    }
+                    for doc in result.documents
+                ] or None
             else:
                 text = str(result)
                 images = None
+                documents = None
 
             results.append(
                 Message(
@@ -185,6 +194,7 @@ def _execute_tool_calls(
                     tool_name=tool_name,
                     content=text,
                     tool_result_images=images,
+                    tool_result_documents=documents,
                 ).with_log()
             )
         except Exception as e:

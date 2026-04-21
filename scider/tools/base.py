@@ -45,16 +45,30 @@ class ToolImage:
 
 
 @dataclass
+class ToolDocument:
+    """A single document (currently PDF) attached to a tool result.
+
+    ``data`` is pure base64 (no ``data:...`` URL prefix). ``filename`` is
+    used by OpenAI's Responses API and shown to the model for citation.
+    """
+
+    media_type: str  # "application/pdf"
+    data: str
+    filename: str | None = None
+
+
+@dataclass
 class ToolResult:
-    """Structured tool result carrying both text and optional images.
+    """Structured tool result carrying text plus optional images / documents.
 
     Tools that only return text can still return a plain ``str`` from
-    ``call()``. Only tools that need to attach images (e.g. Read on a PNG)
-    need to return ``ToolResult``.
+    ``call()``. Return a ``ToolResult`` to attach binary content the LLM
+    should see natively (images, PDFs).
     """
 
     text: str
     images: list[ToolImage] = field(default_factory=list)
+    documents: list[ToolDocument] = field(default_factory=list)
 
 
 class BaseTool(ABC):

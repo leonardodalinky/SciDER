@@ -43,30 +43,46 @@ def _serialize_messages_for_provider(
     litellm_model_id: str,
 ) -> list:
     """Serialize Message objects for the LLM Completion API, injecting
-    image attachments on tool results according to what each provider allows.
+    image and document attachments on tool results according to what each
+    provider allows.
 
-    - Anthropic / Gemini: image blocks go inline on the tool message itself
-      as a multi-part ``content`` list. litellm maps ``image_url`` blocks to
-      each provider's native format.
-    - OpenAI (and unknown): tool messages only accept a text string, so the
-      tool result stays text-only and a synthetic user message carrying the
-      image is appended right after it.
+    - Anthropic / Gemini: image and document blocks go inline on the tool
+      message itself as a multi-part ``content`` list. litellm maps
+      ``image_url`` / ``file`` blocks to each provider's native format.
+    - OpenAI (and unknown): Chat Completions tool messages only accept a
+      text string, so the tool result stays text-only and a synthetic user
+      message carrying the image is appended right after. PDFs are NOT
+      supported on Chat Completions (OpenAI requires Responses API for
+      PDF), so they fall back to text metadata only.
 
-    Messages without ``tool_result_images`` go through the existing
+    Messages without any attachments go through the existing
     ``to_ll_message()`` path unchanged.
     """
     provider = _detect_provider(litellm_model_id)
     out: list = []
     for msg in messages:
         imgs = getattr(msg, "tool_result_images", None)
-        if msg.role == "tool" and imgs:
+        docs = getattr(msg, "tool_result_documents", None)
+        if msg.role == "tool" and (imgs or docs):
             if provider in ("anthropic", "gemini"):
                 content_blocks: list[dict] = [{"type": "text", "text": msg.content or ""}]
-                for img in imgs:
+                for img in imgs or []:
                     content_blocks.append(
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                        }
+                    )
+                for doc in docs or []:
+                    # litellm maps "file" to Anthropic ``document`` blocks and
+                    # Gemini ``inlineData`` parts with application/pdf.
+                    content_blocks.append(
+                        {
+                            "type": "file",
+                            "file": {
+                                "file_data": f"data:{doc['media_type']};base64,{doc['data']}",
+                                **({"filename": doc["filename"]} if doc.get("filename") else {}),
+                            },
                         }
                     )
                 out.append(
@@ -77,22 +93,44 @@ def _serialize_messages_for_provider(
                     }
                 )
             else:
-                # OpenAI workaround: text-only tool result + synthetic user msg
+                # OpenAI / other: tool messages are text-only. Images go as a
+                # synthetic user message; PDFs cannot be attached on Chat
+                # Completions so we surface a note in the text.
                 out.append(msg.to_ll_message())
-                user_blocks: list[dict] = [
-                    {
-                        "type": "text",
-                        "text": f"[Image(s) from Read tool call {msg.tool_call_id}]",
-                    }
-                ]
-                for img in imgs:
+                user_blocks: list[dict] = []
+                if imgs:
                     user_blocks.append(
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                            "type": "text",
+                            "text": f"[Image(s) from Read tool call {msg.tool_call_id}]",
                         }
                     )
-                out.append({"role": "user", "content": user_blocks})
+                    for img in imgs:
+                        user_blocks.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{img['media_type']};base64,{img['data']}"
+                                },
+                            }
+                        )
+                if docs:
+                    # Chat Completions does not accept PDF file blocks — note
+                    # the omission so the model isn't confused by a missing
+                    # document it expected to see.
+                    names = ", ".join(d.get("filename") or "document" for d in docs)
+                    user_blocks.append(
+                        {
+                            "type": "text",
+                            "text": (
+                                f"[PDF document(s) ({names}) from Read tool call "
+                                f"{msg.tool_call_id} are not viewable on this API "
+                                "path — text metadata only.]"
+                            ),
+                        }
+                    )
+                if user_blocks:
+                    out.append({"role": "user", "content": user_blocks})
         else:
             out.append(msg.to_ll_message())
     return out
@@ -101,29 +139,46 @@ def _serialize_messages_for_provider(
 def _serialize_messages_for_responses_api(messages: "list[Message]") -> list:
     """Serialize Message objects for OpenAI's Responses API input list.
 
-    Responses API only allows images in ``role: user`` message blocks, so a
-    tool result with attached images is emitted as the usual
+    Responses API only allows images / files in ``role: user`` message
+    blocks, so a tool result with attachments is emitted as the usual
     ``function_call_output`` followed by a synthetic user message carrying
-    the images as ``input_image`` blocks.
+    ``input_image`` (images) and/or ``input_file`` (PDFs) blocks.
     """
     out: list = []
     for msg in messages:
         imgs = getattr(msg, "tool_result_images", None)
+        docs = getattr(msg, "tool_result_documents", None)
         out.extend(msg.to_ll_response_message())
-        if msg.role == "tool" and imgs:
-            content = [
+        if msg.role == "tool" and (imgs or docs):
+            preamble_bits: list[str] = []
+            if imgs:
+                preamble_bits.append(f"{len(imgs)} image(s)")
+            if docs:
+                preamble_bits.append(f"{len(docs)} PDF(s)")
+            content: list[dict] = [
                 {
                     "type": "input_text",
-                    "text": f"[Image(s) from Read tool call {msg.tool_call_id}]",
+                    "text": (
+                        f"[{' and '.join(preamble_bits)} from Read tool call "
+                        f"{msg.tool_call_id}]"
+                    ),
                 }
             ]
-            for img in imgs:
+            for img in imgs or []:
                 content.append(
                     {
                         "type": "input_image",
                         "image_url": f"data:{img['media_type']};base64,{img['data']}",
                     }
                 )
+            for doc in docs or []:
+                entry: dict = {
+                    "type": "input_file",
+                    "file_data": f"data:{doc['media_type']};base64,{doc['data']}",
+                }
+                if doc.get("filename"):
+                    entry["filename"] = doc["filename"]
+                content.append(entry)
             out.append({"type": "message", "role": "user", "content": content})
     return out
 

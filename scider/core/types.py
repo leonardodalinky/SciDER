@@ -116,6 +116,7 @@ class Message(LLMessage):
         "content_before_snip",
         "finish_reason",
         "tool_result_images",
+        "tool_result_documents",
     ]
 
     # --- tool call fields ---
@@ -148,6 +149,12 @@ class Message(LLMessage):
     # the raw LLMessage dict; injected into the LLM payload by the
     # provider-aware serializer in ``scider/core/llms.py``.
     tool_result_images: list[dict] | None = None
+    # Documents (currently PDFs) attached to a tool result (role=="tool"). Each
+    # entry is ``{"media_type": "application/pdf", "data": "<pure base64>",
+    # "filename": "<original filename or None>"}``. Excluded from the raw
+    # LLMessage dict; injected by the provider-aware serializer in
+    # ``scider/core/llms.py``.
+    tool_result_documents: list[dict] | None = None
 
     @classmethod
     def from_ll_message(cls, msg: LLMessage) -> "Message":
