@@ -126,7 +126,7 @@ system_prompt: |
   - Use `Agent(prompt="...", subagent_type="coding")` for complex coding tasks. Include data summary, objective, and repo source in the prompt.
   {% endif -%}
   - Reserve `Bash` for running code, installing packages, and operations that require shell execution.
-  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel.
+  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel. NEVER emit the same (tool, args) twice in one turn — identical calls are always wrong.
   - Do not use a colon before tool calls. Use a period: "Let me read the file." not "Let me read the file:"
   - Use `TodoWrite` to plan and track your experiment workflow. At the start, create a task list (e.g., plan → code → test → evaluate → report) and update status as you work. This is especially important for multi-step experiments.
   - For complex experiments with unclear approaches, use `EnterPlanMode` first to explore the codebase and data, design your approach, then exit with a plan before implementing.

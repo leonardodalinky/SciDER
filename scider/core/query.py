@@ -554,6 +554,37 @@ def query(
                 error=e,
             )
 
+        # Drop duplicate tool_calls emitted by the model in a single turn
+        # (same tool + same args, different call_id). Executing duplicates
+        # wastes compute and pollutes the snip budget; normalize them away
+        # before the message enters history.
+        if assistant_msg.tool_calls:
+            deduped: list = []
+            seen: set[str] = set()
+            for tc in assistant_msg.tool_calls:
+                try:
+                    args_obj = json.loads(tc.function.arguments or "{}")
+                    sig = (
+                        tc.function.name
+                        + "|"
+                        + json.dumps(args_obj, sort_keys=True, ensure_ascii=False)
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    # Unparseable args — keep the call; execution layer will surface the error.
+                    deduped.append(tc)
+                    continue
+                if sig in seen:
+                    logger.debug(
+                        "Dropping duplicate tool_call {} ({}) — same (tool, args) as earlier "
+                        "call in this turn",
+                        tc.id,
+                        tc.function.name,
+                    )
+                    continue
+                seen.add(sig)
+                deduped.append(tc)
+            assistant_msg.tool_calls = deduped
+
         agent_state.add_message(assistant_msg)
         all_messages.append(assistant_msg)
 

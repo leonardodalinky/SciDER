@@ -51,7 +51,7 @@ system_prompt: |
   - Use `Agent(prompt="search query", subagent_type="paper_search")` for academic paper searches. Be specific in your search queries.
   - Use `WebSearch` for broader context — trends, benchmarks, datasets, tools.
   - Use `WebFetch` to read specific web pages when you need detailed information.
-  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel.
+  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel. NEVER emit the same (tool, args) twice in one turn — identical calls are always wrong.
   - Do not use a colon before tool calls. Use a period: "Let me search for papers." not "Let me search for papers:"
   - Use `TodoWrite` to track your ideation workflow steps (keyword extraction → literature search → gap analysis → idea generation → novelty assessment). Update progress as you complete each step.
 

@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scider.core.skills import SkillRegistry
 from scider.default.models import register_defaults_from_yaml
-from scider.workflows.full_workflow import run_full_workflow
+from scider.workflows.experiment_workflow import run_experiment_workflow
 
 # ---- Constants ----
 SUBMISSION_FILENAME = "submission.csv"
@@ -215,15 +215,24 @@ def _build_preamble(metadata: dict, evaluate_source: str | None = None) -> str:
         "3. **Model size target: ~7B parameters, at most 16B.** Larger won't",
         "   fit a single-GPU LoRA run; much smaller than 1B is usually too weak",
         "   unless the task is well-matched to the architecture.",
-        "4. **Fine-tune with PEFT / LoRA, not full training.** Use `peft` (LoRA,",
-        "   QLoRA, adapter variants as appropriate) on top of the frozen base",
-        "   for any 1B+ checkpoint. Few epochs, modest LR.",
-        "   **Exception — small models get all-parameter fine-tuning (AFT).**",
-        "   If the base is <1B (BERT-base, RoBERTa-large, T5-base/large, small",
-        "   GNN), full fine-tuning is cheap and typically beats LoRA.",
-        "5. **No-training baselines are fair game.** For some tasks a strong",
-        "   zero-shot or few-shot prompt against an instruction-tuned LLM beats",
-        "   a quick fine-tune.",
+        "4. **Fine-tune — this is the default path, not optional.** Beating",
+        "   SOTA on these benchmarks essentially always requires fine-tuning",
+        "   on the provided `train` split. Do not ship a zero-shot / prompting-",
+        "   only solution unless the task is explicitly described as a zero-",
+        "   shot-only evaluation. Concretely:",
+        "   - **<1B params** (ModernBERT, DeBERTa-v3-large, RoBERTa-large, T5-",
+        "     base/large, small GNN): **all-parameter fine-tuning (AFT)** —",
+        "     cheap, converges in minutes, reliably beats LoRA at this size.",
+        "   - **≥1B params (7B/8B/9B/14B causal LMs)**: **PEFT / LoRA / QLoRA**",
+        "     on top of the frozen base. Few epochs, modest LR.",
+        "   Always hold out the `validation` split for model selection; do not",
+        "   train on it.",
+        "5. **Zero-shot / few-shot is a last resort, not a shortcut.** Only",
+        "   skip fine-tuning if (a) the task benchmark explicitly requires",
+        "   zero-shot / in-context learning, or (b) you've already fine-tuned",
+        "   and the validation score is still dominated by a strong zero-shot",
+        "   prompt against a larger instruction-tuned LLM. In that case",
+        "   document the reason and report BOTH numbers in the summary.",
         "6. **Budget your compute.** Pick batch size / seq len / LoRA rank that",
         "   fit VRAM without OOM. Don't sweep hyperparameters exhaustively —",
         "   one sane config is enough.",
@@ -253,6 +262,114 @@ def _build_preamble(metadata: dict, evaluate_source: str | None = None) -> str:
         "   slice), predicting on `validation` instead of `test`, or writing",
         "   predictions only for a sampled subset. Always predict on the FULL",
         "   test set and double-check the row count.",
+        "",
+        "## Training recipe defaults (avoid common pitfalls)",
+        "",
+        "A lot of wasted revision loops come from mis-diagnosing errors and",
+        "downgrading the model when the real fix is a tiny config change.",
+        "Apply these defaults from the start:",
+        "",
+        "### Numerical precision — use bf16, NOT fp16",
+        "",
+        "- **DeBERTa (v2/v3, all sizes) is famously unstable with fp16.** Using",
+        "  `fp16=True` in `TrainingArguments` will produce `ValueError:",
+        "  Attempting to unscale FP16 gradients` or NaN gradients + loss",
+        "  dropping to 0 within the first epoch. Always use `bf16=True` for",
+        "  DeBERTa.",
+        "- **When in doubt, prefer `bf16=True` over `fp16=True`** for ANY",
+        "  modern encoder (ModernBERT, DeBERTa, RoBERTa-large) or any causal",
+        "  LM on Ampere/Hopper/Blackwell GPUs. bf16 has the same dynamic",
+        "  range as fp32 and avoids unscale / overflow issues entirely.",
+        "- Only use `fp16=True` on older GPUs that don't support bf16 (pre-",
+        "  Ampere, i.e. V100 / T4 / P100). Anything A100 / L4 / H100 / GB10 →",
+        "  bf16.",
+        "",
+        "### transformers Trainer API (≥4.46)",
+        "",
+        "- The `tokenizer=` kwarg to `Trainer(...)` was renamed to",
+        "  `processing_class=`. If you see `TypeError: Trainer.__init__() got",
+        "  an unexpected keyword argument 'tokenizer'`, change:",
+        "  ```python",
+        "  trainer = Trainer(..., tokenizer=tokenizer)            # OLD",
+        "  trainer = Trainer(..., processing_class=tokenizer)     # NEW",
+        "  ```",
+        "- `overwrite_output_dir` was also removed from `TrainingArguments`",
+        "  in recent versions; drop it if you see a related TypeError.",
+        "- When installing, pin to a known-good version if you hit churn:",
+        "  `uv add 'transformers>=4.46,<4.50'`.",
+        "",
+        "### When training fails — read the error before downgrading",
+        "",
+        "Do NOT immediately switch to a smaller model. Map symptoms to fixes",
+        "in this order:",
+        "",
+        "1. `ValueError: Attempting to unscale FP16 gradients` / NaN loss →",
+        "   change `fp16=True` to `bf16=True`.",
+        "2. `TypeError: Trainer got unexpected keyword 'tokenizer'` /",
+        "   `'overwrite_output_dir'` → rename / remove the kwarg.",
+        "3. `CUDA out of memory` (the literal string — don't assume OOM",
+        "   without seeing it!) → in order: enable `gradient_checkpointing=",
+        "   True`, reduce `per_device_train_batch_size` + raise",
+        "   `gradient_accumulation_steps`, shorten `max_length`, enable bf16.",
+        "   Only after all of those fail, consider a smaller model.",
+        "4. Task killed with exit code -15 (SIGTERM) → likely a wall-clock",
+        "   timeout, not a memory issue. Reduce epochs / increase batch to",
+        "   finish faster.",
+        "",
+        "### Starter training-args template (encoder fine-tune, ~400M params)",
+        "",
+        "```python",
+        "from transformers import TrainingArguments",
+        "args = TrainingArguments(",
+        "    output_dir='./out',",
+        "    num_train_epochs=3,",
+        "    per_device_train_batch_size=8,",
+        "    per_device_eval_batch_size=32,",
+        "    gradient_accumulation_steps=1,",
+        "    learning_rate=2e-5,",
+        "    warmup_ratio=0.1,",
+        "    weight_decay=0.01,",
+        "    bf16=True,                     # NOT fp16 for DeBERTa / modern GPUs",
+        "    gradient_checkpointing=False,  # enable only if actually OOM",
+        "    eval_strategy='epoch',",
+        "    save_strategy='epoch',",
+        "    load_best_model_at_end=True,",
+        "    metric_for_best_model='accuracy',  # match your task metric",
+        "    report_to='none',",
+        ")",
+        "trainer = Trainer(model=model, args=args, processing_class=tokenizer, ...)",
+        "```",
+        "",
+        "Starting point: `batch=8, max_length=128, bf16=True` fits DeBERTa-",
+        "v3-large comfortably on any ≥16 GB GPU. Only shrink if an ACTUAL",
+        "`CUDA out of memory` error appears.",
+        "",
+        "### Running long training jobs — Bash tool timeout",
+        "",
+        "**The `Bash` tool defaults to a 120-second timeout**, which is far",
+        "shorter than any real training run. Real fine-tunes take minutes to",
+        "hours. Two ways to handle this:",
+        "",
+        "1. **Pass an explicit `timeout` (in seconds)** when running training:",
+        "   ```",
+        '   Bash(command="uv run python train.py", timeout=3600)',
+        "   ```",
+        "   (Max allowed is 43200 = 12 h. For AIRS-Bench tasks `timeout=3600`",
+        "   is almost always enough; use `7200` for very slow datasets.)",
+        "2. **Run in background** and poll with `TaskOutput`:",
+        "   ```",
+        '   Bash(command="uv run python train.py", run_in_background=True)',
+        "   # returns task_id; then:",
+        '   TaskOutput(task_id="task_xxx", block=True, timeout=3600)',
+        "   ```",
+        "   Useful when you want to do something else (e.g. poll GPU, watch a",
+        "   log) while training runs.",
+        "",
+        "**If you see `killed: timeout after 120s` or exit code `-1`/`-15`",
+        "shortly after starting training, this is the Bash tool's default",
+        "timeout, NOT a CUDA OOM and NOT a model issue.** Do NOT downgrade",
+        "the model or batch size — just re-run the training command with a",
+        "bigger `timeout` value.",
         "",
         "---",
         "",
@@ -417,6 +534,50 @@ def _run_prepare(
 _JSON_BLOCK_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
 
 
+def _compare_to_sota(score: dict, metadata: dict) -> dict:
+    """Return SOTA-comparison fields for the results record.
+
+    Picks the metric value from ``score`` (the first/only key, matching the
+    task's `metric` field) and compares it against the best SOTA score in
+    ``metadata.logging_info.sota``. Respects ``metric_lower_is_better``.
+
+    Output fields (added to the record alongside ``score``):
+      - ``our_score``: float, our metric value.
+      - ``sota_score``: float or None, best SOTA from metadata.
+      - ``beat_sota``: bool or None — True iff ours strictly beats SOTA under
+        the metric's direction. ``None`` if either side is missing.
+      - ``lower_is_better``: bool, the metric direction.
+    """
+    info = metadata.get("logging_info") or {}
+    sota_entries = info.get("sota") or []
+    lower_is_better = bool(metadata.get("metric_lower_is_better"))
+
+    our_vals = [v for v in score.values() if isinstance(v, (int, float))]
+    our = float(our_vals[0]) if our_vals else None
+
+    sota_vals = [
+        float(e["sota_score"])
+        for e in sota_entries
+        if isinstance(e.get("sota_score"), (int, float))
+    ]
+    best_sota = (min(sota_vals) if lower_is_better else max(sota_vals)) if sota_vals else None
+
+    beat: bool | None
+    if our is None or best_sota is None:
+        beat = None
+    elif lower_is_better:
+        beat = our < best_sota
+    else:
+        beat = our > best_sota
+
+    return {
+        "our_score": our,
+        "sota_score": best_sota,
+        "beat_sota": beat,
+        "lower_is_better": lower_is_better,
+    }
+
+
 def _parse_eval_result(stdout: str) -> dict:
     """Extract the JSON metric dict from ``evaluate.py``'s stdout.
 
@@ -525,7 +686,6 @@ def run_one_task(
     data_root: Path,
     output_root: Path,
     max_revisions: int,
-    data_recursion_limit: int,
     experiment_recursion_limit: int,
 ) -> dict:
     """Run the full pipeline (setup → prepare → agent → evaluate) for one task."""
@@ -574,15 +734,46 @@ def run_one_task(
         #    WorkspaceInitConfig — the default (env_manager='uv',
         #    init_uv=True) is correct, and LocalEnv will skip re-init because
         #    we already created pyproject.toml in step 1.
-        logger.info("Running FullWorkflow for task={} in {}", task_name, workspace)
-        wf = run_full_workflow(
-            data_path=workspace / DATA_SUBDIR,
+        # We skip the DataWorkflow entirely for airsbench. Reasons:
+        #   1. Data is pre-materialized by prepare.py as HF `save_to_disk`
+        #      Arrow bundles — vanilla EDA tools can't read them directly
+        #      and the critic/approval loop stalls on the empty-looking
+        #      summary.
+        #   2. The canonical schema (columns, dtypes, shape, scoring column,
+        #      submission format) is ALREADY in project_description.md, which
+        #      is already baked into the experiment user_query via the
+        #      preamble. Re-deriving it via EDA would be pure waste.
+        # Instead we hand the experiment agent a short, hand-written data
+        # summary that points at the right load path and defers to the
+        # in-prompt schema.
+        data_summary = (
+            "Data is pre-materialized as HuggingFace `save_to_disk` Arrow "
+            "bundles under `./data/`:\n"
+            "  - `./data/train/`      — training split (has labels)\n"
+            "  - `./data/validation/` — validation split (has labels, use for "
+            "self-scoring)\n"
+            "  - `./data/test/`       — test split (labels REMOVED; predict on "
+            "this, save `submission.csv` at workspace root)\n\n"
+            "Load with:\n"
+            "```python\n"
+            "from datasets import load_from_disk\n"
+            "train = load_from_disk('./data/train').to_pandas()\n"
+            "validation = load_from_disk('./data/validation').to_pandas()\n"
+            "test  = load_from_disk('./data/test').to_pandas()\n"
+            "```\n\n"
+            "The canonical column schema, dtypes, submission format, and row "
+            "count are documented in the task spec (your user query) — rely "
+            "on those rather than re-running EDA. Do NOT edit or remove the "
+            "files under `./data/`."
+        )
+
+        logger.info("Running ExperimentWorkflow for task={} in {}", task_name, workspace)
+        wf = run_experiment_workflow(
             workspace_path=workspace,
             user_query=user_query,
-            data_desc=None,
+            data_summary=data_summary,
             max_revisions=max_revisions,
-            data_agent_recursion_limit=data_recursion_limit,
-            experiment_agent_recursion_limit=experiment_recursion_limit,
+            recursion_limit=experiment_recursion_limit,
             user_approval_enabled=False,
         )
         record["workflow_status"] = wf.final_status
@@ -598,8 +789,15 @@ def run_one_task(
         # 5. Score.
         score = _run_evaluation(task_dir, workspace, data_root, eval_union)
         (workspace / FINAL_SCORE_FILENAME).write_text(json.dumps(score, indent=2), encoding="utf-8")
-        record.update(ok=True, score=score)
-        logger.info("task={} scored {}", task_name, score)
+        sota_cmp = _compare_to_sota(score, metadata)
+        record.update(ok=True, score=score, **sota_cmp)
+        logger.info(
+            "task={} scored {} (sota={}, beat_sota={})",
+            task_name,
+            sota_cmp["our_score"],
+            sota_cmp["sota_score"],
+            sota_cmp["beat_sota"],
+        )
     except Exception as e:
         logger.exception("task={} failed: {}", task_name, e)
         record.update(ok=False, error=str(e))
@@ -672,12 +870,6 @@ def _main() -> None:
         help="Upper bound on critic/approval retries (default 3).",
     )
     parser.add_argument(
-        "--data-recursion-limit",
-        type=int,
-        default=512,
-        help="Recursion limit for DataAgent (default 512).",
-    )
-    parser.add_argument(
         "--experiment-recursion-limit",
         type=int,
         default=512,
@@ -728,7 +920,6 @@ def _main() -> None:
             data_root=data_root,
             output_root=output_root,
             max_revisions=args.max_revisions,
-            data_recursion_limit=args.data_recursion_limit,
             experiment_recursion_limit=args.experiment_recursion_limit,
         )
         results = [r for r in results if r.get("task") != record["task"]]

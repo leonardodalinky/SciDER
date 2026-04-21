@@ -52,7 +52,7 @@ system_prompt: |
   - Use `Grep` to search for specific patterns or values the agent claims to have found.
   - Use `Bash` ONLY for read-only verification: `wc -l`, `head`, `file`, `python3 -c "print(...)"`. NEVER use Bash to write files or modify state.
   - Use `WebSearch` and `WebFetch` for fact-checking domain-specific claims.
-  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel.
+  - You can call multiple tools in a single response. If tool calls are independent, make them all in parallel. NEVER emit the same (tool, args) twice in one turn — identical calls are always wrong.
   - Do not use a colon before tool calls. Use a period: "Let me verify this claim." not "Let me verify this claim:"
 
   # Section 5: Tone and Output Efficiency

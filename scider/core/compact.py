@@ -73,11 +73,11 @@ def _get_tool_results_dir() -> str:
 
 
 # Level 2: keep the N most recent tool results intact; snip older ones
-SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 8))
+SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 6))
 SNIP_PREVIEW_CHARS = 200  # keep first N chars as summary when snipping
 
 # Level 3: trigger autocompact when total tokens exceed this ratio of the threshold
-AUTOCOMPACT_TOKEN_THRESHOLD = int(os.getenv("COMPACT_AUTOCOMPACT_TOKEN_THRESHOLD", 128_000))
+AUTOCOMPACT_TOKEN_THRESHOLD = int(os.getenv("COMPACT_AUTOCOMPACT_TOKEN_THRESHOLD", 256_000))
 AUTOCOMPACT_KEEP_RATIO = float(os.getenv("COMPACT_AUTOCOMPACT_KEEP_RATIO", 0.4))
 AUTOCOMPACT_KEEP_FIRST_N = int(os.getenv("COMPACT_AUTOCOMPACT_KEEP_FIRST_N", 4))
 # LLM model name for autocompact summarization (must be registered in ModelRegistry)
