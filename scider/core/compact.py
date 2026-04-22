@@ -73,12 +73,25 @@ def _get_tool_results_dir() -> str:
 
 
 # Level 2: keep the N most recent tool results intact; snip older ones
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Level 2 can be disabled entirely — rely on Level 1 (persist) + Level 3
+# (autocompact summary) instead. Useful when the agent needs full tool
+# result fidelity and is running on a long-context model.
+SNIP_ENABLED = _env_bool("COMPACT_SNIP_ENABLED", True)
 SNIP_KEEP_RECENT_TOOL_RESULTS = int(os.getenv("COMPACT_SNIP_KEEP_RECENT", 6))
 SNIP_PREVIEW_CHARS = 200  # keep first N chars as summary when snipping
 
 # Level 3: trigger autocompact when total tokens exceed this ratio of the threshold
 AUTOCOMPACT_TOKEN_THRESHOLD = int(os.getenv("COMPACT_AUTOCOMPACT_TOKEN_THRESHOLD", 256_000))
-AUTOCOMPACT_KEEP_RATIO = float(os.getenv("COMPACT_AUTOCOMPACT_KEEP_RATIO", 0.4))
+AUTOCOMPACT_KEEP_RATIO = float(os.getenv("COMPACT_AUTOCOMPACT_KEEP_RATIO", 0.2))
 AUTOCOMPACT_KEEP_FIRST_N = int(os.getenv("COMPACT_AUTOCOMPACT_KEEP_FIRST_N", 4))
 # LLM model name for autocompact summarization (must be registered in ModelRegistry)
 AUTOCOMPACT_MODEL = os.getenv("COMPACT_AUTOCOMPACT_MODEL", "history")
@@ -223,7 +236,11 @@ def apply_history_snip(history: list[Message]) -> tuple[list[Message], int]:
 
     Replaces content of old tool-role messages with a short placeholder.
     Returns (modified history, estimated tokens freed).
+
+    No-op when ``COMPACT_SNIP_ENABLED`` is false.
     """
+    if not SNIP_ENABLED:
+        return history, 0
     # Collect indices of tool-role messages (in reverse order = most recent first)
     tool_indices = [i for i, msg in enumerate(history) if msg.role == "tool"]
 

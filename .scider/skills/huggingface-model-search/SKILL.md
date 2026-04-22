@@ -137,7 +137,7 @@ web UI + a token. If you hit `GatedRepoError`:
    accepted, `HuggingFaceTB/SmolLM2-*`, `tiiuae/falcon-7b`).
 2. Or set `HF_TOKEN` if the user has already accepted the license off-band.
 
-## Quick shortlist — strong open backbones (updated for 2026)
+## Reference table — strong open backbones (updated for 2026)
 
 Use this as a **fallback** when your own search turns up nothing better.
 Always prefer the most recent model that the task leaderboard / recent papers

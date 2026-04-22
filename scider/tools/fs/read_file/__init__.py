@@ -167,10 +167,10 @@ class ReadFileTool(BaseTool):
         # Validate file exists
         if not os.path.exists(file_path):
             suggestion = _suggest_similar_file(file_path)
-            msg = f"Error: File '{file_path}' does not exist."
+            head = f"Error: File '{file_path}' does not exist."
             if suggestion:
-                msg += f" Did you mean '{suggestion}'?"
-            return msg
+                head += f" Did you mean '{suggestion}'?"
+            return head + "\n" + _parent_dir_hint(file_path)
 
         if os.path.isdir(file_path):
             # List first few entries to help the model pick a file
@@ -526,6 +526,56 @@ def _compress_image_to_limit(
         return None
 
     return None
+
+
+def _parent_dir_hint(file_path: str, *, max_chars: int = 1500, max_entries: int = 40) -> str:
+    """Build a hint showing either the parent directory's contents (when the
+    parent exists but the file doesn't) or which ancestor is missing.
+
+    Output is bounded by ``max_chars`` / ``max_entries`` to avoid flooding
+    the context window when the parent has thousands of files.
+    """
+    parent = os.path.dirname(os.path.abspath(file_path)) or "/"
+
+    if not os.path.isdir(parent):
+        # Walk up to find the first existing ancestor so the agent knows
+        # how much of the path is wrong.
+        current = parent
+        while current and not os.path.isdir(current):
+            up = os.path.dirname(current)
+            if up == current:
+                break
+            current = up
+        if current and os.path.isdir(current):
+            return (
+                f"[Parent directory '{parent}' does not exist — "
+                f"nearest existing ancestor is '{current}'.]"
+            )
+        return f"[Parent directory '{parent}' does not exist.]"
+
+    try:
+        raw_entries = sorted(os.listdir(parent))
+    except OSError as e:
+        return f"[Could not list parent directory '{parent}': {e}]"
+
+    if not raw_entries:
+        return f"[Parent directory '{parent}' is empty.]"
+
+    lines: list[str] = []
+    for i, name in enumerate(raw_entries[:max_entries]):
+        full = os.path.join(parent, name)
+        tag = "/" if os.path.isdir(full) else ""
+        lines.append(f"  {name}{tag}")
+    remaining = len(raw_entries) - min(len(raw_entries), max_entries)
+    header = f"[Contents of parent directory '{parent}' ({len(raw_entries)} entries):]"
+    body = "\n".join(lines)
+    if remaining > 0:
+        body += f"\n  ... ({remaining} more not shown)"
+
+    hint = f"{header}\n{body}"
+    if len(hint) > max_chars:
+        hint = hint[:max_chars].rsplit("\n", 1)[0] + "\n  ... (truncated)"
+    return hint
 
 
 def _suggest_similar_file(file_path: str) -> str | None:

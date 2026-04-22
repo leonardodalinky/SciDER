@@ -13,10 +13,16 @@ import contextlib
 import enum
 import inspect
 import json
+import os
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+
+# Default max turns for a query() loop. Callers may still override per-call.
+# Set ``SCIDER_QUERY_MAX_TURNS`` in the environment to raise the default for
+# long-running agents (data / experiment / writing pipelines).
+DEFAULT_MAX_TURNS = int(os.getenv("SCIDER_QUERY_MAX_TURNS", 64))
 
 import litellm
 from loguru import logger
@@ -382,7 +388,7 @@ def query(
     system_prompt: str,
     tools: dict[str, Tool],
     agent_name: str,
-    max_turns: int = 64,
+    max_turns: int = DEFAULT_MAX_TURNS,
     tool_execution_context: AbstractContextManager | None = None,
     on_tool_result: Callable[[str, str, Message], None] | None = None,
     ctx_dict: dict | None = None,
@@ -396,7 +402,8 @@ def query(
         system_prompt: Pre-rendered system prompt string.
         tools: Tool name -> Tool mapping, typically from gather_tools().
         agent_name: Agent identifier for Message.agent_sender.
-        max_turns: Maximum number of LLM calls before stopping. Default 64.
+        max_turns: Maximum number of LLM calls before stopping. Default comes
+            from the ``SCIDER_QUERY_MAX_TURNS`` env var (64 if unset).
         tool_execution_context: Optional context manager for tool execution
             (e.g. agent_state.workspace for data agent, agent_state.local_env for critic).
         on_tool_result: Optional callback (tool_name, tool_call_id, msg) called after

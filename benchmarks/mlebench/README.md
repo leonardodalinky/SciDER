@@ -49,11 +49,15 @@ export AGENT_NAME=scider
 pushd ../..; docker build --platform=linux/amd64 --no-cache -t $AGENT_NAME -f benchmarks/mlebench/mle-bench/agents/scider/Dockerfile --build-arg SUBMISSION_DIR=$SUBMISSION_DIR --build-arg LOGS_DIR=$LOGS_DIR --build-arg CODE_DIR=$CODE_DIR --build-arg AGENT_DIR=$AGENT_DIR .; popd
 ```
 
+Model assignments for this benchmark live in
+`bench_workflows/model_configs/mlebench_roles.yaml` (in the SciDER source
+tree). Edit that yaml to swap models — there is no longer a `--models` CLI
+flag or per-preset agent id, so `config.yaml` has a single `scider` entry.
+
 Finally, you can run the benchmark:
 
 ```bash
-# Set agent ID from `agents/scider/config.yaml`
-export AGENT_ID=scider/gemini-low-medium
+export AGENT_ID=scider
 
 # GPU
 pushd mle-bench/; python run_agent.py --agent-id $AGENT_ID --competition-set experiments/splits/low.txt --container-config environment/config/container_configs/gpu.json; popd

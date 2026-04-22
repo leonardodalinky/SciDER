@@ -1,6 +1,14 @@
 {
     "sync-rsync.local": "/home/link/github/SciEvo",
-    "sync-rsync.remote": "klin@ai4scientist-spark:~/rsync/SciEvo",
+    // "sync-rsync.remote": "klin@ai4scientist-spark:~/rsync/SciEvo",
+    "sync-rsync.sites": [
+        {
+            "remotePath": "klin@ai4scientist-spark:~/rsync/SciEvo"
+        },
+        {
+            "remotePath": "klin07@astral-8xA30-jump:~/rsync/SciEvo"
+        }
+    ],
     "sync-rsync.onSave": false,
     "sync-rsync.onSaveIndividual": false,
     "sync-rsync.delete": false,

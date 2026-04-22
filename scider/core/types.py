@@ -184,14 +184,19 @@ class Message(LLMessage):
 
     @property
     def n_tokens(self) -> int:
-        """
-        Returns the number of tokens in the message.
+        """Tokens contributed by THIS message alone.
+
+        For assistant messages produced via the API, use ``completion_tokens``
+        (the output size of this message). Do NOT use ``prompt_tokens`` —
+        that is the cumulative input of the whole request that generated
+        this message (system + full history), and summing it across messages
+        triple-counts the history and fires autocompact far too early.
         """
         if self._n_tokens is not None:
             return self._n_tokens
-        if self.prompt_tokens is not None:
-            return self.prompt_tokens
-        # Calculate n_tokens if not cached
+        if self.role == "assistant" and self.completion_tokens is not None:
+            return self.completion_tokens
+        # Fallback: local tiktoken estimate of the message's plain-text form.
         self._n_tokens = len(ENCODING.encode(self.to_plain_text()))
         return self._n_tokens
 
