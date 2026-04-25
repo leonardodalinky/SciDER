@@ -24,11 +24,16 @@ def _resolve_cwd(cwd: str | None, agent_state) -> Path:
     if cwd:
         return Path(os.path.expandvars(cwd)).expanduser().resolve()
     if agent_state is not None:
-        if hasattr(agent_state, "local_env") and hasattr(agent_state.local_env, "working_dir"):
-            try:
-                return Path(agent_state.local_env.working_dir).resolve()
-            except Exception:
-                pass
+        # Experiment/Data/Writing agents store the LocalEnv as `workspace`.
+        # (Historical name `local_env` kept as a fallback for any legacy state.)
+        for attr in ("workspace", "local_env"):
+            env = getattr(agent_state, attr, None)
+            wd = getattr(env, "working_dir", None) if env is not None else None
+            if wd is not None:
+                try:
+                    return Path(wd).resolve()
+                except Exception:
+                    pass
         if hasattr(agent_state, "repo_dir") and agent_state.repo_dir:
             try:
                 return Path(agent_state.repo_dir).resolve()

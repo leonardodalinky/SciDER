@@ -49,6 +49,10 @@ class ApprovalContext:
     parent_state: Any | None = None  # HistoryState subclass
     parent_agent: str = ""  # "data" | "experiment" | ...
     workspace_dir: Path | None = None
+    # Parent's LocalEnv — forwarded so the approval subagent's Bash/Read
+    # tool calls run with cwd = parent workspace (and the right PATH).
+    # Without it the subagent inherits the driver's cwd (project root).
+    workspace: Any | None = None
     critic_feedback: str | None = None
     user_query: str = ""
 

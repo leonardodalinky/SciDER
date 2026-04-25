@@ -88,6 +88,7 @@ def agent_loop_node(agent_state: CriticAgentState) -> CriticAgentState:
         system_prompt=system_prompt,
         tools=tools,
         agent_name=AGENT_NAME,
+        tool_execution_context=agent_state.workspace,
     )
 
     return agent_state

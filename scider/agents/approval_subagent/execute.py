@@ -171,6 +171,7 @@ def agent_loop_node(agent_state: ApprovalSubagentState) -> ApprovalSubagentState
         tools=tools,
         agent_name=AGENT_NAME,
         max_turns=40,
+        tool_execution_context=agent_state.workspace,
     )
 
     agent_state.intermediate_state.append(
@@ -293,6 +294,7 @@ def run_approval_subagent(
         title=title,
         parent_agent=context.parent_agent,
         workspace_dir=workspace_dir,
+        workspace=context.workspace,
         critic_feedback=context.critic_feedback,
         user_query=context.user_query,
     )

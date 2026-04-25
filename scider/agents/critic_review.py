@@ -32,11 +32,13 @@ def critic_review_node(agent_state):
     if hasattr(agent_state, "add_node_history"):
         agent_state.add_node_history("critic_review")
 
-    # Build critic state from parent's messages
+    # Build critic state from parent's messages. Forward the parent's
+    # workspace so critic's Bash/etc. run with cwd = parent workspace.
     critic_state = CriticAgentState(
         input_msgs=agent_state.messages[-20:],  # last 20 messages for context
         is_data_agent=(agent_name == "data"),
         is_exp_agent=(agent_name == "experiment"),
+        workspace=getattr(agent_state, "workspace", None),
     )
 
     from scider.workflows.history_export import capture_messages
@@ -141,6 +143,7 @@ def user_review_node(agent_state):
         parent_state=agent_state,
         parent_agent=("data" if hasattr(agent_state, "data_desc") else "experiment"),
         workspace_dir=workspace_dir,
+        workspace=workspace,
         critic_feedback=feedback,
         user_query=user_query,
     )

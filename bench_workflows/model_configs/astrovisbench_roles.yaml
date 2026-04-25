@@ -5,8 +5,10 @@ defaults:
   data: gemini-3-flash-preview[reasoning_effort=low]
   critic: gemini-3-flash-preview[reasoning_effort=low,temperature=0.3]
   history: gemini-3.1-flash-lite-preview[reasoning_effort=low]
-  experiment: claude-haiku-4-5[reasoning_effort=medium]
-  experiment_coding: claude-sonnet-4-6[reasoning_effort=medium]
+  # experiment: claude-haiku-4-5[reasoning_effort=medium]
+  experiment_coding: claude-sonnet-4-5[reasoning_effort=medium]
+  # experiment: claude-3.7[reasoning_effort=medium]
+  experiment_coding: claude-3.7[reasoning_effort=medium]
   writing: gemini-3-flash-preview[reasoning_effort=medium]
   approval: gemini-3.1-flash-lite-preview[reasoning_effort=low]
   embedding: text-embedding-3-small

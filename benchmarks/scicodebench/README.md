@@ -1,4 +1,4 @@
-# Benchmark for MLEBench
+# Benchmark for SciCodeBench
 
 We assume all commands are run from the same dir as this README file.
 
@@ -18,6 +18,12 @@ pip install -r ../../requirements.txt
 ```
 
 Download the [numeric test results](https://drive.google.com/drive/folders/1W5GZW6_bdiDAiipuFMqdUhvUaHIj6-pR?usp=drive_link) and save them as `SciCode/eval/data/test_data.h5`.
+
+Model assignments for this benchmark live in
+`bench_workflows/model_configs/scicodebench_roles.yaml` (in the SciDER
+source tree). Edit that yaml to swap models — there is no `--models` CLI
+flag; model config is picked up automatically via
+`register_defaults_from_yaml`.
 
 Run the evaluation script:
 

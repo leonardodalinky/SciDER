@@ -8,7 +8,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-.env
 .venv/
 venv/
 ENV/
@@ -26,6 +25,15 @@ htmlcov/
 .github/
 .claude/
 benchmarks/
+# ...but re-include the mle-bench scider agent subtree, since
+# benchmarks/mlebench/mle-bench/agents/scider/Dockerfile runs COPY from
+# there during the agent image build. Negations must re-include every
+# intermediate directory (Docker walks top-down).
+!benchmarks/mlebench
+!benchmarks/mlebench/mle-bench
+!benchmarks/mlebench/mle-bench/agents
+!benchmarks/mlebench/mle-bench/agents/scider
+!benchmarks/mlebench/mle-bench/agents/scider/**
 tmp_*
 rsync_tmp_*
 *.ipynb

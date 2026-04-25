@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
+from scider.core.code_env import LocalEnv
 from scider.core.types import HistoryState
 
 
@@ -15,6 +16,9 @@ class ApprovalSubagentState(HistoryState):
     title: str = ""
     parent_agent: str = ""
     workspace_dir: Path | None = None
+    # Parent's LocalEnv — used as tool_execution_context so Bash/Read run
+    # with cwd = parent workspace (not the driver's cwd).
+    workspace: LocalEnv | None = None
     critic_feedback: str | None = None
     user_query: str = ""
 

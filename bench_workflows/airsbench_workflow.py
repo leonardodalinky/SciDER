@@ -64,7 +64,15 @@ EVAL_SUBDIR = "_eval"
 # Files copied INTO the agent's workspace (agent may read/edit these).
 AGENT_VISIBLE_FILES = ("project_description.md", "metadata.yaml", "prepare.py", "utils.py")
 # Files copied INTO the post-agent eval sandbox (agent never sees them).
-EVALUATOR_FILES = ("evaluate.py", "evaluate_prepare.py", "utils.py")
+EVALUATOR_FILES = (
+    "evaluate.py",
+    "evaluate_prepare.py",
+    "utils.py",
+    "testing_utils.py",
+    "gold_submission.csv",
+    "gold_submission_permuted_1.csv",
+    "gold_submission_permuted_2.csv",
+)
 
 ROLES_YAML_PATH = Path(__file__).parent / "model_configs" / "airsbench_roles.yaml"
 
