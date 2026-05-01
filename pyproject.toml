@@ -36,6 +36,9 @@ dependencies = [
     "ddgs>=9.13.0",
     "tavily-python>=0.5.0",
     "matplotlib>=3.10.8",
+    "sympy>=1.14.0",
+    "ipython>=8.39.0",
+    "tenacity>=9.1.2",
 ]
 
 [dependency-groups]

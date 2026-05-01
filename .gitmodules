@@ -13,3 +13,6 @@
 [submodule "benchmarks/airsbench/airs-bench"]
 	path = benchmarks/airsbench/airs-bench
 	url = git@github.com:leonardodalinky/airs-bench.git
+[submodule "benchmarks/discoverybench/discoverybench"]
+	path = benchmarks/discoverybench/discoverybench
+	url = git@github.com:leonardodalinky/discoverybench.git
