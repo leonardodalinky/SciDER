@@ -15,11 +15,12 @@ from pathlib import Path
 from typing import Literal
 
 from loguru import logger
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, model_validator
 
 from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
+from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 from scider.workflows.paper_bootstrap import build_experimental_log, build_sparse_idea_from_query
 from scider.workflows.utils import get_separator
@@ -47,7 +48,9 @@ class FullWorkflow(BaseModel):
     """
 
     # ==================== INPUT ====================
-    data_path: Path
+    data_path: Path | None = None        # real data; mutually exclusive with feature_desc
+    feature_desc: str | None = None      # synthetic data description; mutually exclusive with data_path
+    num_rows: int = 1000                 # forwarded to HypoDataWorkflow
     workspace_path: Path
     user_query: str
     repo_source: str | None = None
@@ -93,9 +96,21 @@ class FullWorkflow(BaseModel):
     paper_writing_summary: str = ""
 
     # Internal: sub-workflows
-    _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
+    _data_workflow: DataWorkflow | HypoDataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
     _writing_workflow: "WritingWorkflow | None" = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _validate_data_mode(self) -> "FullWorkflow":
+        has_path = self.data_path is not None
+        has_desc = bool(self.feature_desc and self.feature_desc.strip())
+        if has_path and has_desc:
+            raise ValueError(
+                "Provide either data_path (real data) or feature_desc (synthetic), not both."
+            )
+        if not has_path and not has_desc:
+            raise ValueError("FullWorkflow requires either data_path or feature_desc.")
+        return self
 
     def run(self) -> "FullWorkflow":
         """
@@ -128,30 +143,42 @@ class FullWorkflow(BaseModel):
 
     def _run_data_phase(self) -> bool:
         """
-        Run DataWorkflow to analyze the input data.
+        Run DataWorkflow or HypoDataWorkflow depending on which input was provided.
 
         Returns:
             True if successful, False if failed
         """
-        logger.info("Phase 1: Running DataWorkflow for data analysis")
+        logger.info("Phase 1: Running data phase")
         self.current_phase = "data_analysis"
 
-        self._data_workflow = DataWorkflow(
-            data_path=self.data_path,
-            workspace_path=self.workspace_path,
-            recursion_limit=self.data_agent_recursion_limit,
-            data_desc=self.data_desc,
-            workspace_init_config=self.workspace_init_config,
-        )
+        if self.feature_desc:
+            self._data_workflow = HypoDataWorkflow(
+                feature_desc=self.feature_desc,
+                workspace_path=self.workspace_path,
+                num_rows=self.num_rows,
+                user_query=self.user_query,
+                recursion_limit=self.data_agent_recursion_limit,
+                extra_data_desc=self.data_desc,
+                workspace_init_config=self.workspace_init_config,
+            )
+        else:
+            self._data_workflow = DataWorkflow(
+                data_path=self.data_path,
+                workspace_path=self.workspace_path,
+                recursion_limit=self.data_agent_recursion_limit,
+                data_desc=self.data_desc,
+                workspace_init_config=self.workspace_init_config,
+            )
 
         try:
             self._data_workflow.run()
 
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
-                self.data_agent_history = self._data_workflow.data_agent_history
+                if isinstance(self._data_workflow, DataWorkflow):
+                    self.data_agent_history = self._data_workflow.data_agent_history
                 self._data_workflow.save_summary()
-                logger.info("DataWorkflow completed successfully")
+                logger.info("Data phase completed successfully")
                 return True
             else:
                 self.error_message = self._data_workflow.error_message
@@ -159,8 +186,8 @@ class FullWorkflow(BaseModel):
                 return False
 
         except Exception as e:
-            logger.exception("DataWorkflow failed")
-            self.error_message = f"DataWorkflow failed: {e}"
+            logger.exception("Data phase failed")
+            self.error_message = f"Data phase failed: {e}"
             self.current_phase = "failed"
             return False
 
@@ -299,7 +326,7 @@ class FullWorkflow(BaseModel):
 
 ## Workflow Metadata
 
-- **Data Path**: {self.data_path}
+- **Data Source**: {f"data_path={self.data_path}" if self.data_path else f"feature_desc={self.feature_desc!r} ({self.num_rows} rows)"}
 - **Workspace**: {self.workspace_path}
 - **Repo Source**: {self.repo_source or 'Not specified'}
 - **Final Status**: {self.final_status}
@@ -330,9 +357,11 @@ class FullWorkflow(BaseModel):
 
 
 def run_full_workflow(
-    data_path: str | Path,
     workspace_path: str | Path,
     user_query: str,
+    data_path: str | Path | None = None,
+    feature_desc: str | None = None,
+    num_rows: int = 1000,
     repo_source: str | None = None,
     max_revisions: int = 3,
     data_agent_recursion_limit: int = 100,
@@ -376,7 +405,9 @@ def run_full_workflow(
         These directories are then passed to DataWorkflow and ExperimentWorkflow.
     """
     workflow = FullWorkflow(
-        data_path=data_path,
+        data_path=Path(data_path) if data_path else None,
+        feature_desc=feature_desc,
+        num_rows=num_rows,
         workspace_path=workspace_path,
         user_query=user_query,
         repo_source=repo_source,
@@ -405,12 +436,26 @@ if __name__ == "__main__":
         description="Full SciDER Workflow - Run complete workflow (DataAgent -> ExperimentAgent)",
         prog="python -m scider.workflows.full_workflow",
     )
-    parser.add_argument("data_path", help="Path to the data file or directory to analyze")
     parser.add_argument("workspace_path", help="Workspace directory for the experiment")
     parser.add_argument("user_query", help="User's experiment objective")
     parser.add_argument(
-        "repo_source",
-        nargs="?",
+        "--data-path",
+        default=None,
+        help="Path to a real data file or directory (mutually exclusive with --feature-desc)",
+    )
+    parser.add_argument(
+        "--feature-desc",
+        default=None,
+        help="Description for synthetic data generation (mutually exclusive with --data-path)",
+    )
+    parser.add_argument(
+        "--num-rows",
+        type=int,
+        default=1000,
+        help="Number of rows to generate in hypo mode (default: 1000)",
+    )
+    parser.add_argument(
+        "--repo-source",
         default=None,
         help="Optional repository source (local path or git URL)",
     )
@@ -446,9 +491,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = run_full_workflow(
-        data_path=args.data_path,
         workspace_path=args.workspace_path,
         user_query=args.user_query,
+        data_path=args.data_path,
+        feature_desc=args.feature_desc,
+        num_rows=args.num_rows,
         repo_source=args.repo_source,
         max_revisions=args.max_revisions,
         data_agent_recursion_limit=args.data_recursion_limit,

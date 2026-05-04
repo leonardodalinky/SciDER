@@ -46,6 +46,7 @@ class HypoDataWorkflow(BaseModel):
     # None → LocalEnv's default (uv-managed, auto `uv init`). Forwarded to the
     # wrapped DataWorkflow.
     workspace_init_config: WorkspaceInitConfig | None = None
+    extra_data_desc: str | None = None  # extra context injected by FullWorkflow callers
 
     # Memory directories (optional)
 
@@ -92,6 +93,8 @@ class HypoDataWorkflow(BaseModel):
                 f"({self.num_rows} rows, {len(spec.features)} features). "
                 f"Focus on verifying the data structure and providing analysis insights."
             )
+            if self.extra_data_desc:
+                data_desc += f"\n\n{self.extra_data_desc}"
 
             query = self.user_query or f"Analyze this synthetic dataset: {self.feature_desc}"
 
@@ -162,6 +165,16 @@ class HypoDataWorkflow(BaseModel):
 
         logger.warning("Max spec retries reached")
         return None
+
+
+    def save_summary(self, path: str | Path | None = None) -> Path:
+        """Save the data summary to a file."""
+        if path is None:
+            path = self.workspace_path / "data_analysis.md"
+        path = Path(path)
+        path.write_text(self.data_summary or "")
+        logger.info(f"Data summary saved to {path}")
+        return path
 
 
 def run_hypo_data_workflow(

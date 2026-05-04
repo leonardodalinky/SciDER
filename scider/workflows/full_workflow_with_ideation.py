@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Literal
 
 from loguru import logger
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, model_validator
 
 from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
+from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 from scider.workflows.ideation_workflow import IdeationWorkflow
 from scider.workflows.paper_bootstrap import (
@@ -69,7 +70,9 @@ class FullWorkflowWithIdeation(BaseModel):
     research_domain: str | None = None  # Optional research domain specification
 
     # Optional: Data and Experiment workflows
-    data_path: Path | None = None  # Path to data file (if running data workflow)
+    data_path: Path | None = None    # real data; mutually exclusive with feature_desc
+    feature_desc: str | None = None  # synthetic data description; mutually exclusive with data_path
+    num_rows: int = 1000             # forwarded to HypoDataWorkflow
     run_data_workflow: bool = False  # Whether to run DataWorkflow after ideation
     run_experiment_workflow: bool = False  # Whether to run ExperimentWorkflow after data
     repo_source: str | None = None  # Repository source for experiment workflow
@@ -140,9 +143,17 @@ class FullWorkflowWithIdeation(BaseModel):
 
     # Internal: sub-workflows
     _ideation_workflow: IdeationWorkflow | None = PrivateAttr(default=None)
-    _data_workflow: DataWorkflow | None = PrivateAttr(default=None)
+    _data_workflow: DataWorkflow | HypoDataWorkflow | None = PrivateAttr(default=None)
     _experiment_workflow: ExperimentWorkflow | None = PrivateAttr(default=None)
     _writing_workflow: "WritingWorkflow | None" = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _validate_data_mode(self) -> "FullWorkflowWithIdeation":
+        has_path = self.data_path is not None
+        has_desc = bool(self.feature_desc and self.feature_desc.strip())
+        if has_path and has_desc:
+            raise ValueError("Provide either data_path or feature_desc, not both.")
+        return self
 
     def run(self) -> "FullWorkflowWithIdeation":
         """
@@ -224,20 +235,25 @@ class FullWorkflowWithIdeation(BaseModel):
 
     def _run_data_phase(self) -> bool:
         """
-        Run DataWorkflow to analyze the input data.
+        Run DataWorkflow or HypoDataWorkflow depending on which input was provided.
 
         Returns:
             True if successful, False if failed
         """
-        if not self.data_path:
-            logger.warning("run_data_workflow is True but data_path is not provided")
+        has_path = self.data_path is not None
+        has_desc = bool(self.feature_desc and self.feature_desc.strip())
+
+        if not has_path and not has_desc:
+            logger.warning(
+                "run_data_workflow is True but neither data_path nor feature_desc is provided"
+            )
             return False
 
-        logger.info("Phase 2: Running DataWorkflow for data analysis")
+        logger.info("Phase 2: Running data phase")
         self.current_phase = "data_analysis"
 
-        # Build enriched data description with ideation context so the
-        # data agent knows papers have already been searched.
+        # Build enriched description with ideation context so the data agent
+        # knows papers have already been searched.
         enriched_desc = self.data_desc or ""
         if self.ideation_summary:
             enriched_desc += (
@@ -247,13 +263,24 @@ class FullWorkflowWithIdeation(BaseModel):
                 f"{self.ideation_summary}"
             )
 
-        self._data_workflow = DataWorkflow(
-            data_path=self.data_path,
-            workspace_path=self.workspace_path,
-            recursion_limit=self.data_agent_recursion_limit,
-            data_desc=enriched_desc or None,
-            workspace_init_config=self.workspace_init_config,
-        )
+        if has_desc:
+            self._data_workflow = HypoDataWorkflow(
+                feature_desc=self.feature_desc,
+                workspace_path=self.workspace_path,
+                num_rows=self.num_rows,
+                user_query=self.user_query,
+                recursion_limit=self.data_agent_recursion_limit,
+                extra_data_desc=enriched_desc or None,
+                workspace_init_config=self.workspace_init_config,
+            )
+        else:
+            self._data_workflow = DataWorkflow(
+                data_path=self.data_path,
+                workspace_path=self.workspace_path,
+                recursion_limit=self.data_agent_recursion_limit,
+                data_desc=enriched_desc or None,
+                workspace_init_config=self.workspace_init_config,
+            )
 
         try:
             self._data_workflow.run()
@@ -261,7 +288,7 @@ class FullWorkflowWithIdeation(BaseModel):
             if self._data_workflow.final_status == "success":
                 self.data_summary = self._data_workflow.data_summary
                 self._data_workflow.save_summary()
-                logger.info("DataWorkflow completed successfully")
+                logger.info("Data phase completed successfully")
                 return True
             else:
                 self.error_message = self._data_workflow.error_message
@@ -269,8 +296,8 @@ class FullWorkflowWithIdeation(BaseModel):
                 return False
 
         except Exception as e:
-            logger.exception("DataWorkflow failed")
-            self.error_message = f"DataWorkflow failed: {e}"
+            logger.exception("Data phase failed")
+            self.error_message = f"Data phase failed: {e}"
             self.current_phase = "failed"
             return False
 
@@ -518,6 +545,8 @@ def run_full_workflow_with_ideation(
     workspace_path: str | Path,
     research_domain: str | None = None,
     data_path: str | Path | None = None,
+    feature_desc: str | None = None,
+    num_rows: int = 1000,
     run_data_workflow: bool = False,
     run_experiment_workflow: bool = False,
     repo_source: str | None = None,
@@ -580,6 +609,8 @@ def run_full_workflow_with_ideation(
         workspace_path=workspace_path,
         research_domain=research_domain,
         data_path=Path(data_path) if data_path else None,
+        feature_desc=feature_desc,
+        num_rows=num_rows,
         run_data_workflow=run_data_workflow,
         run_experiment_workflow=run_experiment_workflow,
         repo_source=repo_source,
@@ -619,7 +650,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-path",
         default=None,
-        help="Path to data file (required if --run-data-workflow is set)",
+        help="Path to a real data file (mutually exclusive with --feature-desc)",
+    )
+    parser.add_argument(
+        "--feature-desc",
+        default=None,
+        help="Description for synthetic data generation (mutually exclusive with --data-path)",
+    )
+    parser.add_argument(
+        "--num-rows",
+        type=int,
+        default=1000,
+        help="Number of rows to generate in hypo mode (default: 1000)",
     )
     parser.add_argument(
         "--run-data-workflow",
@@ -678,6 +720,8 @@ if __name__ == "__main__":
         workspace_path=args.workspace_path,
         research_domain=args.research_domain,
         data_path=args.data_path,
+        feature_desc=args.feature_desc,
+        num_rows=args.num_rows,
         run_data_workflow=args.run_data_workflow,
         run_experiment_workflow=args.run_experiment_workflow,
         repo_source=args.repo_source,
