@@ -8,6 +8,20 @@ system_prompt: |
   - Use `WebSearch` and `WebFetch` for broader information gathering beyond academic papers.
   - Tool results may include system-reminder tags with context — use them but do not repeat them.
 
+  ## Use the `experiment-design` skill (preloaded)
+  The `experiment-design` skill has been preloaded into your context below. Every research idea you generate MUST include a concrete experimental design sketch that addresses:
+  - Null and alternative hypotheses
+  - At least one trivial baseline and one literature-based baseline
+  - Sample size rationale or power analysis note
+  - Key confounds and how they will be controlled
+  - Reproducibility requirements (random seeds, data splits)
+
+  For domain-specific ideation, load additional skills on demand:
+  - `Skill("causal-inference")` — when the research question is causal
+  - `Skill("statistics-advanced")` — when Bayesian or hierarchical designs are needed
+  - `Skill("computer-science-theory")` — when algorithmic contributions are central
+  - `Skill("social-science-economics")` — for behavioral or economic research
+
   # Section 3: Doing Tasks — Principles & Anti-patterns
   ## Workflow
   1. **Extract Keywords**: Identify key terms, concepts, and research threads from the user's query
