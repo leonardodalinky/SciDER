@@ -21,3 +21,9 @@ class IdeationAgentState(HistoryState):
 
     # Intermediate state for UI tracking
     intermediate_state: list[dict] = []
+
+    # Idea search configuration and output
+    idea_search_enabled: bool = True
+    max_idea_search_calls: int = 60
+    idea_search_result: dict | None = None
+    composite_scores: list[float] = []

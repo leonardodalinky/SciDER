@@ -49,6 +49,8 @@ class IdeationWorkflow(BaseModel):
     # has no LocalEnv so the config has no direct effect here, but orchestrator
     # workflows can pass the same config through all stages without branching.
     workspace_init_config: WorkspaceInitConfig | None = None
+    idea_search_enabled: bool = True
+    max_idea_search_calls: int = 60
 
     # ==================== INTERNAL STATE ====================
     current_phase: Literal["init", "ideation", "complete", "failed"] = "init"
@@ -133,6 +135,8 @@ class IdeationWorkflow(BaseModel):
         ideation_state = IdeationAgentState(
             user_query=self.user_query,
             research_domain=self.research_domain,
+            idea_search_enabled=self.idea_search_enabled,
+            max_idea_search_calls=self.max_idea_search_calls,
         )
 
         from scider.workflows.history_export import capture_messages
@@ -252,6 +256,8 @@ def run_ideation_workflow(
     recursion_limit: int = 50,
     user_approval_enabled: bool = False,
     workspace_init_config: WorkspaceInitConfig | None = None,
+    idea_search_enabled: bool = True,
+    max_idea_search_calls: int = 60,
 ) -> IdeationWorkflow:
     """
     Convenience function to run the ideation workflow.
@@ -263,6 +269,8 @@ def run_ideation_workflow(
         recursion_limit: Recursion limit for IdeationAgent (default=50)
         workspace_init_config: Accepted for API uniformity; has no direct
             effect on the ideation agent (no LocalEnv).
+        idea_search_enabled: Run evolutionary idea search after extraction (default=True).
+        max_idea_search_calls: Hard budget cap on LLM calls during search (default=60).
 
     Returns:
         IdeationWorkflow: Completed workflow with results
@@ -273,6 +281,8 @@ def run_ideation_workflow(
         research_domain=research_domain,
         recursion_limit=recursion_limit,
         workspace_init_config=workspace_init_config,
+        idea_search_enabled=idea_search_enabled,
+        max_idea_search_calls=max_idea_search_calls,
     )
     with override_user_approval(user_approval_enabled):
         return workflow.run()

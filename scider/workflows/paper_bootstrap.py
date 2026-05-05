@@ -218,12 +218,15 @@ def build_idea_from_ideation(
     if not research_ideas:
         return build_sparse_idea_from_query(user_query)
 
+    def _select_score(i: dict) -> float:
+        if i.get("composite_score") is not None:
+            return float(i["composite_score"])
+        return float(i.get("novelty_score") or 0.0)
+
     if selected_index is not None and 0 <= selected_index < len(research_ideas):
         idea = research_ideas[selected_index]
     else:
-        scored = [
-            (float(i.get("novelty_score", 0.0)), i) for i in research_ideas if isinstance(i, dict)
-        ]
+        scored = [(_select_score(i), i) for i in research_ideas if isinstance(i, dict)]
         if scored:
             scored.sort(key=lambda p: p[0], reverse=True)
             idea = scored[0][1]
