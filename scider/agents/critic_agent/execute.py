@@ -1,9 +1,8 @@
 """Critic agent — reviews and critiques other agents' work."""
 
-from datetime import datetime
-
 from loguru import logger
 
+from scider.core.agent_utils import build_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -33,12 +32,12 @@ def _get_system_prompt() -> str:
 
 
 def _build_system_context(agent_state: CriticAgentState) -> str:
-    parts = [f"date: {datetime.now().strftime('%Y-%m-%d')}"]
+    parts = [today_part()]
     if agent_state.is_data_agent:
         parts.append("reviewing: data agent output")
     if agent_state.is_exp_agent:
         parts.append("reviewing: experiment agent output")
-    return "<system-reminder>\n" + "\n".join(parts) + "\n</system-reminder>"
+    return build_system_reminder(parts)
 
 
 def create_first_user_msg_node(agent_state: CriticAgentState) -> CriticAgentState:

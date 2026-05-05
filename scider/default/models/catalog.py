@@ -234,7 +234,14 @@ def register_role(
         raise ValueError(
             f"Unknown model id '{base_id}'. Available: {sorted(ModelCatalog._entries)}"
         )
-    resolved_key = api_key
+    params = {**entry.default_params, **spec_overrides, **overrides}
+    # default_params may carry kwargs that collide with ModelRegistry.register's
+    # explicit signature (api_key/base_url) — common for self-hosted vLLM
+    # endpoints. Pop them out so **params doesn't double-pass.
+    # Precedence: explicit register_role kwarg > default_params > env var.
+    inline_key = params.pop("api_key", None)
+    inline_base_url = params.pop("base_url", None)
+    resolved_key = api_key or inline_key
     if resolved_key is None and entry.requires_env:
         resolved_key = os.getenv(entry.requires_env[0])
     if resolved_key is None and entry.requires_env:
@@ -244,8 +251,13 @@ def register_role(
             base_id,
             entry.requires_env[0],
         )
-    params = {**entry.default_params, **spec_overrides, **overrides}
-    ModelRegistry.register(name=role, model=entry.litellm_id, api_key=resolved_key, **params)
+    ModelRegistry.register(
+        name=role,
+        model=entry.litellm_id,
+        base_url=inline_base_url,
+        api_key=resolved_key,
+        **params,
+    )
 
 
 def register_defaults_from_yaml(path: str | Path | None = None) -> dict[str, str]:

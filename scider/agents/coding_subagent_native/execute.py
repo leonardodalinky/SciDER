@@ -4,10 +4,9 @@ No external dependencies (no Claude Agent SDK).
 Works with any LiteLLM-supported model via the experiment_coding role.
 """
 
-from datetime import datetime
-
 from loguru import logger
 
+from scider.core.agent_utils import inject_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -41,35 +40,21 @@ def _get_system_prompt() -> str:
     )
 
 
-def _build_system_context(agent_state: NativeCodingAgentState) -> str:
+def _inject_system_context(agent_state: NativeCodingAgentState) -> None:
+    """Inject env-context system-reminder as meta message (idempotent)."""
     from scider.core.utils import detect_gpu_runtime, detect_python_runtime
 
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
-        f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        today_part(),
         detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
-    return (
-        "<system-reminder>\n"
-        "As you work, you can use the following context:\n"
-        + "\n".join(parts)
-        + "\n</system-reminder>"
-    )
-
-
-def _inject_system_context(agent_state: NativeCodingAgentState) -> None:
-    """Inject system context as a meta user message if not already present."""
-    if agent_state.history and agent_state.history[0].is_meta:
-        return
-    agent_state.history.insert(
-        0,
-        Message(
-            role="user",
-            content=_build_system_context(agent_state),
-            agent_sender=AGENT_NAME,
-            is_meta=True,
-        ),
+    inject_system_reminder(
+        agent_state.history,
+        agent_name=AGENT_NAME,
+        parts=parts,
+        preamble="As you work, you can use the following context:",
     )
 
 

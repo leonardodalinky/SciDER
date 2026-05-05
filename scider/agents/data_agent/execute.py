@@ -9,12 +9,11 @@ Context architecture (following Claude Code's 3-pillar model):
 - User Context: user query + data description (injected by build.py init_node)
 """
 
-from datetime import datetime
-
 from loguru import logger
 
 # Ensure paper_subagent agent type is registered
 import scider.agents.paper_subagent.build  # noqa: F401  # triggers AgentRegistry registration
+from scider.core.agent_utils import inject_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -58,41 +57,23 @@ def _get_system_prompt() -> str:
     )
 
 
-def _build_system_context(agent_state: DataAgentState) -> str:
-    """Build per-call system context.
-
-    Injected as a <system-reminder> user message at the start of conversation.
-    Contains environment info that changes per session.
-    """
+def _inject_system_context(agent_state: DataAgentState) -> None:
+    """Inject the env-context system-reminder as a meta user message
+    (idempotent, no-op if already present)."""
     from scider.core.utils import detect_gpu_runtime, detect_python_runtime
 
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
-        f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        today_part(),
         detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
-    return (
-        "<system-reminder>\n"
-        "As you answer, you can use the following context:\n"
-        + "\n".join(parts)
-        + "\n</system-reminder>"
+    inject_system_reminder(
+        agent_state.history,
+        agent_name=AGENT_NAME,
+        parts=parts,
+        preamble="As you answer, you can use the following context:",
     )
-
-
-def _inject_system_context(agent_state: DataAgentState) -> None:
-    """Inject system context as a meta user message if not already present."""
-    # Only inject once (check if first message is already a system-reminder)
-    if agent_state.history and agent_state.history[0].is_meta:
-        return
-
-    context_msg = Message(
-        role="user",
-        content=_build_system_context(agent_state),
-        agent_sender=AGENT_NAME,
-        is_meta=True,
-    )
-    # Prepend to history
     agent_state.history.insert(0, context_msg)
 
 

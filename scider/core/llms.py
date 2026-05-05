@@ -326,13 +326,10 @@ class ModelRegistry:
 
             params = model_params.copy()
             params.update(kwargs)
-            params.update(
-                {
-                    "input": input,
-                    "tools": res_tools,
-                    "tool_choice": tool_choice,
-                }
-            )
+            params.update({"input": input})
+            if res_tools:
+                params["tools"] = res_tools
+                params["tool_choice"] = tool_choice
 
             response = ll_responses(**params)
             # print(response.model_dump_json(indent=2))
@@ -412,10 +409,13 @@ class ModelRegistry:
             params.update(
                 {
                     "messages": _serialize_messages_for_provider(messages, llm_model),
-                    "tools": tools_json_schemas,
-                    "tool_choice": tool_choice,
                 }
             )
+            # vLLM (and some strict OpenAI-compatible servers) reject an empty
+            # tools array — must either provide ≥1 tool or omit the field.
+            if tools_json_schemas:
+                params["tools"] = tools_json_schemas
+                params["tool_choice"] = tool_choice
 
             response = ll_completion(**params)
             if response.choices is None or len(response.choices) == 0:

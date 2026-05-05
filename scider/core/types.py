@@ -86,21 +86,15 @@ COMPACT_BOUNDARY_CONTENT = "[compact_boundary]"
 
 
 class Message(LLMessage):
-    # --- LLMessage fields ---
-    # content: Optional[str]
-    # role: Literal["assistant", "user", "system", "tool", "function"]
-    # tool_calls: Optional[List[ChatCompletionMessageToolCall]]
-    # function_call: Optional[FunctionCall]
-    # audio: Optional[ChatCompletionAudioResponse] = None
-    # images: Optional[List[ImageURLListItem]] = None
-    # reasoning_content: Optional[str] = None
-    # thinking_blocks: Optional[
-    #     List[Union[ChatCompletionThinkingBlock, ChatCompletionRedactedThinkingBlock]]
-    # ] = None
-    # provider_specific_fields: Optional[Dict[str, Any]] = Field(
-    #     default=None, exclude=True
-    # )
-    # annotations: Optional[List[ChatCompletionAnnotation]] = None
+    """SciDER's message type.
+
+    Inherits all standard fields from ``litellm.Message`` (``content``,
+    ``role``, ``tool_calls``, ``function_call``, ``reasoning_content``,
+    ``thinking_blocks``, ``audio``, ``images``, ``annotations``,
+    ``provider_specific_fields``) and adds SciDER-only metadata listed in
+    ``__CUSTOM_FIELDS__``. The custom fields are stripped before any payload
+    is sent to litellm so they never reach the LLM API.
+    """
 
     __CUSTOM_FIELDS__ = [
         "llm_sender",

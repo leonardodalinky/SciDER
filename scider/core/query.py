@@ -244,8 +244,15 @@ def _call_llm(
     tool_names: list[str],
     agent_name: str,
     tool_choice: str | None,
+    transient_tail_messages: list[Message] | None = None,
 ) -> Message:
-    """Call ModelRegistry.completion with proper history handling."""
+    """Call ModelRegistry.completion with proper history handling.
+
+    ``transient_tail_messages`` are appended to the history for this single
+    LLM call only (not persisted to ``agent_state.messages``). Use this for
+    dynamic per-call reminders (todos, plan content) that would otherwise
+    bust vLLM / Anthropic prefix caches if injected into the system prompt.
+    """
     history = agent_state.messages
     if len(history) == 0 or all(msg.role == "system" for msg in history):
         logger.warning(
@@ -259,6 +266,9 @@ def _call_llm(
                 is_meta=True,
             )
         ]
+
+    if transient_tail_messages:
+        history = list(history) + list(transient_tail_messages)
 
     return ModelRegistry.completion(
         model_name,
@@ -494,12 +504,18 @@ def query(
             active_tools = tools
         active_tool_names = [tool.name for tool in active_tools.values()]
 
-        # --- Step 0.6: Inject plan mode / plan / todo reminders into system prompt ---
+        # --- Step 0.6: Build system prompt + transient reminders ---
+        # Plan mode and approved plan flip rarely (≤1× per session), so we keep
+        # them in system_prompt — at most one cache miss when the flag toggles.
+        # The todo list, however, mutates on every TodoWrite call: putting it
+        # into the system prompt would invalidate the LLM provider's prefix
+        # cache for the entire request every turn. Inject it as a transient
+        # tail message instead so the long stable prefix (system + tools +
+        # history) keeps hitting the cache.
         effective_system_prompt = system_prompt
         if plan_mode_state.is_plan_mode:
             effective_system_prompt = system_prompt + _PLAN_MODE_SYSTEM_REMINDER
 
-        # Remind model of approved plan (if any)
         if plan_mode_state.plan_content and plan_mode_state.plan_approved:
             effective_system_prompt += (
                 "\n\n<system-reminder>\n"
@@ -508,19 +524,26 @@ def query(
                 "</system-reminder>"
             )
 
-        # Remind model of current todo list (if any)
+        transient_tail: list[Message] = []
         current_todos = ctx_dict.get("todos") if ctx_dict else None
         if current_todos:
             status_icons = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]"}
             todo_lines = [
                 f"{status_icons.get(t['status'], '[ ]')} {t['content']}" for t in current_todos
             ]
-            effective_system_prompt += (
-                "\n\n<system-reminder>\n"
-                "Current task list:\n"
-                + "\n".join(todo_lines)
-                + "\n\nContinue with the current in-progress task."
-                "\n</system-reminder>"
+            transient_tail.append(
+                Message(
+                    role="user",
+                    content=(
+                        "<system-reminder>\n"
+                        "Current task list:\n"
+                        + "\n".join(todo_lines)
+                        + "\n\nContinue with the current in-progress task."
+                        "\n</system-reminder>"
+                    ),
+                    agent_sender=agent_name,
+                    is_meta=True,
+                )
             )
 
         # --- Step 1: LLM call (with error recovery) ---
@@ -532,6 +555,7 @@ def query(
                 tool_names=active_tool_names,
                 agent_name=agent_name,
                 tool_choice=tool_choice,
+                transient_tail_messages=transient_tail,
             )
         except litellm.ContextWindowExceededError as e:
             # PTL recovery: attempt history compression and retry
@@ -545,6 +569,7 @@ def query(
                         tool_names=active_tool_names,
                         agent_name=agent_name,
                         tool_choice=tool_choice,
+                        transient_tail_messages=transient_tail,
                     )
                 except Exception as retry_error:
                     logger.error("LLM call failed after compression recovery: {}", retry_error)

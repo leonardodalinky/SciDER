@@ -6,10 +6,9 @@ Context architecture (identical to data_agent):
 - User Context: the top-level task + upstream materials (injected by build.init_node)
 """
 
-from datetime import datetime
-
 from loguru import logger
 
+from scider.core.agent_utils import inject_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -54,37 +53,23 @@ def _get_system_prompt() -> str:
     )
 
 
-def _build_system_context(agent_state: WritingAgentState) -> str:
-    """Build per-session context: paper workspace + SciDER workspace + date."""
+def _inject_system_context(agent_state: WritingAgentState) -> None:
+    """Build + inject per-session env context (idempotent)."""
     from scider.core.utils import detect_gpu_runtime, detect_python_runtime
 
     parts = [
         f"paper_workspace (cwd): {agent_state.workspace.working_dir}",
         f"scider_workspace (read-only source): {agent_state.scider_workspace}",
-        f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        today_part(),
         detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
-    return (
-        "<system-reminder>\n"
-        "As you answer, you can use the following context:\n"
-        + "\n".join(parts)
-        + "\n</system-reminder>"
+    inject_system_reminder(
+        agent_state.history,
+        agent_name=AGENT_NAME,
+        parts=parts,
+        preamble="As you answer, you can use the following context:",
     )
-
-
-def _inject_system_context(agent_state: WritingAgentState) -> None:
-    """Inject system context as a meta user message if not already present."""
-    if agent_state.history and agent_state.history[0].is_meta:
-        return
-
-    context_msg = Message(
-        role="user",
-        content=_build_system_context(agent_state),
-        agent_sender=AGENT_NAME,
-        is_meta=True,
-    )
-    agent_state.history.insert(0, context_msg)
 
 
 def agent_loop_node(agent_state: WritingAgentState) -> WritingAgentState:

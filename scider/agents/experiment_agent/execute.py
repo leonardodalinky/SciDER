@@ -4,12 +4,12 @@ Single agent loop with tool access for coding, execution, and analysis.
 """
 
 import json
-from datetime import datetime
 
 from loguru import logger
 
 # Ensure coding subagent is registered in AgentRegistry
 import scider.agents.experiment_agent.coding_subagent  # noqa: F401
+from scider.core.agent_utils import inject_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -75,44 +75,25 @@ def _get_system_prompt() -> str:
     )
 
 
-def _build_system_context(agent_state: ExperimentAgentState) -> str:
-    from scider.core.utils import detect_gpu_runtime, detect_python_runtime
+def _inject_system_context(agent_state: ExperimentAgentState) -> None:
+    from scider.core.utils import detect_gpu_runtime, detect_python_runtime, get_git_status
 
     parts = [
         f"workspace: {agent_state.workspace.working_dir}",
-        f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        today_part(),
         detect_python_runtime(agent_state.workspace.init_config),
         detect_gpu_runtime(),
     ]
     if agent_state.repo_source:
         parts.append(f"repo_source: {agent_state.repo_source}")
-
-    # Git status snapshot (if workspace is a git repo)
-    from scider.core.utils import get_git_status
-
     git_status = get_git_status(cwd=str(agent_state.workspace.working_dir))
     if git_status:
         parts.append(f"\n{git_status}")
-
-    return (
-        "<system-reminder>\n"
-        "As you work, you can use the following context:\n"
-        + "\n".join(parts)
-        + "\n</system-reminder>"
-    )
-
-
-def _inject_system_context(agent_state: ExperimentAgentState) -> None:
-    if agent_state.history and agent_state.history[0].is_meta:
-        return
-    agent_state.history.insert(
-        0,
-        Message(
-            role="user",
-            content=_build_system_context(agent_state),
-            agent_sender=AGENT_NAME,
-            is_meta=True,
-        ),
+    inject_system_reminder(
+        agent_state.history,
+        agent_name=AGENT_NAME,
+        parts=parts,
+        preamble="As you work, you can use the following context:",
     )
 
 

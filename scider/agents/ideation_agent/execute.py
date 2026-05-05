@@ -3,12 +3,11 @@
 Single agent loop: searches papers, identifies gaps, generates ideas.
 """
 
-from datetime import datetime
-
 from loguru import logger
 
 # Ensure paper_subagent agent type is registered
 import scider.agents.paper_subagent.build  # noqa: F401
+from scider.core.agent_utils import inject_system_reminder, today_part
 from scider.core.llms import ModelRegistry
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
@@ -32,27 +31,13 @@ def _get_system_prompt() -> str:
     return PROMPTS.ideation_agent.system_prompt.render()
 
 
-def _build_system_context(agent_state: IdeationAgentState) -> str:
+def _inject_system_context(agent_state: IdeationAgentState) -> None:
     from scider.core.utils import detect_python_runtime
 
-    parts = [f"date: {datetime.now().strftime('%Y-%m-%d')}", detect_python_runtime()]
+    parts = [today_part(), detect_python_runtime()]
     if agent_state.research_domain:
         parts.append(f"research_domain: {agent_state.research_domain}")
-    return "<system-reminder>\n" + "\n".join(parts) + "\n</system-reminder>"
-
-
-def _inject_system_context(agent_state: IdeationAgentState) -> None:
-    if agent_state.history and agent_state.history[0].is_meta:
-        return
-    agent_state.history.insert(
-        0,
-        Message(
-            role="user",
-            content=_build_system_context(agent_state),
-            agent_sender=AGENT_NAME,
-            is_meta=True,
-        ),
-    )
+    inject_system_reminder(agent_state.history, agent_name=AGENT_NAME, parts=parts)
 
 
 def agent_loop_node(agent_state: IdeationAgentState) -> IdeationAgentState:

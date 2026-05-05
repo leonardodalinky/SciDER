@@ -1,0 +1,26 @@
+# Default model assignment for each agent role.
+#
+# Values are model ids from catalog.yaml. Append [key=val,...] to override
+# default_params inline:
+#   experiment: gemini-2.5-pro[reasoning_effort=high]
+#   data: gpt-5-mini[reasoning.effort=low]
+#
+# Frontend selections in ~/.scider/settings.json override these.
+
+defaults:
+  ideation: scider-qwen3.6-27b
+  paper_search: scider-qwen3.6-27b
+  metric_search: scider-qwen3.6-27b
+  data: scider-qwen3.6-27b
+  critic: scider-qwen3.6-27b[temperature=0.3]
+  history: scider-qwen3.6-27b
+  experiment: scider-qwen3.6-27b
+  experiment_coding: scider-qwen3.6-27b
+  # Paper writing agent — requires a vision model to read generated figures
+  # and embed them in LaTeX (section-writing-agent's multimodal call).
+  writing: scider-qwen3.6-27b
+  # Approval subagent — binary shipping-gate judge for critic's user_review
+  # (only active when USER_APPROVAL_ENABLED=false + APPROVAL_SUBAGENT_ENABLED=true).
+  # Cheap + fast is fine; falls back to 'critic' if not registered.
+  approval: scider-qwen3.6-27b
+  embedding: text-embedding-3-small

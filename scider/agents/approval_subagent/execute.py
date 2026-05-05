@@ -6,12 +6,12 @@ Flow: init → agent_loop → parse_verdict → END
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 from loguru import logger
 
+from scider.core.agent_utils import build_system_reminder, today_part
 from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
 from scider.core.utils import parse_json_from_text
@@ -77,7 +77,7 @@ def _build_system_context(agent_state: ApprovalSubagentState) -> str:
     from scider.core.utils import detect_gpu_runtime, detect_python_runtime
 
     parts = [
-        f"date: {datetime.now().strftime('%Y-%m-%d')}",
+        today_part(),
         f"approval_node: {agent_state.node_name}",
         f"parent_agent: {agent_state.parent_agent or 'unknown'}",
     ]
@@ -85,7 +85,7 @@ def _build_system_context(agent_state: ApprovalSubagentState) -> str:
         parts.append(f"workspace (read-only verification): {agent_state.workspace_dir}")
     parts.append(detect_python_runtime())
     parts.append(detect_gpu_runtime())
-    return "<system-reminder>\n" + "\n".join(parts) + "\n</system-reminder>"
+    return build_system_reminder(parts)
 
 
 def _build_task_prompt(agent_state: ApprovalSubagentState) -> str:
