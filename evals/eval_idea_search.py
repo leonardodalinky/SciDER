@@ -25,6 +25,7 @@ The judge uses the "critic" role to avoid self-confirmation.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import re
@@ -40,8 +41,10 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scider.agents.ideation_agent.idea_search import (
+    IdeaNode,
     IdeaSearchResult,
     run_idea_search,
+    score_population,
 )
 from scider.core.llms import ModelRegistry
 from scider.core.types import Message
@@ -496,29 +499,53 @@ def evaluate_query(
     logger.info("=" * 60)
     logger.info("Query: {} ({})", query, domain)
 
-    # 1. baseline_novelty — no LLM calls
-    bn_idea = _top_by_novelty(seeds)
+    # Score seeds once — shared across all ablations so initial_best is consistent
+    # and we don't pay 4 calls × 3 runs for the same seed population.
+    logger.info("Scoring {} seed ideas (shared initial pass) …", len(seeds))
+    seed_nodes = [IdeaNode(idea=idea, operator="seed", generation=0) for idea in seeds]
+    score_population(seed_nodes, query, max_workers=score_workers)
+    total_calls += 4
+    initial_best = max(n.composite_score or 0.0 for n in seed_nodes)
 
-    # 2. baseline_composite — score-only (max_iterations=0)
+    # baseline_novelty: idea chosen by novelty_score, looked up in scored seeds
+    bn_title = _top_by_novelty(seeds).get("title", "")
+    bn_node = next((n for n in seed_nodes if n.idea.get("title") == bn_title), seed_nodes[0])
+    bn_idea = {
+        **bn_node.idea,
+        "composite_score": bn_node.composite_score,
+        "score_novelty": bn_node.score_novelty,
+        "score_feasibility": bn_node.score_feasibility,
+        "score_impact": bn_node.score_impact,
+        "score_specificity": bn_node.score_specificity,
+        "search_operator": "seed",
+    }
+
+    # baseline_composite: top seed by composite — no search iterations
+    # Pass pre-scored nodes so run_idea_search skips re-scoring and the final
+    # pass is also skipped (any_new_nodes stays False).
     logger.info("Running: score-only baseline …")
     r_composite = run_idea_search(
-        seeds, query, max_iterations=0, score_workers=score_workers
+        seeds, query, max_iterations=0, score_workers=score_workers,
+        _pre_scored_nodes=copy.deepcopy(seed_nodes),
     )
-    total_calls += r_composite.llm_calls_used
+    total_calls += r_composite.llm_calls_used  # 0 calls now (no operators, no final pass)
     bc_idea = r_composite.best_ideas[0] if r_composite.best_ideas else bn_idea
-    initial_best = r_composite.initial_best_composite
 
-    # 3. improve_only
+    # improve_only
     logger.info("Running: improve-only search …")
     r_improve = run_idea_search(
-        seeds, query, improve_fraction=1.0, score_workers=score_workers
+        seeds, query, improve_fraction=1.0, score_workers=score_workers,
+        _pre_scored_nodes=copy.deepcopy(seed_nodes),
     )
     total_calls += r_improve.llm_calls_used
     imp_idea = r_improve.best_ideas[0] if r_improve.best_ideas else bc_idea
 
-    # 4. improve_combine (default, full system)
+    # improve_combine (default, full system)
     logger.info("Running: improve+combine search …")
-    r_full = run_idea_search(seeds, query, score_workers=score_workers)
+    r_full = run_idea_search(
+        seeds, query, score_workers=score_workers,
+        _pre_scored_nodes=copy.deepcopy(seed_nodes),
+    )
     total_calls += r_full.llm_calls_used
     full_idea = r_full.best_ideas[0] if r_full.best_ideas else bc_idea
 

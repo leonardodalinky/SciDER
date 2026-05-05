@@ -200,9 +200,10 @@ def _score_dimension(nodes: list[IdeaNode], dimension: str, user_query: str) -> 
 
     except Exception as e:
         logger.warning("Scoring failed for dimension {}: {}. Assigning neutral 0.5.", dimension, e)
+        # Unconditionally overwrite — a stale score from a previous population context
+        # is worse than neutral: it mixes scales across different batch sizes.
         for node in nodes:
-            if getattr(node, f"score_{dimension}") is None:
-                setattr(node, f"score_{dimension}", 0.5)
+            setattr(node, f"score_{dimension}", 0.5)
 
 
 def _compute_composite(node: IdeaNode) -> None:
@@ -393,6 +394,7 @@ def run_idea_search(
     score_workers: int = 4,
     max_iterations: int = MAX_ITERATIONS,
     improve_fraction: float = IMPROVE_FRACTION,
+    _pre_scored_nodes: Optional[list["IdeaNode"]] = None,
 ) -> IdeaSearchResult:
     """Run evolutionary best-first search over the idea space.
 
@@ -419,22 +421,29 @@ def run_idea_search(
     all_nodes: list[IdeaNode] = []
     iteration = 0
 
-    # Seed population — cap to POPULATION_SIZE
-    population = [
-        IdeaNode(idea=idea, operator="seed", generation=0)
-        for idea in seed_ideas[:POPULATION_SIZE]
-    ]
+    if _pre_scored_nodes is not None:
+        # Caller already scored the seeds (shared across ablations). Deep-copy so
+        # this run's scoring mutations don't corrupt the caller's node objects.
+        import copy
+        population = copy.deepcopy(_pre_scored_nodes)
+        all_nodes.extend(population)
+    else:
+        # Seed population — cap to POPULATION_SIZE
+        population = [
+            IdeaNode(idea=idea, operator="seed", generation=0)
+            for idea in seed_ideas[:POPULATION_SIZE]
+        ]
+        logger.info("Idea search: scoring {} seed ideas across 4 dimensions.", len(population))
+        score_population(population, user_query, max_workers=score_workers)
+        llm_calls += 4
+        all_nodes.extend(population)
 
-    logger.info("Idea search: scoring {} seed ideas across 4 dimensions.", len(population))
-    score_population(population, user_query, max_workers=score_workers)
-    llm_calls += 4  # 4 dimension calls
-    all_nodes.extend(population)
-
-    # Record best composite among seeds immediately after initial scoring (before any operators).
-    # This is the correct lift baseline — not the best score in the final population.
+    # Record best composite among seeds before any operators run.
     initial_best_composite = max(
         (n.composite_score or 0.0 for n in population), default=0.0
     )
+
+    any_new_nodes = False  # tracks whether operators ever produced new nodes
 
     # Main loop
     while iteration < max_iterations and llm_calls < max_llm_calls:
@@ -494,6 +503,7 @@ def run_idea_search(
             )
 
         if new_nodes:
+            any_new_nodes = True
             # Score against the full merged batch so ranks are calibrated.
             # A survivor's composite_score may shift — this is correct, not a bug.
             score_population(survivors + new_nodes, user_query, max_workers=score_workers)
@@ -502,10 +512,13 @@ def run_idea_search(
 
         population = survivors + new_nodes
 
-    # Final authoritative scoring pass on the complete population
-    logger.info("Idea search: final scoring pass on {} ideas.", len(population))
-    score_population(population, user_query, max_workers=score_workers)
-    llm_calls += 4
+    # Final authoritative scoring pass — only when the population changed.
+    # Skipping when no operators ran keeps baseline_composite.lift = 0 by construction
+    # and avoids paying 4 calls to re-score an unchanged population.
+    if any_new_nodes:
+        logger.info("Idea search: final scoring pass on {} ideas.", len(population))
+        score_population(population, user_query, max_workers=score_workers)
+        llm_calls += 4
 
     budget_hit = llm_calls >= max_llm_calls
     if budget_hit:

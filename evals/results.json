@@ -1,0 +1,175 @@
+[
+  {
+    "query": "efficient transformers for long document understanding",
+    "domain": "NLP",
+    "baseline_title": "State-Space Model Hybrid with Selective Full Attention",
+    "treatment_title": "Mamba-Constrained Dynamic Attention for Salient Long Document Understanding",
+    "treatment_operator": "improve",
+    "initial_best_composite": 0.51875,
+    "final_best_composite": 0.75625,
+    "score_lift": 0.45783132530120463,
+    "operator_distribution": {
+      "improve": 5,
+      "seed": 1,
+      "combine": 2
+    },
+    "mean_diversity": 0.2555974277489759,
+    "judge_winner": "B",
+    "judge_rationale": "Idea B is a superior research proposal because its core mechanism\u2014using a recurrent state to dynamically predict and guide a sparse attention pattern\u2014is far more novel and impactful than the heuristic-based approach of Idea A. While riskier, success in Idea B would establish a new principle for building content-aware, efficient models, representing a significant conceptual advance for the field.",
+    "judge_scores": {
+      "A": {
+        "novelty": 2,
+        "feasibility": 5,
+        "impact": 3,
+        "specificity": 5
+      },
+      "B": {
+        "novelty": 5,
+        "feasibility": 3,
+        "impact": 5,
+        "specificity": 4
+      }
+    },
+    "llm_calls_used": 32,
+    "search_budget_hit": false,
+    "iterations_completed": 3
+  },
+  {
+    "query": "privacy-preserving federated learning with heterogeneous data",
+    "domain": "FL/Privacy",
+    "baseline_title": "Personalized Federated Learning via Sparse Private Adapters",
+    "treatment_title": "Private-Adaptive Federated Feature Alignment for Heterogeneous Data",
+    "treatment_operator": "combine",
+    "initial_best_composite": 0.34375,
+    "final_best_composite": 0.7625,
+    "score_lift": 1.218181818181818,
+    "operator_distribution": {
+      "combine": 2,
+      "improve": 5,
+      "seed": 1
+    },
+    "mean_diversity": 0.35359075732489,
+    "judge_winner": "B",
+    "judge_rationale": "Idea B is better because it introduces a more novel mechanism\u2014using a contrastive objective for explicit feature alignment\u2014which tackles the core problem of heterogeneity more directly and has higher potential impact. Its experimental plan is also far more specific, with well-defined baselines and metrics that provide a clearer path to validation.",
+    "judge_scores": {
+      "A": {
+        "novelty": 2,
+        "feasibility": 5,
+        "impact": 3,
+        "specificity": 3
+      },
+      "B": {
+        "novelty": 4,
+        "feasibility": 4,
+        "impact": 5,
+        "specificity": 5
+      }
+    },
+    "llm_calls_used": 32,
+    "search_budget_hit": false,
+    "iterations_completed": 3
+  },
+  {
+    "query": "graph neural networks for molecular property prediction in drug discovery",
+    "domain": "Biology/Chemistry",
+    "baseline_title": "Reaction-Aware Molecular GNN for Retrosynthesis-Driven Property Prediction",
+    "treatment_title": "Multi-Objective Conformal Active Learning for Simultaneous Hit Expansion and Lead Optimization with Graph Neural Networks",
+    "treatment_operator": "improve",
+    "initial_best_composite": 0.0,
+    "final_best_composite": 0.76875,
+    "score_lift": 0.0,
+    "operator_distribution": {
+      "improve": 7,
+      "combine": 1
+    },
+    "mean_diversity": 0.2951577724563683,
+    "judge_winner": "A",
+    "judge_rationale": "Idea A is the better research project because it strikes an excellent balance between innovation, practical impact, and feasibility. While Idea B is more methodologically novel, its core technical challenges are substantial and high-risk, whereas Idea A proposes a clever solution to a critical, real-world problem in drug discovery with a much more realistic path to success.",
+    "judge_scores": {
+      "A": {
+        "novelty": 4,
+        "feasibility": 4,
+        "impact": 4,
+        "specificity": 4
+      },
+      "B": {
+        "novelty": 5,
+        "feasibility": 2,
+        "impact": 4,
+        "specificity": 5
+      }
+    },
+    "llm_calls_used": 32,
+    "search_budget_hit": false,
+    "iterations_completed": 3
+  },
+  {
+    "query": "causal inference methods for observational healthcare data",
+    "domain": "Statistics/Causal",
+    "baseline_title": "Instrumental Variable Estimation via Neural Proxy Variables",
+    "treatment_title": "Sensitivity Analysis for Residual Confounding with Imperfect Proxies in Longitudinal Healthcare Data",
+    "treatment_operator": "improve",
+    "initial_best_composite": 0.51875,
+    "final_best_composite": 0.625,
+    "score_lift": 0.20481927710843364,
+    "operator_distribution": {
+      "improve": 5,
+      "combine": 2,
+      "seed": 1
+    },
+    "mean_diversity": 0.31845231571506455,
+    "judge_winner": "B",
+    "judge_rationale": "Idea B is the better proposal because it outlines a much clearer and more feasible path to a robust methodological contribution. While Idea A is more novel and has higher potential impact, its experimental plan is less specific and its success depends on a high-risk deep learning component that may not work as intended.",
+    "judge_scores": {
+      "A": {
+        "novelty": 5,
+        "feasibility": 3,
+        "impact": 5,
+        "specificity": 3
+      },
+      "B": {
+        "novelty": 4,
+        "feasibility": 4,
+        "impact": 4,
+        "specificity": 5
+      }
+    },
+    "llm_calls_used": 32,
+    "search_budget_hit": false,
+    "iterations_completed": 3
+  },
+  {
+    "query": "self-supervised learning for low-resource speech recognition",
+    "domain": "Speech/Audio",
+    "baseline_title": "Cross-Lingual Transfer via Shared Phoneme Inventory Alignment",
+    "treatment_title": "Prompt-Guided Phoneme-Aware Masked Modeling for Low-Resource Languages",
+    "treatment_operator": "combine",
+    "initial_best_composite": 0.0,
+    "final_best_composite": 0.7,
+    "score_lift": 0.0,
+    "operator_distribution": {
+      "combine": 3,
+      "improve": 5
+    },
+    "mean_diversity": 0.37121324347253226,
+    "judge_winner": "B",
+    "judge_rationale": "Idea B is better because it proposes a more novel and impactful paradigm for low-resource ASR by creatively combining prompting, knowledge distillation, and self-supervised learning. While Idea A is a safer, more incremental project, Idea B's potential to create a general and highly effective framework for bootstrapping speech models represents a more significant leap forward for the field.",
+    "judge_scores": {
+      "A": {
+        "novelty": 2,
+        "feasibility": 5,
+        "impact": 3,
+        "specificity": 5
+      },
+      "B": {
+        "novelty": 5,
+        "feasibility": 3,
+        "impact": 5,
+        "specificity": 3
+      }
+    },
+    "llm_calls_used": 32,
+    "search_budget_hit": false,
+    "iterations_completed": 3
+  }
+]
