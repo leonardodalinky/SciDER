@@ -212,9 +212,9 @@ models:
     requires_env: [GEMINI_API_KEY]
 
   # ---- Self-hosted (vLLM, OpenAI-compatible) ----
-  scider-qwen3.6-27b:
+  openscider-qwen3.6-27b:
     provider: openai                     # litellm uses OpenAI route for vllm
-    litellm_id: openai/scider-qwen3.6-27b   # name after "openai/" must match --served-model-name
+    litellm_id: openai/openscider-qwen3.6-27b   # name after "openai/" must match --served-model-name
     capabilities: [completion]
     supports_vision: false               # we trained text-only; flag VL only if you serve the VL adapter
     requires_env: []

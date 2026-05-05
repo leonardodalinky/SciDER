@@ -1,0 +1,22 @@
+# Role assignments for DS-1000 data generation.
+#
+# We use the self-hosted openscider-qwen3.6-27b for ALL roles — the goal is to
+# bootstrap more SFT data using the same model that consumes it. If a role
+# isn't needed by the coding subagent (most aren't), it's still registered
+# so any incidental dependency resolves.
+#
+# Override per-run by setting CODING_AGENT_VERSION=native (default) so the
+# experiment_coding role is honoured by SciDER's native coding subagent.
+
+defaults:
+  ideation: openscider-qwen3.6-27b
+  paper_search: openscider-qwen3.6-27b
+  metric_search: openscider-qwen3.6-27b
+  data: openscider-qwen3.6-27b
+  critic: openscider-qwen3.6-27b[temperature=0.3]
+  history: openscider-qwen3.6-27b
+  experiment: openscider-qwen3.6-27b
+  experiment_coding: openscider-qwen3.6-27b
+  writing: openscider-qwen3.6-27b
+  approval: openscider-qwen3.6-27b
+  embedding: text-embedding-3-small

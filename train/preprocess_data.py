@@ -207,7 +207,7 @@ def chunk_messages(
 # tool_name) is dropped so HF Datasets can infer a stable schema across all
 # rows. If even one row carries an extra field, ``cast_array_to_feature``
 # fails with a struct mismatch during dataset preparation.
-_CANONICAL_MSG_KEYS = ("role", "content", "tool_calls", "tool_call_id")
+_CANONICAL_MSG_KEYS = ("role", "content", "reasoning_content", "tool_calls", "tool_call_id")
 
 
 def _drop_orphan_tool_calls(messages: list[dict]) -> list[dict]:
@@ -323,7 +323,7 @@ def _normalize_tool_call(tc: dict) -> dict:
     }
 
 
-def _normalize_messages(messages: list[dict]) -> list[dict]:
+def _normalize_messages(messages: list[dict], *, drop_reasoning: bool = False) -> list[dict]:
     out = []
     for m in messages:
         role = m.get("role")
@@ -331,10 +331,19 @@ def _normalize_messages(messages: list[dict]) -> list[dict]:
             continue
         # Emit every canonical key with a non-null default so HF Arrow
         # produces a uniform schema and downstream converters can call
-        # ``len(msg["tool_calls"])`` without hitting None.
+        # ``len(msg["tool_calls"])`` without hitting None. ``drop_reasoning``
+        # forces ``reasoning_content`` to "" for every message — used when
+        # the trainer's template would otherwise consume the reasoning
+        # string. Stays as empty string (not null) for schema uniformity
+        # with the default code path.
+        if drop_reasoning:
+            reasoning = ""
+        else:
+            reasoning = m.get("reasoning_content") or m.get("reasoning") or ""
         cleaned = {
             "role": role,
             "content": m.get("content") if m.get("content") is not None else "",
+            "reasoning_content": reasoning,
             "tool_calls": [_normalize_tool_call(tc) for tc in (m.get("tool_calls") or [])],
             "tool_call_id": m.get("tool_call_id") or "",
         }
@@ -353,6 +362,7 @@ def process_row(
     max_tool_tokens: int | None,
     max_message_tokens: int | None,
     minimal: bool,
+    drop_reasoning: bool,
     enc,
 ) -> Iterator[dict]:
     """Run the configured pipeline on a single row, yielding one or more rows."""
@@ -385,7 +395,7 @@ def process_row(
         new_id = base_id if len(chunks) == 1 else f"{base_id}#part{i + 1:02d}"
         # Always normalize message fields — keeps the JSONL schema flat and
         # uniform so HF Datasets can infer a single Features struct.
-        norm_chunk = _normalize_messages(chunk)
+        norm_chunk = _normalize_messages(chunk, drop_reasoning=drop_reasoning)
         # Drop / cleanse orphaned tool_calls (assistant_with_tc → user without
         # an intervening tool result) — common after critic-retry interrupts.
         norm_chunk = _drop_orphan_tool_calls(norm_chunk)
@@ -425,6 +435,7 @@ def process_file(
     max_tool_tokens: int | None,
     max_message_tokens: int | None,
     minimal: bool,
+    drop_reasoning: bool,
     enc,
 ) -> tuple[int, int]:
     """Process one JSONL file. Returns (rows_in, rows_out)."""
@@ -450,6 +461,7 @@ def process_file(
                 max_tool_tokens=max_tool_tokens,
                 max_message_tokens=max_message_tokens,
                 minimal=minimal,
+                drop_reasoning=drop_reasoning,
                 enc=enc,
             ):
                 fout.write(json.dumps(new_row, ensure_ascii=False))
@@ -502,6 +514,13 @@ def main() -> int:
         help="Output rows keep only id, messages, datasource.",
     )
     parser.add_argument(
+        "--drop-reasoning",
+        action="store_true",
+        help="Force every output message's reasoning_content to null. Use "
+        "when training a non-thinking template that would otherwise consume "
+        "the reasoning string. Schema field is still emitted for uniformity.",
+    )
+    parser.add_argument(
         "--encoding",
         default="cl100k_base",
         help="tiktoken encoding name. Default: cl100k_base (GPT-4 family).",
@@ -527,6 +546,7 @@ def main() -> int:
             max_tool_tokens=args.max_tool_tokens,
             max_message_tokens=args.max_message_tokens,
             minimal=args.minimal,
+            drop_reasoning=args.drop_reasoning,
             enc=enc,
         )
         total_in += n_in

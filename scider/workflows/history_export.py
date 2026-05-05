@@ -82,9 +82,17 @@ def save_conversation_history(
     records = []
     for msg in history:
         if isinstance(msg, Message):
+            # Reasoning models (Qwen3 with --reasoning-parser, Claude
+            # extended thinking, OpenAI o-series) return the chain-of-thought
+            # split into a separate ``reasoning_content`` field by litellm.
+            # Persist it under its own JSON key — always written, with
+            # explicit ``null`` when the message has none. Downstream
+            # consumers (e.g. ``train/prepare_data.py``) decide whether to
+            # splice it back into ``content`` for the trainer's template.
             record = {
                 "role": msg.role,
                 "content": _restore_original_content(msg),
+                "reasoning_content": msg.reasoning_text,
                 "agent_sender": msg.agent_sender,
                 "tool_name": msg.tool_name,
                 "tool_call_id": msg.tool_call_id,
