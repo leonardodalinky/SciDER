@@ -87,6 +87,8 @@ class FullWorkflowWithIdeation(BaseModel):
     skip_ideation: bool = (
         False  # Skip ideation phase (user provides detailed instructions directly)
     )
+    idea_search_enabled: bool = True  # Run evolutionary idea search after seed extraction
+    max_idea_search_calls: int = 60   # Hard LLM budget cap for idea search
 
     # Paper writing phase (off by default)
     run_paper_writing: bool = False
@@ -211,6 +213,8 @@ class FullWorkflowWithIdeation(BaseModel):
             research_domain=self.research_domain,
             recursion_limit=self.ideation_agent_recursion_limit,
             workspace_init_config=self.workspace_init_config,
+            idea_search_enabled=self.idea_search_enabled,
+            max_idea_search_calls=self.max_idea_search_calls,
         )
 
         try:

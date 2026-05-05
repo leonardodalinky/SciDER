@@ -22,6 +22,7 @@ def run_full(cfg, workspace_path):
 
     run_ideation = cfg.get("run_ideation", True)
     run_paper_writing = cfg.get("run_paper_writing", False)
+    idea_search_enabled = cfg.get("idea_search_enabled", True)
 
     w = FullWorkflowWithIdeation(
         user_query=cfg["query"],
@@ -34,6 +35,7 @@ def run_full(cfg, workspace_path):
         max_revisions=5,
         skip_ideation=not run_ideation,
         run_paper_writing=run_paper_writing,
+        idea_search_enabled=idea_search_enabled,
     )
     w.run()
     return w.final_summary or "Workflow finished", []
@@ -105,6 +107,15 @@ def render_form():
                 st.info(f"Using: `{st.session_state.uploaded_full_data_path}`")
 
         run_ideation = st.checkbox("Run Ideation (literature search & idea generation)", value=True)
+        idea_search = st.checkbox(
+            "↳ Enable evolutionary idea search",
+            value=True,
+            disabled=not run_ideation,
+            help=(
+                "After generating seed ideas, runs a best-first search that improves and combines "
+                "ideas across novelty, feasibility, impact, and specificity. Uses ~32 extra LLM calls."
+            ),
+        )
         run_data = st.checkbox("Run Data Analysis", value=True)
         run_exp = st.checkbox("Run Experiment", value=True)
         run_paper_writing = st.checkbox(
@@ -182,6 +193,7 @@ def render_form():
                     "feature_desc": feature_desc_to_use,
                     "num_rows": num_rows_to_use,
                     "run_ideation": run_ideation,
+                    "idea_search_enabled": idea_search and run_ideation,
                     "run_data": run_data,
                     "run_exp": run_exp,
                     "run_paper_writing": run_paper_writing,

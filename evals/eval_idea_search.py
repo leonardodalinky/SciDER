@@ -467,7 +467,12 @@ class QueryResult:
     improve_only: IdeaInfo           # search with improve_fraction=1.0
     improve_combine: IdeaInfo        # search with improve_fraction=0.75 (default)
 
-    initial_best_composite: float    # best composite in seed population after scoring
+    initial_best_composite: float    # best composite in seed population (n=6 context)
+    # Best surviving seed composite in each search run's final n=8 scoring pass.
+    # This is the level-playing-field baseline for lift: same population, same n.
+    # Falls back to initial_best_composite when all seeds are replaced by operators.
+    seed_baseline_improve: float
+    seed_baseline_full: float
 
     # Three pairwise judge comparisons
     judge_novelty_vs_full: JudgePair       # baseline_novelty vs improve_combine
@@ -549,14 +554,31 @@ def evaluate_query(
     total_calls += r_full.llm_calls_used
     full_idea = r_full.best_ideas[0] if r_full.best_ideas else bc_idea
 
-    def _lift(composite: float) -> float:
-        return (composite - initial_best) / initial_best if initial_best > 0 else 0.0
+    def _best_seed_final(best_ideas: list[dict]) -> float:
+        """Best composite among seed-operator ideas in the final population.
 
-    def _info(idea: dict, op_fallback: str = "seed") -> IdeaInfo:
+        Falls back to initial_best when all seeds were replaced by operators
+        (common after 3 iterations — seeds often score below the new ideas in n=8 context).
+        """
+        seed_composites = [
+            i.get("composite_score") or 0.0
+            for i in best_ideas
+            if i.get("search_operator") == "seed"
+        ]
+        return max(seed_composites) if seed_composites else initial_best
+
+    seed_final_improve = _best_seed_final(r_improve.best_ideas)
+    seed_final_full    = _best_seed_final(r_full.best_ideas)
+
+    def _lift(composite: float, baseline: float) -> float:
+        return (composite - baseline) / baseline if baseline > 0 else 0.0
+
+    def _info(idea: dict, op_fallback: str = "seed", baseline: float | None = None) -> IdeaInfo:
+        b = initial_best if baseline is None else baseline
         return IdeaInfo(
             title=idea.get("title", ""),
             composite_score=idea.get("composite_score") or 0.0,
-            lift=_lift(idea.get("composite_score") or 0.0),
+            lift=_lift(idea.get("composite_score") or 0.0, b),
             operator=idea.get("search_operator", op_fallback),
         )
 
@@ -591,11 +613,15 @@ def evaluate_query(
 
     return QueryResult(
         query=query, domain=domain, n_seeds=len(seeds),
+        # baseline runs use initial_best (n=6 context — comparing seed selection strategies)
         baseline_novelty=_info(bn_idea),
         baseline_composite=_info(bc_idea),
-        improve_only=_info(imp_idea),
-        improve_combine=_info(full_idea),
+        # search runs use each run's own final-pass seed baseline (n=8 context — level playing field)
+        improve_only=_info(imp_idea, baseline=seed_final_improve),
+        improve_combine=_info(full_idea, baseline=seed_final_full),
         initial_best_composite=initial_best,
+        seed_baseline_improve=seed_final_improve,
+        seed_baseline_full=seed_final_full,
         judge_novelty_vs_full=_pair("baseline_novelty", "improve_combine", j1),
         judge_composite_vs_full=_pair("baseline_composite", "improve_combine", j2),
         judge_improve_vs_combine=_pair("improve_only", "improve_combine", j3),
@@ -696,7 +722,8 @@ def print_report(results: list[QueryResult]) -> None:
     print(f"{SEP}")
     for r in results:
         print(f"\n[{r.domain}] {r.query}")
-        print(f"  initial best (seed): composite={r.initial_best_composite:.3f}")
+        seed_bl_note = "" if r.seed_baseline_improve == r.initial_best_composite else f"  (final-pass seed: improve={r.seed_baseline_improve:.3f}, full={r.seed_baseline_full:.3f})"
+        print(f"  initial best (seed, n=6): composite={r.initial_best_composite:.3f}{seed_bl_note}")
         configs = [
             ("baseline_novelty",   r.baseline_novelty),
             ("baseline_composite", r.baseline_composite),
@@ -715,8 +742,14 @@ def print_report(results: list[QueryResult]) -> None:
 
     print(f"\n{SEP}")
     print("NOTES")
-    print("  Lift = (final_composite - initial_best_seed) / initial_best_seed")
-    print("  initial_best_seed is captured after the first scoring pass, before any operators.")
+    print("  Lift (baseline_novelty / baseline_composite):")
+    print("    = (composite - initial_best) / initial_best")
+    print("    Both measured in n=6 seed context (comparing seed selection strategies).")
+    print("  Lift (improve_only / improve_combine):")
+    print("    = (composite - seed_baseline) / seed_baseline")
+    print("    seed_baseline = best surviving seed's composite in the final n=8 scoring pass.")
+    print("    Falls back to initial_best when all seeds are replaced by operators (common after")
+    print("    3 iterations). In that case the n=6 vs n=8 scale difference adds ~5-10% noise.")
     print("  Judge = 'critic' model (independent from 'ideation' used in search).")
     print("  Mean pairwise similarity: TF-IDF cosine on titles+descriptions — lower = more diverse.")
     print(f"{SEP}\n")
@@ -789,6 +822,8 @@ def main() -> int:
                 {
                     "query": r.query, "domain": r.domain,
                     "initial_best_composite": r.initial_best_composite,
+                    "seed_baseline_improve": r.seed_baseline_improve,
+                    "seed_baseline_full": r.seed_baseline_full,
                     "baseline_novelty":   {"title": r.baseline_novelty.title,   "composite": r.baseline_novelty.composite_score,   "lift": r.baseline_novelty.lift},
                     "baseline_composite": {"title": r.baseline_composite.title, "composite": r.baseline_composite.composite_score, "lift": r.baseline_composite.lift},
                     "improve_only":       {"title": r.improve_only.title,       "composite": r.improve_only.composite_score,       "lift": r.improve_only.lift},
