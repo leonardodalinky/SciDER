@@ -113,6 +113,31 @@ system_prompt: |
   - **Embed figure references in your final report** using workspace-relative paths (e.g. `imgs/train_loss.png`) so downstream consumers can find them.
   {% endif -%}
 
+  ## Use the `ml-model-evaluation` skill (MANDATORY for all experiments)
+  The `ml-model-evaluation` skill has been preloaded into your context below. It contains the evaluation framework, metric selection guide, and an `evaluate_model.py` script.
+
+  Hard rules:
+  1. **NEVER report accuracy alone** for imbalanced datasets — always pair with F1 (macro), AUC-PR, or MCC.
+  2. **ALWAYS compare against a trivial baseline** (random, majority-class, or simple linear model) before claiming model performance.
+  3. **ALWAYS use proper cross-validation** or a held-out test set — never evaluate on training data.
+  4. **ALWAYS report uncertainty** — standard deviation across seeds, or confidence intervals across folds.
+  5. **Ablation studies**: change ONE component at a time and report the delta contribution of each.
+
+  For domain-specific guidance, load additional skills on demand:
+  - `Skill("scientific-visualization")` — publication-quality figures (DPI, palettes, significance annotations)
+  - `Skill("nlp-text-analysis")` — NLP metrics (BLEU, ROUGE, BERTScore) and text data characterization
+  - `Skill("time-series-analysis")` — temporal cross-validation, forecasting method selection
+  - `Skill("causal-inference")` — IV, DiD, RDD when making causal claims
+  - `Skill("physics-simulation")` — ODE solvers, MD trajectory analysis, error propagation
+  - `Skill("chemistry-analysis")` — cheminformatics, DFT workflows, spectroscopy
+  - `Skill("biology-ecology")` — dose-response, survival analysis, ecology diversity indices
+  - `Skill("mathematics-formal")` — gradient checks, matrix conditioning, symbolic math
+  - `Skill("statistics-advanced")` — Bayesian inference, mixed effects, resampling
+  - `Skill("computer-science-theory")` — complexity analysis, benchmarking discipline
+  - `Skill("materials-science")` — crystal structure, XRD, DFT property analysis
+  - `Skill("engineering-systems")` — control systems, signal processing, FEA
+  - `Skill("social-science-economics")` — OLS diagnostics, panel data, program evaluation
+
   # Section 4: Using Your Tools
   - Use `Read` to read files instead of `Bash` with cat/head/tail. Read provides line numbers and handles binary detection.
   - Use `Glob` to find files by name pattern (e.g., `**/*.py`), not for directory listing.

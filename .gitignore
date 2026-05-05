@@ -213,6 +213,8 @@ rsync_tmp_*
 data_analysis.md
 software-agent-sdk
 env
+.DS_Store
+
 
 streamlit-client/case-study-memory/
 saved_chats/

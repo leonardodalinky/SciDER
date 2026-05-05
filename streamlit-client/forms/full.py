@@ -27,6 +27,8 @@ def run_full(cfg, workspace_path):
         user_query=cfg["query"],
         workspace_path=workspace_path,
         data_path=data_path,
+        feature_desc=cfg.get("feature_desc"),
+        num_rows=cfg.get("num_rows", 1000),
         run_data_workflow=cfg["run_data"],
         run_experiment_workflow=cfg["run_exp"],
         max_revisions=5,
@@ -41,27 +43,56 @@ def render_form():
     """Render the full workflow form. Returns workflow_config dict or None."""
     hf_enabled = constant.HF_DATASET_DOWNLOAD_ENABLED
 
+    source_options = ["Upload local file"]
     if hf_enabled:
-        data_source = st.radio(
-            "Data Source",
-            ["Upload local file", "HuggingFace dataset"],
-            horizontal=True,
-            key="full_data_source_radio",
-        )
-    else:
-        data_source = "Upload local file"
+        source_options.append("HuggingFace dataset")
+    source_options.append("Generate hypothetical data")
+
+    data_source = st.radio(
+        "Data Source",
+        source_options,
+        horizontal=True,
+        key="full_data_source_radio",
+    )
 
     with st.form("full_form", clear_on_submit=True):
         st.markdown("### Full Workflow")
         topic = st.text_input("Research Topic", placeholder="Enter your research topic...")
 
-        if data_source == "HuggingFace dataset":
+        if data_source == "Generate hypothetical data":
+            hf_repo = None
+            uploaded_full_zip = None
+            feature_desc_input = st.text_area(
+                "Describe the data to generate",
+                placeholder=(
+                    "e.g. A dataset about house prices with features: "
+                    "square footage (1000-5000 sq ft), number of bedrooms (1-6), "
+                    "age of house (0-100 years), price ($100k-$1M)"
+                ),
+                height=120,
+                help="Describe the features, their ranges, and the domain of the dataset.",
+                key="full_feature_desc",
+            )
+            num_rows_input = st.number_input(
+                "Number of rows",
+                min_value=10,
+                max_value=100000,
+                value=1000,
+                step=100,
+                key="full_num_rows",
+            )
+        elif data_source == "HuggingFace dataset":
+            feature_desc_input = None
+            num_rows_input = 1000
             hf_repo = st.text_input(
                 "HuggingFace Dataset Repo",
                 placeholder="e.g. scikit-learn/iris",
                 help="Enter a HuggingFace dataset repository name.",
             )
+            uploaded_full_zip = None
         else:
+            feature_desc_input = None
+            num_rows_input = 1000
             hf_repo = None
             st.caption("Data (for Data Analysis): upload zip or enter path")
             uploaded_full_zip = st.file_uploader(
@@ -92,10 +123,17 @@ def render_form():
 
         if submitted and topic:
             data_path_to_use = None
+            feature_desc_to_use = None
+            num_rows_to_use = 1000
 
             if run_data:
-                # HuggingFace mode
-                if data_source == "HuggingFace dataset":
+                if data_source == "Generate hypothetical data":
+                    if not feature_desc_input or not feature_desc_input.strip():
+                        st.error("Please describe the data you want to generate.")
+                        return None
+                    feature_desc_to_use = feature_desc_input.strip()
+                    num_rows_to_use = int(num_rows_input)
+                elif data_source == "HuggingFace dataset":
                     if not hf_repo or not hf_repo.strip():
                         st.error("Please enter a HuggingFace dataset repository name.")
                         return None
@@ -136,11 +174,13 @@ def render_form():
                         )
                         data_path_to_use = None
 
-            if data_path_to_use is not None or not run_data:
+            if data_path_to_use is not None or feature_desc_to_use is not None or not run_data:
                 return {
                     "type": "full",
                     "query": topic,
                     "data_path": data_path_to_use,
+                    "feature_desc": feature_desc_to_use,
+                    "num_rows": num_rows_to_use,
                     "run_ideation": run_ideation,
                     "run_data": run_data,
                     "run_exp": run_exp,
