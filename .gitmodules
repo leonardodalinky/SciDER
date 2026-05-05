@@ -16,3 +16,6 @@
 [submodule "benchmarks/discoverybench/discoverybench"]
 	path = benchmarks/discoverybench/discoverybench
 	url = git@github.com:leonardodalinky/discoverybench.git
+[submodule "train/LlamaFactory"]
+	path = train/LlamaFactory
+	url = git@github.com:leonardodalinky/LlamaFactory.git

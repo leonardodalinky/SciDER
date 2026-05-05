@@ -1,0 +1,29 @@
+[project]
+name = "train"
+version = "0.1.0"
+description = "SciDER agent-trajectory SFT training (LoRA on Qwen3.5)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Core training stack
+    "llamafactory",
+    "deepspeed",
+    "liger-kernel",
+    # Data preparation
+    "tiktoken",
+    # Qwen3.5 hybrid linear-attention kernels (required for any Qwen3.5-* model)
+    "flash-linear-attention>=0.4.1",
+    # Hopper-class (H100/H200) workaround for the Triton ≥3.4 backward bug in fla
+    "tilelang",
+    # Run logging (opt-in via REPORT_TO=wandb in train.sh)
+    "wandb",
+]
+
+[tool.uv]
+# LlamaFactory's gradio dependency only resolves via a pre-release inside
+# its supported range, so allow pre-releases globally for this project.
+prerelease = "allow"
+
+[tool.uv.sources]
+# LlamaFactory is vendored in this directory and patched (see formatter.py).
+llamafactory = { path = "LlamaFactory", editable = true }

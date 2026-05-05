@@ -229,3 +229,7 @@ saved_chats/
 !.scider/SCIDER.md
 
 workspace/
+
+# Generated SFT data (built by train/preprocess_data.py)
+train/dataset/datafiles/*.jsonl
+train/raw_datafiles/

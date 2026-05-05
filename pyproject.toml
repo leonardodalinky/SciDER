@@ -107,3 +107,9 @@ explicit = true
 name = "pytorch-mac"
 url = "https://pypi.org/simple"
 explicit = true
+
+[tool.uv.workspace]
+# train/ is intentionally NOT a workspace member — its dependency on
+# LlamaFactory (which pins gradio → pillow<12) conflicts with scider's
+# pillow>=12. train/ keeps its own independent venv at train/.venv.
+members = []
