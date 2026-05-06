@@ -1,0 +1,140 @@
+[
+  {
+    "query": "deep learning for climate model downscaling and extreme weather prediction",
+    "domain": "Climate",
+    "initial_best_composite": 0.6666666666666666,
+    "seed_baseline_improve": 0.5,
+    "seed_baseline_full": 0.525,
+    "baseline_novelty": {
+      "title": "Diffusion Model for Probabilistic Weather Downscaling",
+      "composite": 0.6333333333333333,
+      "lift": -0.04999999999999999
+    },
+    "baseline_composite": {
+      "title": "Graph Neural Network for Mesoscale Convective System Tracking",
+      "composite": 0.6666666666666666,
+      "lift": 0.0
+    },
+    "improve_only": {
+      "title": "Teleconnection-Aware Graph-Temporal Networks for Sub-seasonal Regime Transitions",
+      "composite": 0.66875,
+      "lift": 0.3374999999999999
+    },
+    "improve_combine": {
+      "title": "Topological Latent Diffusion for Multi-Scale Extreme Precipitation Downscaling",
+      "composite": 0.70625,
+      "lift": 0.3452380952380953
+    },
+    "judge_novelty_vs_full": {
+      "winner": "B",
+      "rationale": "Idea B offers a more novel and technically differentiated approach by combining VQ-LDM with graph-based topological conditioning of atmospheric dynamics, and it targets a high-impact problem (MCS extreme rainfall) with concrete, domain-appropriate evaluation metrics (FSS, MCS tracking). While Idea B is more complex and carries higher implementation risk than the straightforward diffusion ensemble approach in Idea A, its specificity in dataset choice, evaluation protocol, and physical motivation makes it a stronger scientific contribution with clearer differentiation from existing work."
+    },
+    "judge_composite_vs_full": {
+      "winner": "B",
+      "rationale": "Idea B combines multiple cutting-edge components (VQ-LDM, dynamic graph embeddings, topological moisture flux representation) in a novel architecture that directly addresses the high-impact problem of extreme precipitation downscaling with clear evaluation metrics and datasets, making it more ambitious and scientifically significant. Idea A is more feasible and clean but is a more incremental extension of existing GNN tracking methods with narrower scope, whereas B's integration of diffusion models with physical graph structure offers a more transformative contribution to the field despite greater implementation complexity."
+    },
+    "judge_improve_vs_combine": {
+      "winner": "B",
+      "rationale": "Idea B is more novel in combining VQ-LDM with dynamic topological graph conditioning for precipitation downscaling\u2014a genuinely underexplored combination\u2014and targets a higher-impact problem (extreme precipitation/MCS reproduction) with clearly defined data sources, evaluation metrics, and baselines. Idea A, while scientifically grounded, largely extends existing GNN-temporal approaches to teleconnection modeling in a more incremental way, and regime-transition prediction at S2S timescales faces steep feasibility challenges that are not adequately addressed in the experimental design."
+    },
+    "operator_distribution": {
+      "combine": 2,
+      "improve": 5,
+      "seed": 1
+    },
+    "mean_pairwise_similarity": 0.2688126559427281,
+    "llm_calls_total": 63
+  },
+  {
+    "query": "knowledge graph embedding methods for link prediction",
+    "domain": "KR",
+    "initial_best_composite": 0.8416666666666667,
+    "seed_baseline_improve": 0.3125,
+    "seed_baseline_full": 0.34375,
+    "baseline_novelty": {
+      "title": "Multi-Hop Reasoning via Reinforcement Learning on KG Paths",
+      "composite": 0.3,
+      "lift": -0.6435643564356437
+    },
+    "baseline_composite": {
+      "title": "Zero-Shot KG Completion via Pre-trained Language Model Entity Descriptions",
+      "composite": 0.8416666666666667,
+      "lift": 0.0
+    },
+    "improve_only": {
+      "title": "Sparse Differentiable Rule Refinement for Link Prediction",
+      "composite": 0.76875,
+      "lift": 1.4600000000000002
+    },
+    "improve_combine": {
+      "title": "Prototypical Neighborhood Hallucination for Zero-Shot KG Completion",
+      "composite": 0.68125,
+      "lift": 0.9818181818181819
+    },
+    "judge_novelty_vs_full": {
+      "winner": "B",
+      "rationale": "Idea A replicates well-established RL path-reasoning work (e.g., MINERVA, MultiHop) with no clear methodological novelty beyond existing baselines. Idea B introduces a genuinely novel paradigm\u2014using generative PLMs to hallucinate structural context for unseen entities\u2014that addresses the important zero-shot completion gap with a creative alignment strategy, better-defined evaluation metrics, and stronger differentiation from prior text-encoding approaches."
+    },
+    "judge_composite_vs_full": {
+      "winner": "B",
+      "rationale": "Idea B introduces a genuinely novel mechanism\u2014hallucinating structural context from text before embedding, rather than simply encoding descriptions\u2014which bridges the gap between inductive text-based and structural KGE approaches in a creative way. While feasibility is moderately reduced by the complexity of generative subgraph synthesis and manifold alignment, the broader evaluation protocol, richer baselines, and ablation over hallucination diversity make it a substantially more impactful and well-specified contribution compared to Idea A, which largely recapitulates existing BLP-style work."
+    },
+    "judge_improve_vs_combine": {
+      "winner": "B",
+      "rationale": "Idea B introduces a genuinely novel generative hallucination mechanism for zero-shot KG completion, addressing a high-impact open problem (unseen entities) with a creative PLM-driven subgraph synthesis approach that goes well beyond existing text-encoding baselines. Idea A is methodologically solid and well-specified but represents an incremental combination of existing neural-symbolic techniques (rule mining + differentiable relaxation) with limited novelty beyond prior work like Neural LP and DRUM."
+    },
+    "operator_distribution": {
+      "improve": 4,
+      "combine": 3,
+      "seed": 1
+    },
+    "mean_pairwise_similarity": 0.25275604739048035,
+    "llm_calls_total": 63
+  },
+  {
+    "query": "certified adversarial robustness for deep neural networks",
+    "domain": "Security/CV",
+    "initial_best_composite": 0.8333333333333334,
+    "seed_baseline_improve": 0.51875,
+    "seed_baseline_full": 0.40625,
+    "baseline_novelty": {
+      "title": "Randomized Smoothing with Input-Dependent Noise Calibration",
+      "composite": 0.8333333333333334,
+      "lift": 0.0
+    },
+    "baseline_composite": {
+      "title": "Randomized Smoothing with Input-Dependent Noise Calibration",
+      "composite": 0.8333333333333334,
+      "lift": 0.0
+    },
+    "improve_only": {
+      "title": "Data-Anchored Non-Monotonic Activations for Local Lipschitz Regularization",
+      "composite": 0.6125,
+      "lift": 0.18072289156626503
+    },
+    "improve_combine": {
+      "title": "Curvature-Steered Ellipsoidal Propagation (CSEP)",
+      "composite": 0.70625,
+      "lift": 0.7384615384615386
+    },
+    "judge_novelty_vs_full": {
+      "winner": "A",
+      "rationale": "Idea A is grounded in an established, well-understood framework (randomized smoothing) with a clear, practically achievable modification\u2014input-dependent noise calibration\u2014and concrete, reproducible benchmarks against known baselines. Idea B proposes an intellectually ambitious geometric approach, but dynamically re-aligning low-rank ellipsoidal bounds using per-layer Hessians at scale (CIFAR-100/ImageNet with ResNets) faces severe computational and implementation feasibility challenges, and the evaluation metric of 'tightness relative to the empirical decision boundary' is underspecified and hard to measure reliably."
+    },
+    "judge_composite_vs_full": {
+      "winner": "A",
+      "rationale": "Idea A is grounded in an established and reproducible framework (randomized smoothing), and its input-dependent noise calibration has a clear experimental protocol with direct comparisons to strong baselines, making it more likely to yield actionable, verifiable results. Idea B proposes an intellectually interesting combination of ellipsoidal bounds and Hessian-guided propagation, but computing per-layer Hessians at scale is computationally prohibitive and the methodology for maintaining low-rank ellipsoidal structure through deep nonlinear layers is underspecified, creating serious feasibility and reproducibility concerns."
+    },
+    "judge_improve_vs_combine": {
+      "winner": "A",
+      "rationale": "Idea A is more feasible and specific: data-anchored activations with local Lipschitz regularization build incrementally on well-established 1-Lipschitz architectures and have a concrete, reproducible experimental protocol. Idea B is conceptually novel but computationally intractable at scale\u2014computing and re-aligning low-rank ellipsoidal bounds via per-layer Hessians on ImageNet-scale ResNets introduces severe overhead and numerical instability that makes the proposed experiments highly unlikely to succeed as described."
+    },
+    "operator_distribution": {
+      "combine": 2,
+      "improve": 5,
+      "seed": 1
+    },
+    "mean_pairwise_similarity": 0.2504375180584589,
+    "llm_calls_total": 63
+  }
+]

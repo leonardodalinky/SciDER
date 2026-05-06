@@ -443,6 +443,13 @@ def run_idea_search(
         (n.composite_score or 0.0 for n in population), default=0.0
     )
 
+    # Pin the best seed so it can never be displaced by iteration selection.
+    # Without pinning, a high-quality seed can be eliminated when re-scored in a
+    # larger population (n=8 vs n=6), even if it would beat evolved ideas on a
+    # level playing field. The pinned seed always reaches the final scoring pass,
+    # where it competes in the same n=8 context as all evolved ideas.
+    pinned_seed = max(population, key=lambda n: n.composite_score or 0.0)
+
     any_new_nodes = False  # tracks whether operators ever produced new nodes
 
     # Main loop
@@ -450,10 +457,12 @@ def run_idea_search(
         iteration += 1
         logger.info("Idea search iteration {}/{}", iteration, max_iterations)
 
-        # Select survivors: top SURVIVORS_PER_ITER by composite
+        # Select survivors: always keep the pinned seed; fill remaining slots
+        # with the top scorers from the rest of the population.
         scored = [n for n in population if n.composite_score is not None]
         scored.sort(key=lambda n: n.composite_score or 0.0, reverse=True)
-        survivors = scored[:SURVIVORS_PER_ITER]
+        rest = [n for n in scored if n is not pinned_seed]
+        survivors = [pinned_seed] + rest[: SURVIVORS_PER_ITER - 1]
 
         n_new = POPULATION_SIZE - len(survivors)
         n_improve = round(n_new * improve_fraction)

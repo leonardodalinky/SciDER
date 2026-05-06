@@ -8,11 +8,12 @@
 # Frontend selections in ~/.scider/settings.json override these.
 
 defaults:
-  ideation: gemini-2.5-flash[reasoning_effort=medium]
+  ideation: gemini-3-flash-preview[reasoning_effort=medium]
   paper_search: gemini-2.5-flash[reasoning_effort=low]
   metric_search: gemini-2.5-flash[reasoning_effort=low]
   data: gemini-2.5-flash[reasoning_effort=medium]
-  critic: gemini-2.5-pro[reasoning_effort=medium,temperature=0.3]
+  #critic: gemini-2.5-pro[reasoning_effort=medium,temperature=0.3]
+  critic: claude-sonnet-4-6
   history: gemini-2.5-flash[reasoning_effort=low]
   experiment: gemini-2.5-pro[reasoning_effort=medium]
   experiment_coding: gemini-2.5-pro[reasoning_effort=medium]
