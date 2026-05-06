@@ -13,6 +13,7 @@ from scider.core.query import QueryResult, gather_tools, query
 from scider.core.types import Message
 from scider.prompts import PROMPTS
 
+from .idea_search import IdeaSearchResult, run_idea_search
 from .state import IdeationAgentState
 
 LLM_NAME = "ideation"
@@ -165,6 +166,64 @@ def extract_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
                 f", avg novelty: {agent_state.novelty_score:.1f}/10"
                 if agent_state.novelty_score
                 else ""
+            ),
+        }
+    )
+
+    return agent_state
+
+
+def idea_search_node(agent_state: IdeationAgentState) -> IdeationAgentState:
+    """Run evolutionary idea search on the extracted ideas."""
+    logger.debug("idea_search_node of IdeationAgent")
+    agent_state.add_node_history("idea_search")
+
+    if not agent_state.idea_search_enabled:
+        agent_state.intermediate_state.append(
+            {"node_name": "idea_search", "output": "Skipped (idea_search_enabled=False)"}
+        )
+        return agent_state
+
+    if not agent_state.research_ideas:
+        agent_state.intermediate_state.append(
+            {"node_name": "idea_search", "output": "Skipped (no ideas extracted)"}
+        )
+        return agent_state
+
+    result: IdeaSearchResult = run_idea_search(
+        seed_ideas=agent_state.research_ideas,
+        user_query=agent_state.user_query,
+        max_llm_calls=agent_state.max_idea_search_calls,
+    )
+
+    # Replace research_ideas with the enriched, ranked output
+    agent_state.research_ideas = result.best_ideas
+    agent_state.composite_scores = [
+        idea.get("composite_score") or 0.0 for idea in result.best_ideas
+    ]
+
+    # Update novelty_score to reflect composite for backward-compat display
+    if agent_state.composite_scores:
+        agent_state.novelty_score = sum(agent_state.composite_scores) / len(
+            agent_state.composite_scores
+        )
+
+    agent_state.idea_search_result = {
+        "llm_calls_used": result.llm_calls_used,
+        "iterations_completed": result.iterations_completed,
+        "search_budget_hit": result.search_budget_hit,
+        "n_ideas": len(result.best_ideas),
+    }
+
+    best_score = max(agent_state.composite_scores, default=0.0)
+    agent_state.intermediate_state.append(
+        {
+            "node_name": "idea_search",
+            "output": (
+                f"Search complete: {result.iterations_completed} iterations, "
+                f"{result.llm_calls_used} LLM calls"
+                + (" [BUDGET HIT]" if result.search_budget_hit else "")
+                + f". Best composite: {best_score:.3f}"
             ),
         }
     )

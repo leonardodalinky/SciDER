@@ -533,7 +533,7 @@ def _run_workflow_func(wc, ideation_graph, workspace_path):
     """Execute the appropriate workflow function (called from background thread)."""
     wtype = wc["type"]
     if wtype == "ideation":
-        return run_ideation(wc.get("query"), ideation_graph)
+        return run_ideation(wc, ideation_graph)
     elif wtype == "data":
         return run_data(wc["path"], wc["query"], workspace_path)
     elif wtype == "data_hypo":
