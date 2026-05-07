@@ -1,0 +1,18 @@
+# Role assignments for ScienceAgentBench data generation.
+#
+# Same as ds1000 / aiidea / datascibench: drive every role through the
+# self-hosted openscider-qwen3.6-27b so we bootstrap data + experiment SFT
+# data with the same model that consumes it.
+
+defaults:
+  ideation: openscider-qwen3.6-27b
+  paper_search: openscider-qwen3.6-27b
+  metric_search: openscider-qwen3.6-27b
+  data: openscider-qwen3.6-27b
+  critic: openscider-qwen3.6-27b[temperature=0.3]
+  history: openscider-qwen3.6-27b
+  experiment: openscider-qwen3.6-27b
+  experiment_coding: openscider-qwen3.6-27b
+  writing: openscider-qwen3.6-27b
+  approval: openscider-qwen3.6-27b
+  embedding: text-embedding-3-small

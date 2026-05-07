@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end DataSciBench SFT data pipeline:
+# End-to-end ScienceAgentBench SFT data pipeline:
 #   1. Generate (data + experiment) trajectories with FullWorkflow (skip-existing)
 #   2. Emit a workspace.list of absolute paths for every ok=true workspace
 #      (no eval/filter — every workflow run that completes is kept)
@@ -8,21 +8,21 @@
 # to top up.
 #
 # Override defaults via env vars:
-#   BENCH_ROOT           DataSciBench-data dir holding csv_excel_*/, dl_*/, human_*/
-#                        (default: /sciclone/proj-ds/ai4scientist/kelin/SciDER/DataSciBench/data/DataSciBench-data)
-#   OUTPUT_ROOT          where workspaces go (default: data_generation/datascibench/dataset)
-#   FAMILY               csv_excel | dl | human (omit = all)
-#   LIMIT                cap how many tasks to attempt this run
-#   MAX_REVISIONS        critic retry budget per agent (default 1)
-#   DATA_RECURSION       data agent recursion limit (default 80)
-#   EXP_RECURSION        experiment agent recursion limit (default 128)
-#   WORKSPACE_LIST       path for the workspace list output
-#                        (default: <OUTPUT_ROOT>/workspace.list)
+#   BENCH_ROOT        unzipped ScienceAgentBench dir holding datasets/, gold_programs/, ...
+#                     (default: /sciclone/proj-ds/ai4scientist/kelin/SciDER/sciagentbench/benchmark)
+#   OUTPUT_ROOT       where workspaces go (default: data_generation/sciagentbench/dataset)
+#   USE_KNOWLEDGE     "1" to inject domain_knowledge into the prompt (default: off)
+#   LIMIT             cap how many tasks to attempt this run
+#   MAX_REVISIONS     critic retry budget per agent (default 1)
+#   DATA_RECURSION    data agent recursion limit (default 80)
+#   EXP_RECURSION     experiment agent recursion limit (default 128)
+#   WORKSPACE_LIST    path for the workspace list output
+#                     (default: <OUTPUT_ROOT>/workspace.list)
 #
 # Examples:
-#   bash data_generation/datascibench/generate.sh
-#   FAMILY=human LIMIT=5 bash data_generation/datascibench/generate.sh
-#   BENCH_ROOT=/scratch/me/DataSciBench-data bash data_generation/datascibench/generate.sh
+#   bash data_generation/sciagentbench/generate.sh
+#   LIMIT=5 USE_KNOWLEDGE=1 bash data_generation/sciagentbench/generate.sh
+#   BENCH_ROOT=/scratch/me/sciagentbench bash data_generation/sciagentbench/generate.sh
 
 set -euo pipefail
 
@@ -31,9 +31,9 @@ notify_on_exit() {
   local rc=$?
   if command -v apprise >/dev/null 2>&1; then
     if [ $rc -eq 0 ]; then
-      apprise -b "DataSciBench Generation Succeed" || true
+      apprise -b "ScienceAgentBench Generation Succeed" || true
     else
-      apprise -b "DataSciBench Generation Failed (exit code: $rc)" || true
+      apprise -b "ScienceAgentBench Generation Failed (exit code: $rc)" || true
     fi
   fi
 }
@@ -44,17 +44,17 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 # --- Defaults (env override) -------------------------------------------------
-BENCH_ROOT="${BENCH_ROOT:-/sciclone/proj-ds/ai4scientist/kelin/SciDER/datascibench/data/DataSciBench-data}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/data_generation/datascibench/dataset}"
+BENCH_ROOT="${BENCH_ROOT:-/sciclone/proj-ds/ai4scientist/kelin/SciDER/sciagentbench/benchmark}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/data_generation/sciagentbench/dataset}"
 WORKSPACE_LIST="${WORKSPACE_LIST:-${OUTPUT_ROOT}/workspace.list}"
-MAX_REVISIONS="${MAX_REVISIONS:-1}"
-DATA_RECURSION="${DATA_RECURSION:-80}"
-EXP_RECURSION="${EXP_RECURSION:-128}"
+MAX_REVISIONS="${MAX_REVISIONS:-2}"
+DATA_RECURSION="${DATA_RECURSION:-128}"
+EXP_RECURSION="${EXP_RECURSION:-512}"
 
 # --- Build optional CLI args from env ---------------------------------------
 GEN_EXTRA=()
-[[ -n "${FAMILY:-}" ]] && GEN_EXTRA+=(--family "$FAMILY")
-[[ -n "${LIMIT:-}" ]]  && GEN_EXTRA+=(--limit "$LIMIT")
+[[ "${USE_KNOWLEDGE:-0}" == "1" ]] && GEN_EXTRA+=(--use-knowledge)
+[[ -n "${LIMIT:-}" ]] && GEN_EXTRA+=(--limit "$LIMIT")
 
 mkdir -p "$OUTPUT_ROOT"
 
@@ -77,7 +77,7 @@ cd "$PROJECT_ROOT"
 # --- 1. Generate -------------------------------------------------------------
 echo
 echo "==> [1/2] Generating trajectories (FullWorkflow, no ideation)"
-"$PY" -m data_generation.datascibench.generation \
+"$PY" -m data_generation.sciagentbench.generation \
     --bench-root "$BENCH_ROOT" \
     --output-root "$OUTPUT_ROOT" \
     --skip-existing \
@@ -90,9 +90,6 @@ echo "==> [1/2] Generating trajectories (FullWorkflow, no ideation)"
 echo
 echo "==> [2/2] Building workspace list at $WORKSPACE_LIST"
 
-# Walk every output.json, emit the absolute workspace dir for runs with
-# ok=true. We use python (not jq) so the script has zero non-stdlib deps
-# beyond what generate already required.
 "$PY" - "$OUTPUT_ROOT" "$WORKSPACE_LIST" <<'PY'
 import json, sys
 from pathlib import Path
@@ -103,7 +100,7 @@ out  = Path(sys.argv[2])
 total = ok = 0
 lines: list[str] = []
 for ws in sorted(root.iterdir()):
-    if not (ws.is_dir() and ws.name.startswith("datascibench_")):
+    if not (ws.is_dir() and ws.name.startswith("sciagentbench_")):
         continue
     out_json = ws / "output.json"
     if not out_json.is_file():
@@ -129,5 +126,5 @@ echo "[generate.sh] Done."
 echo "Use the workspace list with train/prepare_data.py:"
 echo "  python train/prepare_data.py \\"
 echo "      --workspace-list $WORKSPACE_LIST \\"
-echo "      --out raw_datafiles/datascibench.jsonl \\"
+echo "      --out raw_datafiles/sciagentbench.jsonl \\"
 echo "      --id-level 1"

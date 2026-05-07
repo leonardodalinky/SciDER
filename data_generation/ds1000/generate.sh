@@ -2,8 +2,8 @@
 # End-to-end DS-1000 SFT data pipeline:
 #   1. Generate trajectories with the coding subagent  (skip-existing)
 #   2. Evaluate every workspace against DS-1000's test_execution harness
-#   3. Print pass-rate summary + emit a JSONL of trajectory paths for the
-#      passing runs (caller can feed this to train/prepare_data.py)
+#   3. Print pass-rate summary + emit a workspace.list of absolute paths for
+#      every passing workspace (caller can feed this to train/prepare_data.py)
 #
 # Re-runs are safe: --skip-existing on generate, default skip-already-evaluated
 # on eval. Re-launch the script anytime to top up.
@@ -13,8 +13,8 @@
 #   LIBRARY              filter to a single DS-1000 library (Pandas/NumPy/...)
 #   LIMIT                cap how many tasks to attempt this run
 #   EVAL_TIMEOUT         per-task subprocess timeout in eval (default 15s)
-#   PASSED_LIST          path for the passing-trajectory list output
-#                        (default: <OUTPUT_ROOT>/passed_trajectories.txt)
+#   WORKSPACE_LIST       path for the passing-workspace list output
+#                        (default: <OUTPUT_ROOT>/workspace.list)
 #
 # Examples:
 #   bash data_generation/ds1000/generate.sh
@@ -46,7 +46,7 @@ PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 # --- Defaults (env override) -------------------------------------------------
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/data_generation/ds1000/dataset}"
 EVAL_TIMEOUT="${EVAL_TIMEOUT:-15}"
-PASSED_LIST="${PASSED_LIST:-${OUTPUT_ROOT}/passed_trajectories.txt}"
+WORKSPACE_LIST="${WORKSPACE_LIST:-${OUTPUT_ROOT}/workspace.list}"
 
 # --- Build optional CLI args from env ---------------------------------------
 GEN_EXTRA=()
@@ -60,9 +60,9 @@ PY="${PY:-python}"
 if command -v uv >/dev/null 2>&1 && [[ -d "${PROJECT_ROOT}/.venv" ]]; then
     PY="${PROJECT_ROOT}/.venv/bin/python"
 fi
-echo "[generate.sh] interpreter:  $PY"
-echo "[generate.sh] output_root:  $OUTPUT_ROOT"
-echo "[generate.sh] passed_list:  $PASSED_LIST"
+echo "[generate.sh] interpreter:    $PY"
+echo "[generate.sh] output_root:    $OUTPUT_ROOT"
+echo "[generate.sh] workspace_list: $WORKSPACE_LIST"
 [[ ${#GEN_EXTRA[@]} -gt 0 ]] && echo "[generate.sh] gen extras:   ${GEN_EXTRA[*]}"
 
 cd "$PROJECT_ROOT"
@@ -82,14 +82,14 @@ echo "==> [2/3] Scoring with DS-1000 test harness (timeout=${EVAL_TIMEOUT}s)"
     --output-root "$OUTPUT_ROOT" \
     --timeout "$EVAL_TIMEOUT"
 
-# --- 3. Filter passing trajectories -----------------------------------------
+# --- 3. Filter passing workspaces -------------------------------------------
 echo
-echo "==> [3/3] Building passed-trajectory list at $PASSED_LIST"
+echo "==> [3/3] Building passed-workspace list at $WORKSPACE_LIST"
 
-# Walk every output.json, pull the absolute trajectory path for runs with
+# Walk every output.json, emit the absolute workspace dir for runs with
 # passed=true. We use python (not jq) so the script has zero non-stdlib deps
 # beyond what generate/eval already required.
-"$PY" - "$OUTPUT_ROOT" "$PASSED_LIST" <<'PY'
+"$PY" - "$OUTPUT_ROOT" "$WORKSPACE_LIST" <<'PY'
 import json, sys
 from pathlib import Path
 
@@ -113,20 +113,18 @@ for ws in sorted(root.iterdir()):
     total += 1
     if rec.get("passed"):
         passed += 1
-        history = ws / rec.get("history_path", "coding_agent_history.json").rsplit("/", 1)[-1]
-        if history.is_file():
-            lines.append(str(history.resolve()))
+        lines.append(str(ws.resolve()))
 
 out.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 rate = (passed / total * 100) if total else 0.0
 print(f"[generate.sh] eval summary: {passed}/{total} passed  ({rate:.1f}%)")
-print(f"[generate.sh] {len(lines)} trajectory paths written to {out}")
+print(f"[generate.sh] {len(lines)} workspace paths written to {out}")
 PY
 
 echo
 echo "[generate.sh] Done."
-echo "Use the path list with train/prepare_data.py:"
+echo "Use the workspace list with train/prepare_data.py:"
 echo "  python train/prepare_data.py \\"
-echo "      --workspace-list $PASSED_LIST \\"
+echo "      --workspace-list $WORKSPACE_LIST \\"
 echo "      --out raw_datafiles/ds1000.jsonl \\"
 echo "      --id-level 1"

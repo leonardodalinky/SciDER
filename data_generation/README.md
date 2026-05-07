@@ -36,11 +36,16 @@ data_generation/
 │   ├── generation.py          # python -m data_generation.aiidea.generation
 │   ├── roles.yaml
 │   └── generate.sh            # one-shot pipeline (gen → emit traj list)
-└── datascibench/              # data + experiment trajectories (no eval)
-    ├── _common.py             # discover_tasks, stage_inputs, run_full_workflow_task
-    ├── generation.py          # python -m data_generation.datascibench.generation
+├── datascibench/              # data + experiment trajectories (no eval)
+│   ├── _common.py             # discover_tasks, stage_inputs, run_full_workflow_task
+│   ├── generation.py          # python -m data_generation.datascibench.generation
+│   ├── roles.yaml
+│   └── generate.sh            # one-shot pipeline (gen → emit workspace list)
+└── sciagentbench/             # data + experiment trajectories (no eval)
+    ├── _common.py             # load_tasks, stage_inputs (symlink), run_full_workflow_task
+    ├── generation.py          # python -m data_generation.sciagentbench.generation
     ├── roles.yaml
-    └── generate.sh            # one-shot pipeline (gen → emit traj list)
+    └── generate.sh
 ```
 
 ## Available benchmarks
@@ -50,6 +55,7 @@ data_generation/
 | DS-1000 | [`data_generation.ds1000`](ds1000/) | `xlangai/DS-1000` | coding (with eval) |
 | AI-Idea-Bench | [`data_generation.aiidea`](aiidea/) | `yanshengqiu/AI_Idea_Bench_2025` | ideation (no eval) |
 | DataSciBench | [`data_generation.datascibench`](datascibench/) | `zd21/DataSciBench` (uses local-fs copy) | data+experiment (no eval) |
+| ScienceAgentBench | [`data_generation.sciagentbench`](sciagentbench/) | `osunlp/ScienceAgentBench` (verified split) + local `benchmark/datasets/` | data+experiment (no eval) |
 
 ## Running
 
@@ -66,12 +72,13 @@ OUTPUT_ROOT=/scratch/me/aiidea bash data_generation/aiidea/generate.sh
 ```
 
 Each script defaults to `data_generation/<bench>/dataset/` for output and
-writes a trajectory-path list (`passed_trajectories.txt` for ds1000,
-`all_trajectories.txt` for aiidea) that you feed to `train/prepare_data.py`:
+writes a `workspace.list` of absolute workspace dirs (passed-only for
+ds1000; ok=true for aiidea / datascibench) that you feed to
+`train/prepare_data.py`:
 
 ```bash
 python train/prepare_data.py \
-    --workspace-list data_generation/ds1000/dataset/passed_trajectories.txt \
+    --workspace-list data_generation/ds1000/dataset/workspace.list \
     --out raw_datafiles/ds1000.jsonl \
     --id-level 1
 ```

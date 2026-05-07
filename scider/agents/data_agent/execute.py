@@ -74,7 +74,6 @@ def _inject_system_context(agent_state: DataAgentState) -> None:
         parts=parts,
         preamble="As you answer, you can use the following context:",
     )
-    agent_state.history.insert(0, context_msg)
 
 
 def agent_loop_node(agent_state: DataAgentState) -> DataAgentState:

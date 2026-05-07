@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end AI-Idea-Bench SFT data pipeline:
 #   1. Generate ideation trajectories with the IdeationAgent (skip-existing)
-#   2. Emit a path list of every produced trajectory (no eval/filter — every
-#      ideation run is kept regardless of "quality")
+#   2. Emit a workspace.list of absolute paths for every ok=true workspace
+#      (no eval/filter — every ideation run that completes is kept)
 #
 # Re-runs are safe: --skip-existing on generate. Re-launch the script anytime
 # to top up.
@@ -11,8 +11,8 @@
 #   OUTPUT_ROOT          where workspaces go (default: data_generation/aiidea/dataset)
 #   LIMIT                cap how many tasks to attempt this run
 #   RECURSION_LIMIT      IdeationAgent recursion limit (default 50)
-#   TRAJ_LIST            path for the trajectory list output
-#                        (default: <OUTPUT_ROOT>/all_trajectories.txt)
+#   WORKSPACE_LIST       path for the workspace list output
+#                        (default: <OUTPUT_ROOT>/workspace.list)
 #
 # Examples:
 #   bash data_generation/aiidea/generate.sh
@@ -43,7 +43,7 @@ PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 # --- Defaults (env override) -------------------------------------------------
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/data_generation/aiidea/dataset}"
-TRAJ_LIST="${TRAJ_LIST:-${OUTPUT_ROOT}/all_trajectories.txt}"
+WORKSPACE_LIST="${WORKSPACE_LIST:-${OUTPUT_ROOT}/workspace.list}"
 RECURSION_LIMIT="${RECURSION_LIMIT:-128}"
 
 # --- Build optional CLI args from env ---------------------------------------
@@ -59,7 +59,7 @@ if command -v uv >/dev/null 2>&1 && [[ -d "${PROJECT_ROOT}/.venv" ]]; then
 fi
 echo "[generate.sh] interpreter:    $PY"
 echo "[generate.sh] output_root:    $OUTPUT_ROOT"
-echo "[generate.sh] traj_list:      $TRAJ_LIST"
+echo "[generate.sh] workspace_list: $WORKSPACE_LIST"
 echo "[generate.sh] recursion_lim:  $RECURSION_LIMIT"
 [[ ${#GEN_EXTRA[@]} -gt 0 ]] && echo "[generate.sh] gen extras:     ${GEN_EXTRA[*]}"
 
@@ -74,14 +74,14 @@ echo "==> [1/2] Generating ideation trajectories"
     --recursion-limit "$RECURSION_LIMIT" \
     "${GEN_EXTRA[@]}"
 
-# --- 2. Emit trajectory list -------------------------------------------------
+# --- 2. Emit workspace list --------------------------------------------------
 echo
-echo "==> [2/2] Building trajectory list at $TRAJ_LIST"
+echo "==> [2/2] Building workspace list at $WORKSPACE_LIST"
 
-# Walk every output.json, pull the absolute trajectory path for runs with
+# Walk every output.json, emit the absolute workspace dir for runs with
 # ok=true. We use python (not jq) so the script has zero non-stdlib deps
 # beyond what generate already required.
-"$PY" - "$OUTPUT_ROOT" "$TRAJ_LIST" <<'PY'
+"$PY" - "$OUTPUT_ROOT" "$WORKSPACE_LIST" <<'PY'
 import json, sys
 from pathlib import Path
 
@@ -104,20 +104,18 @@ for ws in sorted(root.iterdir()):
     if not rec.get("ok"):
         continue
     ok += 1
-    history = ws / Path(rec.get("history_path", "ideation_agent_history.json")).name
-    if history.is_file():
-        lines.append(str(history.resolve()))
+    lines.append(str(ws.resolve()))
 
 out.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 rate = (ok / total * 100) if total else 0.0
 print(f"[generate.sh] gen summary: {ok}/{total} ok  ({rate:.1f}%)")
-print(f"[generate.sh] {len(lines)} trajectory paths written to {out}")
+print(f"[generate.sh] {len(lines)} workspace paths written to {out}")
 PY
 
 echo
 echo "[generate.sh] Done."
-echo "Use the path list with train/prepare_data.py:"
+echo "Use the workspace list with train/prepare_data.py:"
 echo "  python train/prepare_data.py \\"
-echo "      --workspace-list $TRAJ_LIST \\"
+echo "      --workspace-list $WORKSPACE_LIST \\"
 echo "      --out raw_datafiles/aiidea.jsonl \\"
 echo "      --id-level 1"

@@ -198,7 +198,15 @@ def run_one_task(
         data_desc = _build_data_summary(task, staged)
         (workspace / PROMPT_FILENAME).write_text(user_query, encoding="utf-8")
 
-        data_path: Path | None = workspace / INPUTS_SUBDIR if staged else None
+        # Always pass inputs/ as data_path so FullWorkflow's validator is
+        # satisfied (it requires either data_path or feature_desc). For
+        # csv_excel tasks the dir is empty — DataAgent will note that in
+        # its summary; the experiment agent then materialises the inline
+        # CSV from the prompt itself. We do NOT route empty-input tasks
+        # through feature_desc because that triggers HypoDataWorkflow
+        # (synthetic data generation), which is the wrong contract — the
+        # data already exists, just inlined.
+        data_path: Path = workspace / INPUTS_SUBDIR
 
         logger.info(
             "[{}] running FullWorkflow ({} input files, {} chars prompt)",
