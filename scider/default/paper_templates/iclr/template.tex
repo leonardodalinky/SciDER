@@ -1,0 +1,69 @@
+% --- SciDER ICLR template ---
+%
+% The bootstrap step will attempt to auto-download the official style file
+% from the ICLR Master-Template GitHub repository.
+% If the download fails, clone https://github.com/ICLR/Master-Template and
+% place iclr2026_conference.sty in this directory manually.
+%
+% Without the style file this compiles as a plain article for drafting.
+\documentclass{article}
+
+% \usepackage{iclr2026_conference}  % ICLR submission — auto-activated
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{cleveref}
+\usepackage[round]{natbib}
+
+\title{TODO: Paper Title}
+
+% ICLR anonymous review — do not include author names
+\author{Anonymous Author(s)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO: fill with Abstract content (≤ 250 words). State the problem, approach, and key results.
+\end{abstract}
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Method}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\subsection{Problem Setup}
+
+\subsection{Proposed Approach}
+
+\subsection{Theoretical Analysis}
+% Include if applicable; otherwise remove this subsection.
+
+\section{Experiments}
+% TODO: filled by Step 4 using experimental_log.md and figures/.
+
+\subsection{Experimental Setup}
+
+\subsection{Main Results}
+
+\subsection{Ablations}
+
+\section{Conclusion}
+% TODO: filled by Step 4. Summarize contributions and future work.
+
+\bibliographystyle{iclr2026_conference}
+\bibliography{refs}
+
+\end{document}

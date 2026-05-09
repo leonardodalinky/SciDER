@@ -1,0 +1,5 @@
+{
+  "url": "https://aaai.org/authorkit26-1/",
+  "extract_extensions": [".sty", ".bst", ".cls", ".clo", ".cfg"],
+  "note": "AAAI 2026 official style files. Extracted files are cached here; delete them to force a re-download."
+}

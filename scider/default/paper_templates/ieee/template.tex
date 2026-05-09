@@ -1,0 +1,70 @@
+% --- SciDER IEEE Conference template ---
+%
+% The bootstrap step will auto-download IEEEtran.cls from CTAN into inputs/.
+% LaTeX finds it in the local directory automatically.
+%
+% For journal submissions change "conference" to "journal" in \documentclass.
+\documentclass[conference]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{cleveref}
+\usepackage{cite}
+
+\title{TODO: Paper Title}
+
+\author{%
+  \IEEEauthorblockN{Anonymous Author}
+  \IEEEauthorblockA{%
+    \textit{Anonymous Institution}\\
+    City, Country\\
+    email@example.com
+  }
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO: fill with Abstract content (≤ 150 words). State the problem, proposed approach, and main results concisely.
+\end{abstract}
+
+\begin{IEEEkeywords}
+keyword1, keyword2, keyword3, keyword4
+\end{IEEEkeywords}
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Proposed Method}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\subsection{Problem Formulation}
+
+\subsection{Approach}
+
+\section{Experimental Results}
+% TODO: filled by Step 4 using experimental_log.md and figures/.
+
+\subsection{Experimental Setup}
+
+\subsection{Results and Discussion}
+
+\section{Conclusion}
+% TODO: filled by Step 4. Summarize contributions and future work.
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

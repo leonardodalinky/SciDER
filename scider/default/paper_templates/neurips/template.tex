@@ -1,0 +1,68 @@
+% --- SciDER NeurIPS 2026 template ---
+%
+% The bootstrap step will attempt to auto-download neurips_2026.sty.
+% If the download fails, download it manually from the URL in style_files.json
+% and place it in the template directory root.
+%
+% Without the style file this compiles as a plain article for drafting.
+\documentclass{article}
+
+% Uncomment after neurips_2026.sty is in inputs/ (auto-downloaded or placed manually):
+% \usepackage{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{cleveref}
+
+% NeurIPS uses natbib with the plainnat style
+\usepackage[round]{natbib}
+
+\title{TODO: Paper Title}
+
+% NeurIPS submissions are anonymous — do not include author names
+\author{Anonymous Author(s)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO: fill with Abstract content (≤ 250 words). State the problem, approach, and key results.
+\end{abstract}
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Method}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\section{Experiments}
+% TODO: filled by Step 4 using experimental_log.md and figures/.
+
+\subsection{Experimental Setup}
+
+\subsection{Results}
+
+\subsection{Ablation Study}
+
+\section{Conclusion}
+% TODO: filled by Step 4. Summarize contributions and future work.
+
+% NeurIPS requires a Broader Impact section (optional appendix)
+\section*{Broader Impact}
+% Discuss potential societal consequences of this work.
+
+\bibliographystyle{abbrvnat}
+\bibliography{refs}
+
+\end{document}

@@ -1,0 +1,5 @@
+{
+  "url": "https://media.neurips.cc/Conferences/NeurIPS2026/Formatting_Instructions_For_NeurIPS_2026.zip",
+  "extract_extensions": [".sty", ".bst", ".cls", ".clo", ".cfg"],
+  "note": "NeurIPS 2026 official style files. Extracted files are cached here; delete them to force a re-download."
+}

@@ -1,0 +1,5 @@
+{
+  "url": "https://github.com/acl-org/acl-style-files/archive/refs/heads/master.zip",
+  "extract_extensions": [".sty", ".bst", ".cls", ".clo", ".cfg"],
+  "note": "ACL official style files (GitHub archive). Extracted files are cached here; delete them to force a re-download."
+}

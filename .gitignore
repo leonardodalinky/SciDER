@@ -236,3 +236,10 @@ workspace/
 # Generated SFT data (built by train/preprocess_data.py)
 train/dataset/datafiles/*.jsonl
 train/raw_datafiles/
+
+# Downloaded venue style files — cached on first run, not redistributed (license)
+scider/default/paper_templates/**/*.sty
+scider/default/paper_templates/**/*.bst
+scider/default/paper_templates/**/*.cls
+scider/default/paper_templates/**/*.clo
+scider/default/paper_templates/**/*.cfg

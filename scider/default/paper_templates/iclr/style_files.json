@@ -1,0 +1,5 @@
+{
+  "url": "https://github.com/ICLR/Master-Template/archive/refs/heads/master.zip",
+  "extract_extensions": [".sty", ".bst", ".cls", ".clo", ".cfg"],
+  "note": "ICLR official style files from the Master-Template repository. Extracted files are cached here; delete them to force a re-download."
+}

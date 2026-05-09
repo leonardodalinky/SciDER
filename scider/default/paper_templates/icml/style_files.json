@@ -1,0 +1,5 @@
+{
+  "url": "https://media.icml.cc/Conferences/ICML2026/Styles/icml2026.zip",
+  "extract_extensions": [".sty", ".bst", ".cls", ".clo", ".cfg"],
+  "note": "ICML 2026 official style files. Extracted files are cached here; delete them to force a re-download."
+}
