@@ -21,8 +21,8 @@ from pydantic import BaseModel, PrivateAttr, model_validator
 from scider.core.code_env import WorkspaceInitConfig
 from scider.core.constant import override_user_approval
 from scider.workflows.data_workflow import DataWorkflow
-from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 from scider.workflows.experiment_workflow import ExperimentWorkflow
+from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 from scider.workflows.ideation_workflow import IdeationWorkflow
 from scider.workflows.paper_bootstrap import (
     build_experimental_log,
@@ -70,9 +70,9 @@ class FullWorkflowWithIdeation(BaseModel):
     research_domain: str | None = None  # Optional research domain specification
 
     # Optional: Data and Experiment workflows
-    data_path: Path | None = None    # real data; mutually exclusive with feature_desc
+    data_path: Path | None = None  # real data; mutually exclusive with feature_desc
     feature_desc: str | None = None  # synthetic data description; mutually exclusive with data_path
-    num_rows: int = 1000             # forwarded to HypoDataWorkflow
+    num_rows: int = 1000  # forwarded to HypoDataWorkflow
     run_data_workflow: bool = False  # Whether to run DataWorkflow after ideation
     run_experiment_workflow: bool = False  # Whether to run ExperimentWorkflow after data
     repo_source: str | None = None  # Repository source for experiment workflow
@@ -88,7 +88,7 @@ class FullWorkflowWithIdeation(BaseModel):
         False  # Skip ideation phase (user provides detailed instructions directly)
     )
     idea_search_enabled: bool = True  # Run evolutionary idea search after seed extraction
-    max_idea_search_calls: int = 60   # Hard LLM budget cap for idea search
+    max_idea_search_calls: int = 60  # Hard LLM budget cap for idea search
 
     # Paper writing phase (off by default)
     run_paper_writing: bool = False
@@ -122,7 +122,8 @@ class FullWorkflowWithIdeation(BaseModel):
     research_ideas: list[dict] = []  # All generated ideas
     selected_idea_index: int | None = None  # User-selected idea (single selection)
     idea_novelty_assessments: list[dict] = []  # Per-idea novelty assessments
-    novelty_score: float | None = None  # Average novelty score
+    # Quality signal: best composite (idea search ON) or mean LLM novelty (OFF)
+    idea_score: float | None = None
     novelty_feedback: str | None = None  # Aggregated feedback summary
 
     # Data and Experiment results (from sub-workflows)
@@ -223,7 +224,7 @@ class FullWorkflowWithIdeation(BaseModel):
             if self._ideation_workflow.final_status == "success":
                 self.ideation_summary = self._ideation_workflow.ideation_summary
                 self.research_ideas = self._ideation_workflow.research_ideas
-                self.novelty_score = self._ideation_workflow.novelty_score
+                self.idea_score = self._ideation_workflow.idea_score
                 logger.info("IdeationWorkflow completed successfully")
                 return True
             else:
@@ -450,8 +451,8 @@ class FullWorkflowWithIdeation(BaseModel):
                     f"- **{a.get('title', 'Unknown')}**: {a['novelty_score']:.2f}/10"
                 )
             novelty_display = "\n".join(novelty_lines)
-        elif self.novelty_score is not None:
-            novelty_display = f"{self.novelty_score:.2f}/10"
+        elif self.idea_score is not None:
+            novelty_display = f"{self.idea_score:.3f}"
         else:
             novelty_display = "N/A"
 
@@ -459,7 +460,7 @@ class FullWorkflowWithIdeation(BaseModel):
 
 {self.ideation_summary}
 
-**Average Novelty Score**: {f'{self.novelty_score:.2f}/10' if self.novelty_score is not None else 'N/A'}
+**Idea Score**: {f'{self.idea_score:.3f}' if self.idea_score is not None else 'N/A'}
 **Papers Reviewed**: {len(self.ideation_papers)}
 
 ### Per-Idea Novelty

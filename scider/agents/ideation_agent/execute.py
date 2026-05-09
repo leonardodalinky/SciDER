@@ -151,7 +151,7 @@ def extract_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
             # Extract average novelty score
             scores = [i["novelty_score"] for i in ideas if i.get("novelty_score") is not None]
             if scores:
-                agent_state.novelty_score = sum(scores) / len(scores)
+                agent_state.idea_score = sum(scores) / len(scores)
 
         logger.info("Extracted {} research ideas", len(agent_state.research_ideas))
 
@@ -162,11 +162,7 @@ def extract_ideas_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         {
             "node_name": "extract_ideas",
             "output": f"Extracted {len(agent_state.research_ideas)} ideas"
-            + (
-                f", avg novelty: {agent_state.novelty_score:.1f}/10"
-                if agent_state.novelty_score
-                else ""
-            ),
+            + (f", avg novelty: {agent_state.idea_score:.1f}/10" if agent_state.idea_score else ""),
         }
     )
 
@@ -202,11 +198,12 @@ def idea_search_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         idea.get("composite_score") or 0.0 for idea in result.best_ideas
     ]
 
-    # Update novelty_score to reflect composite for backward-compat display
+    # idea_score = BEST composite from the final population. Reporting the
+    # mean would be uninformative — by construction the mean of rank-
+    # normalized composite scores is (N+1)/(2N), a constant. The best
+    # composite signals "how good is the top idea this run".
     if agent_state.composite_scores:
-        agent_state.novelty_score = sum(agent_state.composite_scores) / len(
-            agent_state.composite_scores
-        )
+        agent_state.idea_score = max(agent_state.composite_scores)
 
     agent_state.idea_search_result = {
         "llm_calls_used": result.llm_calls_used,

@@ -28,7 +28,8 @@ set -euo pipefail
 
 # --- Notify on exit (success OR failure, including set -e abort) -------------
 notify_on_exit() {
-  local rc=$?
+  local rc
+  rc=$?
   if command -v apprise >/dev/null 2>&1; then
     if [ $rc -eq 0 ]; then
       apprise -b "ScienceAgentBench Generation Succeed" || true

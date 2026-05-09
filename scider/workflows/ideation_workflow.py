@@ -59,7 +59,8 @@ class IdeationWorkflow(BaseModel):
     final_status: Literal["success", "failed"] | None = None
     ideation_summary: str = ""
     research_ideas: list[dict] = []
-    novelty_score: float | None = None  # Average novelty score
+    # Quality signal: best composite (idea search ON) or mean LLM novelty (OFF)
+    idea_score: float | None = None
     idea_novelty_assessments: list[dict] = []  # Per-idea novelty scores
     ideation_papers: list[dict] = []  # Papers reviewed during literature search
     error_message: str | None = None
@@ -152,7 +153,7 @@ class IdeationWorkflow(BaseModel):
                 # Extract results
                 self.ideation_summary = result_state.output_summary or ""
                 self.research_ideas = result_state.research_ideas
-                self.novelty_score = result_state.novelty_score
+                self.idea_score = result_state.idea_score
                 # Prefer captured (full pre-compact history) over result_state.history,
                 # which compact() would have truncated.
                 self.ideation_agent_history = list(captured)
@@ -160,11 +161,7 @@ class IdeationWorkflow(BaseModel):
                 logger.info("IdeationAgent completed successfully")
                 logger.info(
                     f"Generated {len(self.research_ideas)} ideas"
-                    + (
-                        f" with novelty score: {self.novelty_score:.2f}/10"
-                        if self.novelty_score
-                        else ""
-                    )
+                    + (f" with idea score: {self.idea_score:.3f}" if self.idea_score else "")
                 )
                 return True
 
@@ -216,8 +213,8 @@ class IdeationWorkflow(BaseModel):
 ## Research Domain
 {self.research_domain or 'Not specified'}
 
-## Novelty Assessment
-- **Average Score**: {f'{self.novelty_score:.2f}/10' if self.novelty_score is not None else 'N/A'}
+## Idea Score
+- **Score**: {f'{self.idea_score:.3f}' if self.idea_score is not None else 'N/A'}
 - **Ideas Evaluated**: {len(self.idea_novelty_assessments)}
 
 {self._format_per_idea_novelty()}
@@ -327,8 +324,8 @@ if __name__ == "__main__":
     print("IDEATION WORKFLOW COMPLETE")
     print(get_separator())
     print(f"\nStatus: {result.final_status}")
-    if result.novelty_score is not None:
-        print(f"Average Novelty Score: {result.novelty_score:.2f}/10")
+    if result.idea_score is not None:
+        print(f"Idea Score: {result.idea_score:.3f}")
     if result.idea_novelty_assessments:
         for a in result.idea_novelty_assessments:
             print(f"  - {a.get('title', 'Unknown')}: {a['novelty_score']:.2f}/10")

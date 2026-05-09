@@ -208,7 +208,7 @@ def run_one_task(
         "ok": ok,
         "status": status,
         "n_ideas": n_ideas,
-        "novelty_score": workflow.novelty_score,
+        "idea_score": workflow.idea_score,
         "n_messages": len(history),
         "history_path": str((workspace / HISTORY_FILENAME).relative_to(output_root)),
     }

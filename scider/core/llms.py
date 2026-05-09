@@ -10,6 +10,13 @@ from litellm import RateLimitError, ServiceUnavailableError
 from litellm.types.utils import Usage
 from loguru import logger
 
+# Anthropic requires `tools=` whenever the message history contains assistant
+# tool_calls. Our generate_summary_node calls completion() without tools but
+# the history (full agent loop) does contain tool_calls. Setting modify_params
+# tells litellm to auto-inject a dummy tool placeholder so the request goes
+# through. Safe for other providers (no-op).
+litellm.modify_params = True
+
 from ..tools import ToolRegistry
 from .constant import __AGENT_STATE_NAME__
 from .types import Message

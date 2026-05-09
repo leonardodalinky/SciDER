@@ -212,7 +212,7 @@ class TestFullWorkflowWithIdeationForwardsConfig:
                 self.final_status = "success"
                 self.ideation_summary = "topic"
                 self.research_ideas = []
-                self.novelty_score = None
+                self.idea_score = None
                 self.error_message = None
 
             def run(self):

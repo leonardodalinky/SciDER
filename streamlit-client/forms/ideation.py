@@ -23,11 +23,11 @@ def run_ideation(wc, ideation_graph):
     out = []
     if rs.output_summary:
         out.append("## Research Ideas Summary\n\n" + rs.output_summary)
-    if rs.novelty_score is not None:
+    if rs.idea_score is not None:
         out.append(
-            "## Novelty Evaluation\n```json\n"
+            "## Idea Score\n```json\n"
             + json.dumps(
-                {"novelty_score": rs.novelty_score},
+                {"idea_score": rs.idea_score},
                 indent=2,
             )
             + "\n```"

@@ -317,41 +317,142 @@ def _build_user_query(
         ' "workflow": "<evidence-backed analytical steps that justify the hypothesis>"}',
         "```",
         "",
-        "Both fields must be non-empty strings. The hypothesis will be scored "
-        "by an LLM-as-judge against a held-out gold hypothesis along three "
-        "axes (context, variables, relations) — be specific about which "
-        "columns are involved and what form of relationship you find.",
+        "Both fields must be non-empty strings. The hypothesis will be "
+        "scored by an LLM-as-judge against a held-out gold hypothesis "
+        "along three axes (context, variables, relations) — be specific "
+        "about which columns are involved and what form of relationship "
+        "you find.",
         "",
-        "### Evidence-based requirement (CRITICAL)",
+        "### Why this matters (empirical priors)",
         "",
-        "Every claim in `hypothesis` must be DIRECTLY supported by numbers "
-        "you computed from the data — do NOT speculate. The `workflow` field "
-        "must record, for each step:",
+        "On a 239-task pilot run, **84% of zero scores were caused by "
+        "framing / context-mismatch**, not by wrong numbers. The judge "
+        "first decomposes both hypotheses into sub-hypotheses, matches "
+        "them by **context phrase**, and scores ONLY matched pairs. If "
+        "your context phrase doesn't match the gold's, you score 0 even "
+        "when your underlying numbers are exactly right. The five rules "
+        "below address every common framing-mismatch pattern observed.",
         "",
-        "1. Which CSV(s) and column(s) the step touched (use exact column "
-        "names from the metadata).",
-        "2. What was computed — concrete statistic with its value (e.g. "
-        "`Pearson r = -0.495 (n=120, p<0.001)`, `mean=3.4 ± 0.7`, `peak at "
-        "year=3200 BCE`). Vague phrasing like 'a strong correlation' without "
-        "the number is NOT acceptable.",
-        "3. How that statistic supports (or refutes) the hypothesis claim.",
+        "### RULE 1 — Lift scope words verbatim from the question",
         "",
-        "If a step depends on assumptions (e.g. you treat a categorical "
-        "variable as ordinal, drop outliers, interpolate missing data), "
-        "state the assumption AND why it's reasonable for this dataset. ",
-        "Self-check before finalizing: re-read your hypothesis sentence by "
-        "sentence and confirm every quantitative or directional claim has a "
-        "matching workflow step that produced the supporting number.",
+        "If the question says 'in Psychology', your hypothesis says 'in "
+        "Psychology' — NOT 'in Psychology, specifically Social and "
+        "Cognitive disciplines'. Do NOT add sub-categories, project "
+        "codes, time windows, or cohort identifiers that the question "
+        "did NOT ask about. Extra specificity is not rewarded — it "
+        "punishes you by breaking context match.",
         "",
-        "The critic / approval review step will explicitly look for: "
-        "(a) any numeric claim in `hypothesis` not backed by a computed "
-        "value in `workflow`, (b) wrong column references (e.g. citing a "
-        "column that isn't in the relevant CSV), (c) statistical mistakes "
-        "(reading a correlation as causation, mis-interpreting Z-scores or "
-        "log-scaled values, ignoring obvious confounders), and (d) "
-        "off-by-one errors in time / unit conversions (BCE/CE, calBP, "
-        "decade vs. century). Any of these is grounds for revision — fix "
-        "them yourself before declaring done.",
+        "### RULE 2 — Mirror the question's answer shape",
+        "",
+        "- **Comparative** ('Is A higher than B?', 'Which domain has "
+        "  more Y?'): hypothesis MUST name BOTH sides AND the direction. "
+        "  Write 'Psychology has 84 citations vs Experimental Economics' "
+        "  80, so Psychology > Experimental Economics' — NOT 'Experimental "
+        "  Economics has 80 citations'. Single-side stats break the "
+        "  context match even when the underlying number is right.",
+        "- **Relational** ('What is the relationship between X and Y?'): "
+        "  hypothesis MUST state the type (linear / monotonic / inverse / "
+        "  threshold / none) AND the strength (correlation r, slope, "
+        "  effect size).",
+        "- **Locative** ('In which century did X peak?'): hypothesis "
+        "  MUST give the located value AND a supporting magnitude (e.g. "
+        "  'peak at 32nd century BCE with z=2.6 vs next-highest 1.3').",
+        "- **Conditional / restricted** ('among women aged 25-50', 'in "
+        "  studies after 2010'): repeat the restriction VERBATIM in the "
+        "  hypothesis. Do not paraphrase or generalise the cohort.",
+        "- **Direct-answer** ('Which variable has property X?', 'What "
+        "  type of compensation is used?'): hypothesis MUST start with "
+        "  the literal answer — 'The variable XYZ ...', 'The compensation "
+        "  type is ABC ...'. Do NOT write a process narrative.",
+        "",
+        "### RULE 3 — Use the column name the question uses, not your " "derived column",
+        "",
+        "If you analyzed `Depot_inter` (interpolated) but the question "
+        "says 'Depots', the column name in your hypothesis and `variables` "
+        "list must be `Depot` (or `Depot (analyzed via the interpolated "
+        "Depot_inter)`). The judge's variable-set F1 is computed against "
+        "the gold's column names, which use the conceptual / primary "
+        "names, not derived / `_inter` / `_smoothed` ones.",
+        "",
+        "### RULE 4 — Variables = subjects of the claim, NOT every column " "you touched",
+        "",
+        "If your hypothesis is about Psychology vs Experimental Economics "
+        "paper length, the variables are {discipline, length} — NOT "
+        "{discipline, length, citations, n_authors, year, project_id}. "
+        "Listing every column you happened to inspect during EDA dilutes "
+        "the variable F1.",
+        "",
+        "### RULE 5 — Direction-sign self-check",
+        "",
+        "For every directional / comparative word in the hypothesis "
+        "('increased / decreased', 'converged / diverged', 'positive / "
+        "negative correlation', 'higher / lower', 'more / fewer'), "
+        "re-read the underlying statistic value and confirm the sign. "
+        "A reversed direction returns 0 even when context and variables "
+        "match perfectly. Pay special attention to: convergence vs "
+        "divergence, before/after comparisons, BCE/CE sign conventions.",
+        "",
+        "### Evidence-based requirement",
+        "",
+        "Every numeric claim in `hypothesis` must be supported by a "
+        "concrete computed value recorded in `workflow`. The `workflow` "
+        "field documents, for each step: which CSV(s) + column(s) the "
+        "step touched (using the names per RULE 3), what was computed "
+        "with its actual value (e.g. `Pearson r = -0.495 (n=120, "
+        "p<0.001)`, `mean=3.4 ± 0.7`, `peak at year=3200 BCE`), and how "
+        "that supports the hypothesis. Vague phrasings like 'a strong "
+        "correlation' without the number are NOT acceptable. State and "
+        "justify any analytical assumptions (ordinal treatment, outlier "
+        "drops, interpolation) explicitly.",
+        "",
+        "### Mandatory pre-submission self-review",
+        "",
+        "Before writing `./result.json`, run through this checklist "
+        "explicitly in your reasoning (don't skip — this is the single "
+        "highest-leverage step you can take):",
+        "",
+        "1. **Question echo**: Quote the original question on one line; "
+        "   write your hypothesis directly below. Do they share the same "
+        "   scope words (per RULE 1)?",
+        "2. **Answer-shape match**: Does your hypothesis sentence have "
+        "   the same shape the question implies (per RULE 2)?",
+        "3. **Direction-sign check**: For each directional word in the "
+        "   hypothesis, name the supporting statistic value and confirm "
+        "   the sign matches (per RULE 5).",
+        "4. **Variables**: Are these the columns the QUESTION names "
+        "   (per RULE 3), and only the subjects of the claim (per RULE 4)?",
+        "5. **Numeric backing**: Every numeric claim in hypothesis has a "
+        "   matching workflow step with the actual computed value.",
+        "",
+        "If any check fails, REWRITE the hypothesis before finalizing.",
+        "",
+        "### Critic / approval review checklist",
+        "",
+        "The critic / approval reviewer is instructed to FORCE A REVISION "
+        "if it finds any of these defects (these mirror the rules above; "
+        "if you self-reviewed correctly, the critic should pass on the "
+        "first try):",
+        "",
+        "(a) **Direction-sign error**: hypothesis says 'increased / "
+        "    converged / positive' but the supporting numbers show the "
+        "    opposite. Highest-frequency failure mode — verify carefully.",
+        "(b) **Context over-specification**: hypothesis frames the result "
+        "    in sub-categories the question did NOT mention (sub-"
+        "    disciplines, project codes, narrow cohorts).",
+        "(c) **Wrong column reference**: hypothesis cites `_inter` / "
+        "    smoothed / derived columns instead of the question's "
+        "    conceptual name; or cites a column not in the relevant CSV.",
+        "(d) **Variable list bloat**: `variables` list includes columns "
+        "    that aren't subjects of the hypothesis claim.",
+        "(e) **Numeric claim without supporting computation** in workflow.",
+        "(f) **Process narrative instead of an answer**: 'I ran a "
+        "    regression that showed...' instead of 'X is higher than Y'.",
+        "(g) **Off-by-one in time / unit conversions** (BCE/CE sign, "
+        "    calBP arithmetic, decade vs. century).",
+        "(h) **Statistical confusion**: correlation read as causation, "
+        "    Z-scores confused with raw values, log-scaled values misread.",
+        "",
+        "Any of these is grounds for revision. Fix yourself before " "declaring done.",
         "",
         "## Available data",
         "",

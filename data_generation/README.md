@@ -41,9 +41,14 @@ data_generation/
 │   ├── generation.py          # python -m data_generation.datascibench.generation
 │   ├── roles.yaml
 │   └── generate.sh            # one-shot pipeline (gen → emit workspace list)
-└── sciagentbench/             # data + experiment trajectories (no eval)
-    ├── _common.py             # load_tasks, stage_inputs (symlink), run_full_workflow_task
-    ├── generation.py          # python -m data_generation.sciagentbench.generation
+├── sciagentbench/             # data + experiment trajectories (no eval)
+│   ├── _common.py             # load_tasks, stage_inputs (symlink), run_full_workflow_task
+│   ├── generation.py          # python -m data_generation.sciagentbench.generation
+│   ├── roles.yaml
+│   └── generate.sh
+└── dsbench/                   # data + experiment trajectories (analysis + modeling families)
+    ├── _common.py             # discover_{analysis,modeling}_tasks, stage_*_inputs (symlink), run_full_workflow_task
+    ├── generation.py          # python -m data_generation.dsbench.generation --family {analysis|modeling|both}
     ├── roles.yaml
     └── generate.sh
 ```
@@ -56,6 +61,7 @@ data_generation/
 | AI-Idea-Bench | [`data_generation.aiidea`](aiidea/) | `yanshengqiu/AI_Idea_Bench_2025` | ideation (no eval) |
 | DataSciBench | [`data_generation.datascibench`](datascibench/) | `zd21/DataSciBench` (uses local-fs copy) | data+experiment (no eval) |
 | ScienceAgentBench | [`data_generation.sciagentbench`](sciagentbench/) | `osunlp/ScienceAgentBench` (verified split) + local `benchmark/datasets/` | data+experiment (no eval) |
+| DSBench | [`data_generation.dsbench`](dsbench/) | `liqiang888/DSBench` (analysis + modeling, local-fs unzip) | data+experiment (no eval) |
 
 ## Running
 

@@ -26,7 +26,8 @@ set -euo pipefail
 # `command -v apprise` guards a missing apprise binary so the trap itself
 # never fails (which would mask the real error).
 notify_on_exit() {
-  local rc=$?
+  local rc
+  rc=$?
   if command -v apprise >/dev/null 2>&1; then
     if [ $rc -eq 0 ]; then
       apprise -b "AIIdea Generation Succeed" || true

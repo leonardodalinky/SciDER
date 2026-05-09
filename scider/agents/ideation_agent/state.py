@@ -11,7 +11,11 @@ class IdeationAgentState(HistoryState):
 
     # Output
     research_ideas: list[dict] = []
-    novelty_score: float | None = None
+    # Quality signal for the ideation output. Two regimes:
+    # - With idea search OFF: mean of LLM-given 0-10 novelty scores from the report.
+    # - With idea search ON: BEST composite score in [0, 1] across the final population.
+    # Display logic in build.py picks the right label based on which regime ran.
+    idea_score: float | None = None
     output_summary: str | None = None
 
     # Approval

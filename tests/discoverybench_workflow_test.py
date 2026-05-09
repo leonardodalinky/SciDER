@@ -350,20 +350,54 @@ class TestBuildUserQuery:
         assert "If you plot" not in prompt
         assert "matplotlib.use('Agg')" not in prompt
 
-    def test_evidence_based_section_present(self):
-        """workflow must demand concrete numbers + critic must be told what
-        to look for. Both have bitten us in real eval runs — pin them."""
+    def test_five_framing_rules_present(self):
+        """The five rules derived from the 239-task pilot eval. Each one
+        addresses an empirically observed failure mode and we MUST keep
+        them in the prompt — pin all five."""
+        t = self._make_task()
+        prompt = mod._build_user_query(t, ["data.csv"])
+        # The empirical-prior call-out — drives motivation for the rules.
+        assert "84%" in prompt and "framing" in prompt.lower()
+        # All five rules.
+        assert "RULE 1" in prompt and "scope words verbatim" in prompt
+        assert "RULE 2" in prompt
+        # Q-shape categories under RULE 2.
+        for shape in ("Comparative", "Relational", "Locative", "Conditional", "Direct-answer"):
+            assert shape in prompt, f"{shape} not in prompt"
+        assert "RULE 3" in prompt and "_inter" in prompt
+        assert "RULE 4" in prompt and "every column you touched" in prompt
+        assert "RULE 5" in prompt and "Direction-sign" in prompt
+
+    def test_evidence_and_self_review_sections_present(self):
+        """workflow rigor + agent self-review checklist. Without the self-
+        review, the critic ends up rubber-stamping wrong-direction answers."""
         t = self._make_task()
         prompt = mod._build_user_query(t, ["data.csv"])
         assert "Evidence-based requirement" in prompt
-        # Workflow rigor cues.
-        assert "exact column names" in prompt
-        assert "Pearson r" in prompt or "concrete statistic" in prompt
-        # Critic / approval review checklist explicitly in prompt.
-        assert "critic" in prompt.lower() or "approval" in prompt.lower()
-        assert "not backed by a computed value" in prompt
-        # Self-check before finalize.
-        assert "Self-check" in prompt or "self-check" in prompt
+        assert "Pearson r" in prompt
+        # Agent must run a 5-item checklist before writing result.json.
+        assert "Mandatory pre-submission self-review" in prompt
+        for cue in (
+            "Question echo",
+            "Answer-shape match",
+            "Direction-sign check",
+            "Variables",
+            "Numeric backing",
+        ):
+            assert cue in prompt, f"{cue} missing from self-review"
+
+    def test_critic_checklist_includes_direction_and_framing(self):
+        """Critic agent reads user_query — its checks must cover the
+        observed failure modes (direction reversal, context over-spec,
+        wrong column refs, variable bloat, process narrative)."""
+        t = self._make_task()
+        prompt = mod._build_user_query(t, ["data.csv"])
+        assert "Critic / approval review checklist" in prompt
+        assert "Direction-sign error" in prompt
+        assert "Context over-specification" in prompt
+        assert "Wrong column reference" in prompt
+        assert "Variable list bloat" in prompt
+        assert "Process narrative" in prompt
 
     def test_domain_knowledge_off_by_default(self):
         t = self._make_task()

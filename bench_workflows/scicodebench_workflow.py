@@ -194,7 +194,33 @@ def run_coding_workflow(
     coding_state = StateCls(**state_kwargs)
     coding_graph = build_fn().compile()
     logger.info("Executing coding graph in {}...", workspace_dir)
-    coding_graph.invoke(coding_state)
+    result_state = coding_graph.invoke(coding_state)
+
+    # Persist the full conversation trajectory so train/prepare_data.py
+    # can pick it up as ``<agent>_agent_history.json`` later. Without this
+    # the workspace ends up with only ``code.py`` + ``__pycache__/`` and
+    # there's nothing for SFT data prep to chew on. Filename matches the
+    # ``<agent>_agent_history.json`` convention prepare_data scans for via
+    # _MAIN_TRAJ_RE — the agent slug here is "coding".
+    try:
+        from scider.workflows.history_export import save_conversation_history
+
+        history = (
+            result_state.get("history")
+            if isinstance(result_state, dict)
+            else getattr(result_state, "history", None)
+        )
+        if history:
+            save_conversation_history(
+                history,
+                workspace_dir / "coding_agent_history.json",
+                agent_name="coding",
+            )
+        else:
+            logger.warning("Coding subagent produced no history to save")
+    except Exception as e:
+        # History persistence is bookkeeping — don't let it fail the run.
+        logger.warning("Failed to persist coding history: {}", e)
 
     if not code_path.is_file():
         logger.warning(

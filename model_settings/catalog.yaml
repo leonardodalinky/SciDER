@@ -216,7 +216,7 @@ models:
     provider: openai                     # litellm uses OpenAI route for vllm
     litellm_id: openai/openscider-qwen3.6-27b   # name after "openai/" must match --served-model-name
     capabilities: [completion]
-    supports_vision: false               # we trained text-only; flag VL only if you serve the VL adapter
+    supports_vision: true                # verified — endpoint accepts image_url blocks and describes images correctly
     requires_env: []
     default_params:
       api_base: http://openscider-qwen36-27b-srv:8000/v1

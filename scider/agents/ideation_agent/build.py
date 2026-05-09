@@ -56,10 +56,10 @@ def _format_ideas_summary(agent_state: IdeationAgentState) -> str:
         lines.append("")
 
     has_composite = any(i.get("composite_score") is not None for i in agent_state.research_ideas)
-    if has_composite and agent_state.novelty_score is not None:
-        lines.append(f"**Average composite score: {agent_state.novelty_score:.3f}**")
-    elif agent_state.novelty_score is not None:
-        lines.append(f"**Average novelty score: {agent_state.novelty_score:.1f}/10**")
+    if has_composite and agent_state.idea_score is not None:
+        lines.append(f"**Best composite score: {agent_state.idea_score:.3f}**")
+    elif agent_state.idea_score is not None:
+        lines.append(f"**Average novelty score: {agent_state.idea_score:.1f}/10**")
 
     return "\n".join(lines)
 
