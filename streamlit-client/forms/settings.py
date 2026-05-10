@@ -109,9 +109,10 @@ def _select_model(
 
 def render_settings_form(current_settings: dict | None = None) -> dict | None:
     """Render settings form. Returns new settings dict on submit, None otherwise."""
-    st.markdown("### Settings")
+    st.markdown("### Configure SciDER")
     st.caption(
-        "Your settings are stored locally on this machine only and are never uploaded to the cloud."
+        "API keys and model selections are stored locally on this machine only — "
+        "they are never uploaded to the cloud or shared between users."
     )
 
     # Make sure the catalog is loaded once before we render anything.
@@ -151,79 +152,61 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
         # --- API Keys ---
         st.markdown("#### API Keys")
         st.caption(
-            "Configure any combination of providers. Models whose key is missing "
-            "will appear greyed-out in the dropdowns below."
+            "Enter keys for the providers you want to use. Gemini or OpenAI keys enable most workflows. "
+            "An Anthropic key is required for the Claude coding agent used in Experiment and Full Pipeline. "
+            "Models without a matching key will appear with a warning in the dropdowns below."
         )
 
-        gemini_api_key = st.text_input(
-            "Gemini API Key",
-            type="password",
-            placeholder="Enter your Gemini API key",
-            value=init_gemini,
-            key="_sk_gemini",
-        )
-        openai_api_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            placeholder="Enter your OpenAI API key",
-            value=init_openai,
-            key="_sk_openai",
-        )
-        anthropic_api_key = st.text_input(
-            "Anthropic (Claude) API Key",
-            type="password",
-            placeholder="Optional — needed for Claude coding agent",
-            value=init_anthropic,
-            key="_sk_anthropic",
-        )
+        # Gemini + OpenAI side by side
+        key_col1, key_col2 = st.columns(2)
+        with key_col1:
+            gemini_api_key = st.text_input(
+                "Gemini API Key",
+                type="password",
+                placeholder="Enter your Gemini API key",
+                value=init_gemini,
+                key="_sk_gemini",
+            )
+        with key_col2:
+            openai_api_key = st.text_input(
+                "OpenAI API Key",
+                type="password",
+                placeholder="Enter your OpenAI API key",
+                value=init_openai,
+                key="_sk_openai",
+            )
 
-        st.divider()
-
-        s2_api_key = st.text_input(
-            "Semantic Scholar API Key",
-            type="password",
-            placeholder="Optional — enables Semantic Scholar paper search",
-            value=_initial_key_value("s2_api_key", current),
-        )
+        # Anthropic full-width — most important for coding agent
+        ant_col, s2_col = st.columns(2)
+        with ant_col:
+            anthropic_api_key = st.text_input(
+                "Anthropic (Claude) API Key",
+                type="password",
+                placeholder="Required for Experiment and Full Pipeline coding agent",
+                value=init_anthropic,
+                key="_sk_anthropic",
+            )
+        with s2_col:
+            s2_api_key = st.text_input(
+                "Semantic Scholar API Key",
+                type="password",
+                placeholder="Optional — improves paper search rate limits",
+                value=_initial_key_value("s2_api_key", current),
+            )
         st.caption(
-            "Optional. If provided, paper search will also query Semantic Scholar "
-            "in addition to arXiv. Get a key at https://www.semanticscholar.org/product/api"
+            "Gemini or OpenAI enables most workflows. Anthropic is required for the coding agent. "
+            "Semantic Scholar is optional — get a key at https://www.semanticscholar.org/product/api"
         )
 
-        # --- HuggingFace Dataset Download ---
+        # --- System status (compact 3-column row) ---
         st.divider()
-        st.markdown("#### HuggingFace Dataset Download")
+        st.markdown("#### System Status")
+        st.caption("Read-only. Configure these settings via environment variables in `.env`.")
 
         from scider.core import constant as _c
 
-        if _c.HF_DATASET_DOWNLOAD_ENABLED:
-            st.success(f"Enabled — max dataset size: {_c.HF_DATASET_MAX_SIZE_MB} MB")
-        else:
-            st.info("Disabled. Set `HF_DATASET_DOWNLOAD_ENABLED=true` in `.env` to enable.")
-        st.caption(
-            "When enabled, you can enter a HuggingFace dataset repo name "
-            "(e.g. `google/fleurs`) instead of uploading a local file."
-        )
-
-        # --- Memory ---
-        st.divider()
-        st.markdown("#### Memory")
         mem_read = os.getenv("SCIDER_MEMORY_READ", "true").lower() in {"1", "true", "yes", "y"}
         mem_write = os.getenv("SCIDER_MEMORY_WRITE", "true").lower() in {"1", "true", "yes", "y"}
-        if mem_read and mem_write:
-            st.success("Reading and writing enabled")
-        elif mem_read:
-            st.info("Reading enabled, writing disabled")
-        elif mem_write:
-            st.info("Writing enabled, reading disabled")
-        else:
-            st.warning("Memory disabled")
-        st.caption("Configure via `SCIDER_MEMORY_READ` / `SCIDER_MEMORY_WRITE` in `.env`.")
-
-        # --- Coding Agent ---
-        st.divider()
-        st.markdown("#### Coding Agent")
-
         coding_version = os.getenv("CODING_AGENT_VERSION", "claude_sdk")
         if coding_version in ("v3", "claude_sdk"):
             version_label = "Claude Agent SDK"
@@ -231,15 +214,34 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             version_label = "Native (SciDER)"
         else:
             version_label = coding_version
-        st.text_input(
-            "Coding Agent Backend",
-            value=version_label,
-            disabled=True,
-            key="coding_agent_version_display",
-        )
+
+        sys_col1, sys_col2, sys_col3 = st.columns(3)
+        with sys_col1:
+            st.markdown("**HuggingFace Datasets**")
+            if _c.HF_DATASET_DOWNLOAD_ENABLED:
+                st.success(f"✓ Enabled ({_c.HF_DATASET_MAX_SIZE_MB} MB max)")
+            else:
+                st.info("Disabled")
+        with sys_col2:
+            st.markdown("**Cross-Session Memory**")
+            if mem_read and mem_write:
+                st.success("✓ Read + Write")
+            elif mem_read:
+                st.info("Read only")
+            elif mem_write:
+                st.info("Write only")
+            else:
+                st.warning("Disabled")
+        with sys_col3:
+            st.markdown("**Coding Agent**")
+            st.info(version_label)
+
+        # --- Coding Agent model ---
+        st.divider()
+        st.markdown("#### Coding Agent Model")
         st.caption(
-            "To change the coding agent backend, set the `CODING_AGENT_VERSION` "
-            "environment variable (`claude_sdk` or `native`) in `.env`."
+            "The model used by the coding subagent during Experiment and Full Pipeline workflows. "
+            "Set `CODING_AGENT_VERSION` in `.env` to switch between `claude_sdk` and `native`."
         )
 
         if coding_version in ("v3", "claude_sdk"):
@@ -273,7 +275,8 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             role_items = list(roles.items())
             for row_start in range(0, len(role_items), max_cols):
                 row = role_items[row_start : row_start + max_cols]
-                cols = st.columns(max_cols)
+                # Use exactly as many columns as there are roles in this row — avoids blank columns
+                cols = st.columns(len(row))
                 for col, (role, label) in zip(cols, row):
                     with col:
                         role_selections[role] = _select_model(

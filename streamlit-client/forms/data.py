@@ -13,11 +13,11 @@ from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 
 def run_data(path, q, workspace_path):
     """Run data workflow. Called from background thread."""
-    data_path = Path(path) if Path(path).exists() else path  # may be HF repo name
+    data_path = Path(path) if Path(path).exists() else Path(str(path))
     logger.info(f"Running data analysis on path: {data_path}")
 
     w = DataWorkflow(
-        data_path=Path(path) if Path(path).exists() else Path(str(path)),
+        data_path=data_path,
         workspace_path=workspace_path,
         recursion_limit=100,
     )
@@ -71,7 +71,11 @@ def render_form():
     )
 
     with st.form("data_form", clear_on_submit=True):
-        st.markdown("### Data Analysis Workflow")
+        st.markdown("### Analyze Your Data")
+        st.caption(
+            "Upload a dataset, enter a HuggingFace repo name, or let SciDER generate synthetic data. "
+            "The AI agent explores structure, runs statistical analysis, and searches for related metrics in the literature."
+        )
 
         if data_source == "Generate hypothetical data":
             feature_desc = st.text_area(
@@ -114,8 +118,11 @@ def render_form():
                 placeholder="e.g. scikit-learn/iris",
                 help="Enter a HuggingFace dataset repository name. It will be downloaded automatically.",
             )
-            query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis")
+            query = st.text_input(
+                "Query",
+                placeholder="e.g. What features most strongly predict the target variable?",
+            )
+            submitted = st.form_submit_button("Analyze Dataset")
             if submitted:
                 if not hf_repo or not hf_repo.strip():
                     st.error("Please enter a HuggingFace dataset repository name.")
@@ -125,7 +132,7 @@ def render_form():
                 return {"type": "data", "path": hf_repo.strip(), "query": query}
 
         else:
-            st.caption("Upload a zip dataset or enter a path to existing data")
+            st.caption("Upload a zip file containing your dataset")
             uploaded_zip = st.file_uploader(
                 "Upload ZIP dataset (optional)",
                 type=["zip"],
@@ -133,8 +140,11 @@ def render_form():
             )
             if st.session_state.get("uploaded_data_path"):
                 st.info(f"Using uploaded data: `{st.session_state.uploaded_data_path}`")
-            query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis")
+            query = st.text_input(
+                "Query",
+                placeholder="e.g. What features most strongly predict the target variable?",
+            )
+            submitted = st.form_submit_button("Analyze Dataset")
             if submitted:
                 if not query or not query.strip():
                     query = "Analyze this dataset — explore its structure, key patterns, and notable findings."

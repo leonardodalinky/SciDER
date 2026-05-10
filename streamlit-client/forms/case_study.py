@@ -5,11 +5,13 @@ from pathlib import Path
 
 import streamlit as st
 
-# Search paths for case-study-memory
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Search paths for saved conversations and case-study-memory examples
+_APP_ROOT = Path(__file__).resolve().parent.parent  # streamlit-client/
+_PROJECT_ROOT = _APP_ROOT.parent                    # SciDER/
 _CASE_STUDY_DIRS = [
-    _PROJECT_ROOT / "case-study-memory",
-    Path(__file__).resolve().parent.parent / "case-study-memory",
+    _APP_ROOT / "saved_chats",           # conversations saved by the app's own workflows
+    _PROJECT_ROOT / "case-study-memory", # pre-bundled example case studies
+    _APP_ROOT / "case-study-memory",
 ]
 
 
@@ -49,9 +51,26 @@ def list_case_studies() -> list[tuple[Path, dict]]:
     return results
 
 
+_WORKFLOW_LABELS = {
+    "ideation": "Ideation",
+    "data": "Data Analysis",
+    "experiment": "Experiment",
+    "full": "Full Pipeline",
+}
+
+
 def render_case_study_viewer():
     """Render the case study browser UI."""
-    st.title("SciDER — Case Studies")
+    st.markdown(
+        """<div class='scider-header'>
+        <span class='scider-header-icon'>📚</span>
+        <div>
+            <div class='scider-header-title'>Case Studies</div>
+            <div class='scider-header-sub'>Browse saved workflow conversations and workspace artifacts</div>
+        </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
     available = list_case_studies()
     if not available:
@@ -67,12 +86,33 @@ def render_case_study_viewer():
     )
 
     selected_path = available[idx][0]
+    selected_meta = available[idx][1]
     with open(selected_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    messages = data.get("messages", [])
+    # Metadata card
+    wf_type = selected_meta["workflow_type"]
+    wf_label = _WORKFLOW_LABELS.get(wf_type, wf_type.title())
+    query = data.get("metadata", {}).get("query", selected_meta["label"])
+    ts = selected_meta["timestamp"]
+    st.markdown(
+        f"""<div class='approval-card'>
+        <p class='approval-card-title'>{query}</p>
+        <p class='approval-card-subtitle'>{wf_label} &nbsp;·&nbsp; {ts}</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    # Workflow type badge + message count
+    msg_count = len(data.get("messages", []))
+    st.markdown(
+        f"<span class='chat-agent-badge'>{wf_label}</span>&nbsp;&nbsp;"
+        f"<span style='color:#64748b;font-size:0.85rem'>{msg_count} messages</span>",
+        unsafe_allow_html=True,
+    )
     st.divider()
 
+    messages = data.get("messages", [])
     for m in messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])

@@ -63,8 +63,15 @@ def render_form():
     )
 
     with st.form("full_form", clear_on_submit=True):
-        st.markdown("### Full Workflow")
-        topic = st.text_input("Research Topic", placeholder="Enter your research topic...")
+        st.markdown("### End-to-End Research Pipeline")
+        st.caption(
+            "Chain all SciDER phases: Ideation → Data Analysis → Experiment → (optional) Paper Writing. "
+            "Each phase pauses for your review before proceeding."
+        )
+        topic = st.text_input(
+            "Research Topic",
+            placeholder="e.g. Using graph neural networks for molecular property prediction",
+        )
 
         if data_source == "Generate hypothetical data":
             hf_repo = None
@@ -144,7 +151,7 @@ def render_form():
             key="full_paper_template",
         )
         submitted = st.form_submit_button(
-            "Run Full Workflow",
+            "Launch Pipeline",
         )
 
         if submitted and topic:

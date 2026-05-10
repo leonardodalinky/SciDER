@@ -35,16 +35,15 @@ def render_approval_ui(handler) -> None:
     node_name = pending["node_name"]
     title = pending.get("title", "")
 
-    # Highlighted header with title
+    # Approval card header
     title_html = (
-        f"<br><span style='font-size: 16px; font-weight: 600; color: #856404;'>{title}</span>"
+        f"<p class='approval-card-subtitle'>{title}</p>"
         if title
         else ""
     )
     st.markdown(
-        f"""<div style="background: #fff3cd; border-left: 4px solid #ffc107;
-        padding: 12px 16px; border-radius: 6px; margin-bottom: 8px;">
-        <span style="font-size: 18px; font-weight: 700;">⚠️ Approval required: {node_name}</span>
+        f"""<div class='approval-card'>
+        <p class='approval-card-title'>Review required: {node_name}</p>
         {title_html}
         </div>""",
         unsafe_allow_html=True,

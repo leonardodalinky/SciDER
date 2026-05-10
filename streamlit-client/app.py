@@ -42,37 +42,277 @@ from settings import has_settings, load_settings, save_settings
 from utils import cleanup_uploaded_data, save_chat_history
 from workflow.approval import StreamlitApprovalHandler
 from workflow.runner import WorkflowRunner
+from workflow.usage_tracker import UsageTracker
 
 from scider.agents import ideation_agent
 from scider.core import approval as approval_module
-from scider.core.types import set_on_message_callback
+from scider.core.types import add_message_listener, remove_message_listener, set_on_message_callback
 from scider.default.models import ModelCatalog, parse_model_spec, register_role
 
 # ==================== Page config ====================
 
-st.set_page_config(page_title="SciDER Chat", page_icon="🍎", layout="centered")
+st.set_page_config(page_title="SciDER — Research Assistant", page_icon="🍎", layout="centered")
 
 st.markdown(
     """
     <style>
-    h1, h2, h3, h4, h5, h6 { color: #384166 !important; }
-    [data-testid="stChatMessage"] h1, [data-testid="stChatMessage"] h2,
-    [data-testid="stChatMessage"] h3, [data-testid="stChatMessage"] h4,
-    [data-testid="stChatMessage"] h5, [data-testid="stChatMessage"] h6 {
+    /* ══════════════════════════════════════════════════════════
+       BUTTONS  —  the biggest visual change
+       Streamlit 1.30+ buttons need direct testid targeting
+       ══════════════════════════════════════════════════════════ */
+
+    /* All regular (secondary) buttons → vibrant blue outline
+       Multiple selectors for Streamlit version compatibility */
+    [data-testid="stBaseButton-secondary"],
+    [data-testid="baseButton-secondary"],
+    .stButton > button,
+    button[kind="secondary"] {
+        background: white !important;
+        color: #4361ee !important;
+        border: 2px solid #4361ee !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: background 0.15s ease, color 0.15s ease,
+                    box-shadow 0.15s ease, transform 0.1s ease !important;
+    }
+    [data-testid="stBaseButton-secondary"]:hover,
+    [data-testid="baseButton-secondary"]:hover,
+    .stButton > button:hover {
+        background: #4361ee !important;
+        color: white !important;
+        border-color: #4361ee !important;
+        box-shadow: 0 4px 14px rgba(67, 97, 238, 0.35) !important;
+        transform: translateY(-1px) !important;
+    }
+    [data-testid="stBaseButton-secondary"]:active,
+    .stButton > button:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 1px 4px rgba(67, 97, 238, 0.2) !important;
+    }
+
+    /* Form submit buttons → vibrant gradient */
+    [data-testid="stBaseButton-primary"],
+    [data-testid="stBaseButton-primaryFormSubmit"],
+    [data-testid="baseButton-primary"],
+    .stButton > button[kind="primary"],
+    button[kind="primary"] {
+        background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 10px rgba(67, 97, 238, 0.4) !important;
+        transition: box-shadow 0.15s ease, transform 0.1s ease !important;
+    }
+    [data-testid="stBaseButton-primary"]:hover,
+    [data-testid="stBaseButton-primaryFormSubmit"]:hover,
+    [data-testid="baseButton-primary"]:hover {
+        box-shadow: 0 5px 20px rgba(67, 97, 238, 0.55) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* Secondary form submit (e.g. Cancel) → outlined */
+    [data-testid="stBaseButton-secondaryFormSubmit"],
+    [data-testid="baseButton-secondaryFormSubmit"] {
+        background: white !important;
+        color: #4361ee !important;
+        border: 2px solid #4361ee !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stBaseButton-secondaryFormSubmit"]:hover {
+        background: #eef0fd !important;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       HEADINGS
+       ══════════════════════════════════════════════════════════ */
+    h1, h2, h3, h4, h5, h6 {
+        color: #1e2a4a !important;
+        letter-spacing: -0.3px;
+    }
+    [data-testid="stChatMessage"] h1,
+    [data-testid="stChatMessage"] h2,
+    [data-testid="stChatMessage"] h3,
+    [data-testid="stChatMessage"] h4,
+    [data-testid="stChatMessage"] h5,
+    [data-testid="stChatMessage"] h6 {
         color: inherit !important;
+        letter-spacing: normal;
     }
+
+    /* ══════════════════════════════════════════════════════════
+       BRANDED HEADER BAND
+       ══════════════════════════════════════════════════════════ */
+    .scider-header {
+        background: linear-gradient(135deg, #1e2a4a 0%, #384166 60%, #4361ee 100%);
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .scider-header-icon { font-size: 30px; line-height: 1; }
+    .scider-header-title {
+        color: white !important;
+        font-size: 22px !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px !important;
+        margin: 0 !important;
+        line-height: 1.2 !important;
+    }
+    .scider-header-sub {
+        color: #a5b4e8;
+        font-size: 12.5px;
+        margin: 3px 0 0;
+        line-height: 1.3;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       WORKFLOW SECTION
+       ══════════════════════════════════════════════════════════ */
+    .workflow-section-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #4361ee;
+        margin-bottom: 6px;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       FORMS — colored top border
+       ══════════════════════════════════════════════════════════ */
+    [data-testid="stForm"] {
+        border: 1px solid #d9dcf8 !important;
+        border-radius: 12px !important;
+        border-top: 4px solid #4361ee !important;
+        padding-top: 8px !important;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       CHAT MESSAGES
+       ══════════════════════════════════════════════════════════ */
     .chat-agent-badge {
-        font-size: 12px;
-        color: #777;
-        margin-bottom: 2px;
-        font-weight: 600;
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        color: #4361ee;
+        background: #eef0fd;
+        border: 1px solid #c5c9f8;
+        border-radius: 999px;
+        padding: 2px 10px;
+        margin-bottom: 6px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
     }
+
     .chat-meta-msg {
-        color: #888;
+        color: #64748b;
         font-size: 13px;
-        border-left: 3px solid #ddd;
-        padding-left: 10px;
-        margin: 4px 0;
+        background: #f5f6ff;
+        border-left: 3px solid #c5c9f8;
+        border-radius: 0 4px 4px 0;
+        padding: 6px 12px;
+        margin: 6px 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       HERO / SETUP CARD  — teal-to-blue gradient for warmth
+       ══════════════════════════════════════════════════════════ */
+    .scider-hero {
+        background: linear-gradient(135deg, #e8f4f8 0%, #eef0fd 60%, #f0f4ff 100%);
+        border: 1px solid #b8d8e8;
+        border-top: 4px solid #0891b2;
+        border-radius: 12px;
+        padding: 24px 28px;
+        margin: 16px 0 24px;
+    }
+    .scider-hero h2 {
+        color: #0c4a6e !important;
+        margin-top: 0;
+        font-size: 22px;
+        letter-spacing: -0.4px;
+    }
+    .scider-hero p {
+        color: #334155;
+        font-size: 15px;
+        line-height: 1.65;
+        margin: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       RUNNING INDICATOR  — amber/warm to show active state
+       ══════════════════════════════════════════════════════════ */
+    .running-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(90deg, #fff7ed 0%, #fffbf5 100%);
+        border-left: 4px solid #f59e0b;
+        border-radius: 0 8px 8px 0;
+        padding: 12px 16px;
+        font-size: 14px;
+        color: #78350f;
+        font-weight: 500;
+        margin: 8px 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       APPROVAL CARD  — indigo accent
+       ══════════════════════════════════════════════════════════ */
+    .approval-card {
+        background: linear-gradient(90deg, #eef0fd 0%, #f5f6ff 100%);
+        border-left: 4px solid #6366f1;
+        border-radius: 0 10px 10px 0;
+        padding: 14px 18px;
+        margin-bottom: 12px;
+    }
+    .approval-card-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e2a4a;
+        margin: 0 0 4px;
+    }
+    .approval-card-subtitle {
+        font-size: 14px;
+        color: #6366f1;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       SUCCESS / INFO CALLOUTS  — green accent
+       ══════════════════════════════════════════════════════════ */
+    [data-testid="stSuccess"] {
+        background: #f0fdf4 !important;
+        border-left: 4px solid #22c55e !important;
+        border-radius: 0 8px 8px 0 !important;
+    }
+    [data-testid="stInfo"] {
+        background: #eff6ff !important;
+        border-left: 4px solid #3b82f6 !important;
+        border-radius: 0 8px 8px 0 !important;
+    }
+    [data-testid="stWarning"] {
+        background: #fffbeb !important;
+        border-left: 4px solid #f59e0b !important;
+        border-radius: 0 8px 8px 0 !important;
+    }
+    [data-testid="stError"] {
+        background: #fef2f2 !important;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 0 8px 8px 0 !important;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       MISC
+       ══════════════════════════════════════════════════════════ */
+    hr { border-color: #e2e5f8 !important; }
+    /* Sidebar-less layout: add subtle page border */
+    [data-testid="stAppViewContainer"] > section:first-child {
+        border-right: 1px solid #e8eaf0;
     }
     </style>
     """,
@@ -161,8 +401,7 @@ def render_chat_message(
         # Meta messages: render as muted system info
         if is_meta:
             st.markdown(
-                f"<div style='color: #888; font-size: 13px; border-left: 3px solid #ddd; "
-                f"padding-left: 10px; margin: 4px 0;'>{content}</div>",
+                f"<div class='chat-meta-msg'>{content}</div>",
                 unsafe_allow_html=True,
             )
         elif len(content) > _TRUNCATE_LEN:
@@ -171,7 +410,7 @@ def render_chat_message(
             with st.expander(f"{label}...", expanded=False):
                 st.markdown(content)
         elif content:
-            st.markdown(content)
+            st.markdown(content, unsafe_allow_html=True)
 
         # Tool-result images (e.g. from Read on a PNG) rendered below text
         if images:
@@ -225,6 +464,70 @@ def render_chat_messages(messages: list[dict]):
                         tool_name=m.get("tool_name"),
                         images=m.get("images"),
                     )
+
+
+# ==================== Usage stats display ====================
+
+_PROVIDER_COLORS = {
+    "gemini": "#1a73e8",
+    "anthropic": "#d97706",
+    "openai": "#16a34a",
+}
+
+
+def _model_display(model_id: str) -> str:
+    """Strip provider prefix: 'gemini/gemini-2.5-pro' → 'gemini-2.5-pro'."""
+    return model_id.split("/", 1)[-1] if "/" in model_id else model_id
+
+
+def render_usage_stats(rows: list[dict]) -> None:
+    if not rows:
+        return
+    total_in = sum(r["input_tokens"] for r in rows)
+    total_out = sum(r["output_tokens"] for r in rows)
+    total_calls = sum(r["calls"] for r in rows)
+    costs = [r["cost_usd"] for r in rows if r["cost_usd"] is not None]
+    total_cost_str = f"~${sum(costs):.4f}" if costs else "cost unavailable"
+
+    with st.expander(
+        f"📊 API Usage — {total_in + total_out:,} tokens · {total_cost_str}",
+        expanded=False,
+    ):
+        # Column headers
+        h1, h2, h3, h4, h5, h6 = st.columns([2.5, 3, 1.5, 1.5, 1, 1.5])
+        h1.markdown("**Agent**")
+        h2.markdown("**Model**")
+        h3.markdown("**Input**")
+        h4.markdown("**Output**")
+        h5.markdown("**Calls**")
+        h6.markdown("**Est. Cost**")
+        st.divider()
+
+        for r in rows:
+            c1, c2, c3, c4, c5, c6 = st.columns([2.5, 3, 1.5, 1.5, 1, 1.5])
+            label = _agent_label(r["role"]) or r["role"]
+            model_short = _model_display(r["model"])
+            cost_str = f"${r['cost_usd']:.4f}" if r["cost_usd"] is not None else "N/A"
+            c1.caption(label)
+            c2.caption(f"`{model_short}`")
+            c3.caption(f"{r['input_tokens']:,}")
+            c4.caption(f"{r['output_tokens']:,}")
+            c5.caption(str(r["calls"]))
+            c6.caption(cost_str)
+
+        st.divider()
+        t1, t2, t3, t4, t5, t6 = st.columns([2.5, 3, 1.5, 1.5, 1, 1.5])
+        t1.markdown("**Total**")
+        t2.markdown("")
+        t3.markdown(f"**{total_in:,}**")
+        t4.markdown(f"**{total_out:,}**")
+        t5.markdown(f"**{total_calls}**")
+        t6.markdown(f"**{total_cost_str}**")
+
+        st.caption(
+            "Cost estimates use litellm's published per-token pricing and may differ from your "
+            "actual bill. Input tokens shown are per-request totals (system + full history)."
+        )
 
 
 # ==================== Model registration ====================
@@ -335,16 +638,33 @@ if not has_settings():
             _logo_src = _logo_url
         except Exception:
             pass
+    st.markdown(
+        """<div class='scider-header' style='margin-bottom:16px'>
+          <span class='scider-header-icon'>🍎</span>
+          <div>
+            <div class='scider-header-title'>SciDER</div>
+            <div class='scider-header-sub'>AI-powered scientific research assistant</div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
     if _logo_src:
         _col_l, _col_c, _col_r = st.columns([1, 2, 1])
         with _col_c:
-            st.image(_logo_src, width=300)
-    st.title("SciDER Research Assistant")
+            st.image(_logo_src, width=220)
     if st.button("📂 Browse Case Studies", key="case_study_from_setup"):
         st.session_state.view_mode = "case_study"
         st.rerun()
     st.divider()
-    st.info("Configure your API keys to get started.")
+    st.markdown(
+        """<div class='scider-hero'>
+        <h2>Get started with SciDER</h2>
+        <p>SciDER automates the full scientific research loop — from literature search and idea generation
+        to data analysis, ML experiments, and paper writing. Configure at least one AI provider
+        API key below to begin. You can mix providers across different agent roles.</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
     new_settings = render_settings_form()
     if new_settings:
         save_settings(new_settings)
@@ -356,7 +676,16 @@ _settings = load_settings()
 
 # --- Settings page (when user clicks Settings button) ---
 if st.session_state.get("show_settings"):
-    st.title("SciDER Research Assistant — Settings")
+    st.markdown(
+        """<div class='scider-header' style='margin-bottom:16px'>
+          <span class='scider-header-icon'>⚙️</span>
+          <div>
+            <div class='scider-header-title'>Settings</div>
+            <div class='scider-header-sub'>Configure API keys and model assignments — stored locally only</div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
     if st.button("📂 Browse Case Studies", key="case_study_from_settings"):
         st.session_state.show_settings = False
         st.session_state.view_mode = "case_study"
@@ -392,26 +721,46 @@ if st.session_state.get("show_settings"):
 
 # ==================== Apply settings ====================
 
-# --- Title bar ---
-col_title, col_settings, col_reset = st.columns([4, 1.2, 1])
-with col_title:
-    st.title("SciDER Research Assistant")
-with col_settings:
-    if st.button("\u2699\ufe0f Settings", key="btn_settings"):
+# --- Branded header ---
+_hdr_col, _btn_col1, _btn_col2 = st.columns([4, 1.2, 1])
+with _hdr_col:
+    st.markdown(
+        """<div class='scider-header'>
+          <span class='scider-header-icon'>🍎</span>
+          <div>
+            <div class='scider-header-title'>SciDER</div>
+            <div class='scider-header-sub'>AI-powered scientific research assistant</div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+with _btn_col1:
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    if st.button("\u2699\ufe0f Settings", key="btn_settings", use_container_width=True):
         st.session_state.show_settings = True
         st.rerun()
-with col_reset:
-    if st.button("\U0001f504 Reset", help="Clear chat history", key="btn_reset"):
+with _btn_col2:
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Reset", help="Clear chat history", key="btn_reset", use_container_width=True):
         cleanup_uploaded_data()
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Hello. I can run ideation, data analysis, experiments, or a full workflow.\n\nPlease select a workflow type below to get started.",
+                "content": (
+                    "Welcome back to **SciDER** — your AI-powered research assistant.\n\n"
+                    "I can help you with four research workflows:\n"
+                    "- **Ideation** — search the literature and generate novel, scored research ideas\n"
+                    "- **Data Analysis** — explore datasets with AI-guided analysis and metric search\n"
+                    "- **Experiment** — implement, run, and iterate on ML experiments with a coding agent\n"
+                    "- **Full Pipeline** — chain all phases end-to-end, optionally producing a LaTeX paper draft\n\n"
+                    "Select a workflow below to get started."
+                ),
             }
         ]
         if "selected_workflow" in st.session_state:
             st.session_state.selected_workflow = None
         st.session_state.show_workspace_result = False
+        st.session_state.pop("last_usage_stats", None)
         st.rerun()
 
 # --- Per-session initialization ---
@@ -432,7 +781,15 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Hello. I can run ideation, data analysis, experiments, or a full workflow.\n\nPlease select a workflow type below to get started.",
+            "content": (
+                "Welcome to **SciDER** — your AI-powered end-to-end scientific research assistant.\n\n"
+                "I can help you with four research workflows:\n"
+                "- **Ideation** — search the literature and generate novel, scored research ideas\n"
+                "- **Data Analysis** — explore datasets with AI-guided analysis and metric search\n"
+                "- **Experiment** — implement, run, and iterate on ML experiments with a coding agent\n"
+                "- **Full Pipeline** — chain all phases end-to-end, optionally producing a LaTeX paper draft\n\n"
+                "Select a workflow below to get started."
+            ),
         }
     ]
 
@@ -450,31 +807,42 @@ if "selected_workflow" not in st.session_state:
 
 # ==================== Workflow selection ====================
 
-st.subheader("Select Workflow Type")
+st.markdown(
+    "<p class='workflow-section-label'>🚀 Choose a Workflow</p>",
+    unsafe_allow_html=True,
+)
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("\U0001f4a1 Ideation", use_container_width=True, key="btn_ideation"):
+    if st.button("💡 Ideation", use_container_width=True, key="btn_ideation"):
         st.session_state.selected_workflow = "ideation"
         st.rerun()
+    st.caption("Search literature and evolve novel research ideas using 4D scoring.")
 with col2:
-    if st.button("\U0001f4ca Data Analysis", use_container_width=True, key="btn_data"):
+    if st.button("📊 Data Analysis", use_container_width=True, key="btn_data"):
         st.session_state.selected_workflow = "data"
         st.rerun()
+    st.caption("Explore datasets, run AI analysis, and extract key findings.")
 with col3:
-    if st.button("\U0001f9ea Experiment", use_container_width=True, key="btn_experiment"):
+    if st.button("🧪 Experiment", use_container_width=True, key="btn_experiment"):
         st.session_state.selected_workflow = "experiment"
         st.rerun()
+    st.caption("Implement and iterate on ML experiments with a Claude coding agent.")
 with col4:
-    if st.button("\U0001f680 Full Workflow", use_container_width=True, key="btn_full"):
+    if st.button("🚀 Full Pipeline", use_container_width=True, key="btn_full"):
         st.session_state.selected_workflow = "full"
         st.rerun()
+    st.caption("Chain all phases end-to-end, optionally producing a LaTeX paper.")
 
 st.divider()
 
 # --- Chat history (skip if workflow is running — polling loop handles rendering) ---
 if "workflow_runner" not in st.session_state:
     render_chat_messages(st.session_state.messages)
+
+    # Show API usage stats from the last completed workflow
+    if st.session_state.get("last_usage_stats"):
+        render_usage_stats(st.session_state.last_usage_stats)
 
     # Show workspace files after experiment/full workflow completion
     if st.session_state.get("show_workspace_result"):
@@ -557,6 +925,10 @@ if workflow_config and "workflow_runner" not in st.session_state:
     st.session_state.approval_handler = handler
     approval_module.set_handler(handler)
 
+    tracker = UsageTracker()
+    st.session_state.usage_tracker = tracker
+    add_message_listener(tracker.on_message)
+
     # Hook every add_message() call to push to UI
     def _on_msg(msg):
         images = getattr(msg, "tool_result_images", None)
@@ -626,15 +998,22 @@ if "workflow_runner" in st.session_state:
         if wc["type"] in ("data", "data_hypo", "experiment", "full"):
             st.session_state.show_workspace_result = True
 
+        # Collect and store usage stats before tearing down
+        tracker = st.session_state.pop("usage_tracker", None)
+        if tracker:
+            remove_message_listener(tracker.on_message)
+            st.session_state.last_usage_stats = tracker.get_rows()
+
         set_on_message_callback(None)
         del st.session_state.workflow_runner
         del st.session_state.workflow_config_active
         del st.session_state.approval_handler
         st.rerun()
     else:
-        render_chat_message("assistant", "Workflow is running...", None)
-        time.sleep(2)
-        st.rerun()
-        render_chat_message("assistant", "Workflow is running...", None)
+        render_chat_message(
+            "assistant",
+            "<div class='running-indicator'>⚙️ Workflow in progress — agents are working. This may take several minutes.</div>",
+            None,
+        )
         time.sleep(2)
         st.rerun()
