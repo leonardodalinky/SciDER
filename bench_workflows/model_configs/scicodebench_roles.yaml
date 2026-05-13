@@ -1,13 +1,12 @@
 defaults:
   ideation: gemini-3-flash-preview[reasoning_effort=low]
-  paper_search: gemini-3.1-flash-lite-preview[reasoning_effort=low]
-  metric_search: gemini-3.1-flash-lite-preview[reasoning_effort=low]
+  paper_search: gemini-3.1-flash-lite[reasoning_effort=low]
+  metric_search: gemini-3.1-flash-lite[reasoning_effort=low]
   data: gemini-3-flash-preview[reasoning_effort=low]
   critic: gemini-3-flash-preview[reasoning_effort=low,temperature=0.3]
-  history: gemini-3.1-flash-lite-preview[reasoning_effort=low]
+  history: gemini-3.1-flash-lite[reasoning_effort=low]
   experiment: claude-haiku-4-5[reasoning_effort=medium]
-  experiment_coding: claude-haiku-4-5[reasoning_effort=medium]
-  # experiment_coding: claude-sonnet-4-5[reasoning_effort=medium]
+  experiment_coding: claude-sonnet-4-5[reasoning_effort=medium]
   writing: gemini-3-flash-preview[reasoning_effort=medium]
-  approval: gemini-3.1-flash-lite-preview[reasoning_effort=low]
+  approval: gemini-3.1-flash-lite[reasoning_effort=low]
   embedding: text-embedding-3-small

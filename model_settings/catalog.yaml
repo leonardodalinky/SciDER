@@ -40,9 +40,9 @@ models:
     default_params:
       reasoning_effort: low
 
-  gemini-3.1-flash-lite-preview:
+  gemini-3.1-flash-lite:
     provider: gemini
-    litellm_id: gemini/gemini-3.1-flash-lite-preview
+    litellm_id: gemini/gemini-3.1-flash-lite
     capabilities: [completion]
     supports_vision: true
     requires_env: [GEMINI_API_KEY]
