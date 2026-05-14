@@ -1,5 +1,6 @@
 """SciDER Research Assistant — Streamlit App (main entry point)."""
 
+import json
 import os
 import sys
 import time
@@ -314,6 +315,141 @@ st.markdown(
     [data-testid="stAppViewContainer"] > section:first-child {
         border-right: 1px solid #e8eaf0;
     }
+
+    /* ══════════════════════════════════════════════════════════
+       WORKFLOW STATUS BANNERS
+       ══════════════════════════════════════════════════════════ */
+    .status-banner {
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        font-weight: 700;
+        font-size: 14px;
+    }
+    .status-success { background: #f0fdf4; border-left: 4px solid #22c55e; color: #15803d; }
+    .status-warn    { background: #fffbeb; border-left: 4px solid #f59e0b; color: #b45309; }
+    .status-fail    { background: #fef2f2; border-left: 4px solid #ef4444; color: #b91c1c; }
+
+    /* ══════════════════════════════════════════════════════════
+       IDEATION RESULT — search metrics + ranked idea cards
+       ══════════════════════════════════════════════════════════ */
+    .ir-section-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #4361ee;
+        text-transform: uppercase;
+        margin: 16px 0 8px;
+    }
+    .search-metrics {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+    }
+    .sm-item {
+        flex: 1;
+        min-width: 92px;
+        text-align: center;
+        background: linear-gradient(135deg, #eef0fd 0%, #f5f6ff 100%);
+        border: 1px solid #d9dcf8;
+        border-radius: 10px;
+        padding: 10px 8px;
+    }
+    .sm-val { font-size: 21px; font-weight: 800; color: #1e2a4a; line-height: 1.1; }
+    .sm-lbl {
+        font-size: 10px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 3px;
+    }
+    .idea-card {
+        border: 1px solid #e2e5f8;
+        border-left: 4px solid #4361ee;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        background: #ffffff;
+    }
+    .idea-card-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .idea-rank {
+        font-size: 13px;
+        font-weight: 800;
+        color: #4361ee;
+        background: #eef0fd;
+        border-radius: 6px;
+        padding: 1px 7px;
+    }
+    .idea-title { font-size: 15px; font-weight: 700; color: #1e2a4a; flex: 1; }
+    .idea-op {
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 2px 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .idea-novelty {
+        font-size: 10px;
+        font-weight: 700;
+        color: #3a0ca3;
+        background: #eef0fd;
+        border-radius: 999px;
+        padding: 2px 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .idea-composite {
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .idea-composite small {
+        font-size: 8px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-top: 2px;
+    }
+    .idea-desc { font-size: 13.5px; color: #334155; line-height: 1.55; margin: 8px 0 2px; }
+    .sc-bars { margin: 8px 0 2px; }
+    .sc-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+    .sc-label { font-size: 11px; font-weight: 600; color: #64748b; width: 80px; flex-shrink: 0; }
+    .sc-track {
+        flex: 1;
+        height: 7px;
+        background: #eef0f6;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .sc-fill { display: block; height: 100%; border-radius: 999px; }
+    .sc-val {
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        width: 32px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+    .idea-extra { font-size: 12px; color: #475569; margin-top: 5px; line-height: 1.5; }
+    .idea-extra-lbl {
+        font-weight: 700;
+        color: #4361ee;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -324,6 +460,7 @@ _TRUNCATE_LEN = 800
 _AGENT_LABELS = {
     # Ideation
     "ideation": "💡 Ideation Agent",
+    "idea_search": "🧬 Idea Search",
     # Data
     "data": "📊 Data Agent",
     "data_agent": "📊 Data Agent",
@@ -355,6 +492,28 @@ def _agent_label(agent: str | None) -> str:
     return _AGENT_LABELS.get(agent, agent)
 
 
+def _format_tool_call(tc) -> str:
+    """Render a tool_call as a compact one-line invocation summary (HTML)."""
+    try:
+        fn = tc.function.name
+    except Exception:
+        fn = "tool"
+    args_str = ""
+    try:
+        args = json.loads(tc.function.arguments or "{}")
+        if isinstance(args, dict):
+            parts = []
+            for k, v in list(args.items())[:4]:
+                vs = str(v).replace("\n", " ")
+                if len(vs) > 60:
+                    vs = vs[:60] + "…"
+                parts.append(f"{k}={vs}")
+            args_str = ", ".join(parts)
+    except Exception:
+        pass
+    return f"🔧 <b>{fn}</b>(<code>{args_str}</code>)"
+
+
 def _render_tool_images(images: list[dict]) -> None:
     """Decode base64 tool-result images and render them under the chat bubble."""
     import base64 as _b64
@@ -380,6 +539,7 @@ def render_chat_message(
     is_tool: bool = False,
     tool_name: str | None = None,
     images: list[dict] | None = None,
+    truncate: bool = True,
 ):
     """Render a single chat message as a Streamlit chat_message with markdown."""
     # Map role for st.chat_message (only supports "user", "assistant", "ai", "human")
@@ -404,10 +564,10 @@ def render_chat_message(
                 f"<div class='chat-meta-msg'>{content}</div>",
                 unsafe_allow_html=True,
             )
-        elif len(content) > _TRUNCATE_LEN:
-            preview_lines = content[:200].split("\n")
-            label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
-            with st.expander(f"{label}...", expanded=False):
+        elif truncate and len(content) > _TRUNCATE_LEN:
+            first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "")
+            label = (first_line[:117] + "…") if len(first_line) > 117 else (first_line or "Response")
+            with st.expander(label, expanded=False):
                 st.markdown(content)
         elif content:
             st.markdown(content, unsafe_allow_html=True)
@@ -449,6 +609,7 @@ def render_chat_messages(messages: list[dict]):
                 is_tool=m.get("is_tool", False),
                 tool_name=m.get("tool_name"),
                 images=m.get("images"),
+                truncate=not m.get("is_report", False),
             )
         else:
             # Multiple consecutive messages from same agent — collapse
@@ -539,6 +700,17 @@ def register_all_models(settings: dict) -> bool:
     Keys are passed directly to register_role() per session — never written to
     os.environ (which is shared across all Streamlit sessions).
     """
+    # Wire the Semantic Scholar key into the module-level constant that
+    # paper_search.py reads at call time. constant.S2_API_KEY is resolved once
+    # at import from the env, so setting os.environ alone is too late — we must
+    # mutate the attribute directly. (Env is also set for any subprocesses.)
+    from scider.core import constant as _constant
+
+    _s2_key = settings.get("s2_api_key", "")
+    _constant.S2_API_KEY = _s2_key
+    if _s2_key:
+        os.environ["S2_API_KEY"] = _s2_key
+
     # Build {env_var: key} from this session's settings.
     key_map: dict[str, str] = {}
     for env_var, settings_key in (
@@ -767,12 +939,15 @@ with _btn_col2:
 if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
-# Re-register models on EVERY rerun so each session uses its own keys.
-# ModelRegistry is a process-level singleton — without this, one user's
-# keys would leak into another user's session.
-if not register_all_models(_settings):
-    st.error("Failed to register models. Please check your API key in Settings.")
-    st.stop()
+# Re-register models on each rerun so every session uses its own keys —
+# ModelRegistry is a process-level singleton, so without this one user's keys
+# would leak into another user's session. Skip while a workflow is running:
+# the poll loop reruns every 2s, and re-registering there is pure waste (the
+# background thread is already using the registry).
+if "workflow_runner" not in st.session_state:
+    if not register_all_models(_settings):
+        st.error("Failed to register models. Please check your API key in Settings.")
+        st.stop()
 
 if "ideation_graph" not in st.session_state:
     st.session_state.ideation_graph = ideation_agent.build().compile()
@@ -793,10 +968,17 @@ if "messages" not in st.session_state:
         }
     ]
 
+# Per-session workspace dir so concurrent sessions don't clobber each other's
+# files (the process-wide ModelRegistry is shared, but the filesystem is not).
+if "_session_id" not in st.session_state:
+    import uuid
+
+    st.session_state._session_id = uuid.uuid4().hex[:8]
+_session_workspace = Path.cwd() / "workspace" / st.session_state._session_id
 if "workspace_path" not in st.session_state:
-    st.session_state.workspace_path = Path.cwd() / "workspace"
+    st.session_state.workspace_path = _session_workspace
 if "default_workspace_path" not in st.session_state:
-    st.session_state.default_workspace_path = Path.cwd() / "workspace"
+    st.session_state.default_workspace_path = _session_workspace
 _ws = st.session_state.workspace_path
 if isinstance(_ws, (str, Path)) and "scider_uploads" in str(_ws) and not Path(_ws).exists():
     cleanup_uploaded_data()
@@ -932,11 +1114,31 @@ if workflow_config and "workflow_runner" not in st.session_state:
     # Hook every add_message() call to push to UI
     def _on_msg(msg):
         images = getattr(msg, "tool_result_images", None)
-        if msg.content or images:
+        agent = getattr(msg, "agent_sender", None)
+        content = msg.content or ""
+
+        # Surface the agent's reasoning/thinking as a muted preview line.
+        reasoning = getattr(msg, "reasoning_content", None)
+        if reasoning and reasoning.strip():
+            preview = reasoning.strip()
+            if len(preview) > 400:
+                preview = preview[:400] + "…"
+            handler.push_message("assistant", f"🧠 <i>Thinking:</i> {preview}", agent, is_meta=True)
+
+        # Surface tool invocations. Assistant messages whose only payload is
+        # tool_calls (empty content) were previously dropped entirely, so the
+        # UI showed tool *results* with no visible cause — no file path, no
+        # bash command, no search query.
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls:
+            for tc in tool_calls:
+                handler.push_message("assistant", _format_tool_call(tc), agent, is_meta=True)
+
+        if content or images:
             handler.push_message(
                 msg.role or "assistant",
-                msg.content or "",
-                getattr(msg, "agent_sender", None),
+                content,
+                agent,
                 is_meta=getattr(msg, "is_meta", False),
                 is_tool=msg.role == "tool",
                 tool_name=getattr(msg, "tool_name", None),
@@ -967,13 +1169,26 @@ if "workflow_runner" in st.session_state:
     if handler.has_pending():
         render_approval_ui(handler)
     elif runner.is_done:
+        tb_msg = None
         if runner.error:
-            resp = f"Workflow failed: {runner.error}"
+            resp = f"❌ Workflow failed: {runner.error}"
+            if runner.traceback:
+                # Persist the full traceback as its own message — it lands in
+                # a collapsed expander (long content) so it's available for
+                # debugging without dominating the chat.
+                tb_msg = {
+                    "role": "assistant",
+                    "content": f"⚠️ Error traceback\n\n```\n{runner.traceback}\n```",
+                }
         else:
             resp, _ = runner.result or ("No result", [])
 
-        st.session_state.messages.append({"role": "assistant", "content": resp})
-        render_chat_message("assistant", resp, None)
+        st.session_state.messages.append(
+            {"role": "assistant", "content": resp, "is_report": True}
+        )
+        if tb_msg:
+            st.session_state.messages.append(tb_msg)
+        render_chat_message("assistant", resp, None, truncate=False)
 
         wc = st.session_state.workflow_config_active
         metadata = {
@@ -1010,9 +1225,26 @@ if "workflow_runner" in st.session_state:
         del st.session_state.approval_handler
         st.rerun()
     else:
+        # Live status: current agent, elapsed time, running token/cost total.
+        elapsed = int(runner.elapsed)
+        mins, secs = divmod(elapsed, 60)
+        elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+        last_agent = next(
+            (m.get("agent") for m in reversed(st.session_state.messages) if m.get("agent")),
+            None,
+        )
+        agent_str = _agent_label(last_agent) if last_agent else "starting up…"
+        parts = [f"⚙️ <b>{agent_str}</b>", f"⏱ {elapsed_str}"]
+        tracker = st.session_state.get("usage_tracker")
+        if tracker is not None:
+            toks = tracker.total_tokens
+            if toks:
+                cost = tracker.total_cost
+                cost_str = f" · ~${cost:.4f}" if cost else ""
+                parts.append(f"{toks:,} tokens{cost_str}")
         render_chat_message(
             "assistant",
-            "<div class='running-indicator'>⚙️ Workflow in progress — agents are working. This may take several minutes.</div>",
+            "<div class='running-indicator'>" + " &nbsp;·&nbsp; ".join(parts) + "</div>",
             None,
         )
         time.sleep(2)

@@ -4,7 +4,12 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import _rm_upload_root, find_data_analysis_file, save_and_extract_upload
+from utils import (
+    _rm_upload_root,
+    find_data_analysis_file,
+    save_and_extract_upload,
+    status_banner,
+)
 
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 
@@ -26,7 +31,15 @@ def run_experiment(q, path, workspace_path):
     else:
         return "No data analysis file", []
     w.run()
-    return w.final_summary or "Experiment finished", w.experiment_agent_intermediate_state
+    status = getattr(w, "final_status", None)
+    label = {
+        "success": "Experiment completed successfully",
+        "max_revisions_reached": "Experiment finished — max revision cycles reached",
+        "failed": "Experiment failed",
+    }.get(status, "Experiment finished")
+    banner = status_banner(status, label)
+    body = w.final_summary or getattr(w, "error_message", None) or "No summary produced."
+    return f"{banner}\n\n{body}", w.experiment_agent_intermediate_state
 
 
 def render_form():

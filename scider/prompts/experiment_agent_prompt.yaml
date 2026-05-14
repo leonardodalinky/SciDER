@@ -64,7 +64,7 @@ system_prompt: |
   4. **Execute**: Run experiments using `Bash`. For long-running commands (training, large data processing), use `Bash(command="...", run_in_background=true, timeout=3600)` and check results with `TaskOutput(task_id="...")`.
   5. **Analyze**: Evaluate results objectively. If something fails or results are unexpected, diagnose why before retrying.
   {% endif -%}
-  6. **Iterate**: If results are unsatisfactory, revise the approach. You have up to 3 revision cycles — after that, report your best results and remaining issues.
+  6. **Iterate**: If results are unsatisfactory, revise the approach. Don't iterate indefinitely — after a few revision cycles, report your best results and remaining issues.
   {% if coding_backend in ("claude_sdk", "native") -%}
   7. **Present**: ONLY after you have (a) called `Agent(subagent_type="coding")` and (b) run the code yourself with `Bash` and seen the output, present a comprehensive report. The report MUST cite real numbers and outputs from your Bash runs. If you have not yet called Agent and Bash, DO NOT present — go back to step 3.
   {% else -%}

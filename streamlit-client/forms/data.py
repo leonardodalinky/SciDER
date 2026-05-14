@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import cleanup_uploaded_data, save_and_extract_upload
+from utils import cleanup_uploaded_data, save_and_extract_upload, status_banner
 
 from scider.core import constant
 from scider.workflows.data_workflow import DataWorkflow
@@ -25,11 +25,11 @@ def run_data(path, q, workspace_path):
     intermediate_state = getattr(w, "data_agent_intermediate_state", [])
     if w.final_status != "success":
         error_msg = w.error_message or "Data workflow failed"
-        return f"Data workflow failed: {error_msg}", intermediate_state
-    out = ["## Data Analysis Complete"]
-    if w.data_summary:
-        out.append(w.data_summary)
-    return "\n\n".join(out), intermediate_state
+        banner = status_banner("failed", "Data workflow failed")
+        return f"{banner}\n\n{error_msg}", intermediate_state
+    banner = status_banner("success", "Data analysis complete")
+    body = w.data_summary or "The data agent finished but produced no summary."
+    return f"{banner}\n\n{body}", intermediate_state
 
 
 def run_hypo_data(feature_desc, num_rows, query, workspace_path):
@@ -47,11 +47,11 @@ def run_hypo_data(feature_desc, num_rows, query, workspace_path):
 
     if w.final_status != "success":
         error_msg = w.error_message or "Hypothetical data workflow failed"
-        return f"Workflow failed: {error_msg}", []
-    out = ["## Hypothetical Data Analysis Complete"]
-    if w.data_summary:
-        out.append(w.data_summary)
-    return "\n\n".join(out), []
+        banner = status_banner("failed", "Hypothetical data workflow failed")
+        return f"{banner}\n\n{error_msg}", []
+    banner = status_banner("success", "Hypothetical data analysis complete")
+    body = w.data_summary or "The data agent finished but produced no summary."
+    return f"{banner}\n\n{body}", []
 
 
 def render_form():

@@ -23,6 +23,10 @@ class UsageTracker:
         if not msg.llm_sender or not (input_t or output_t):
             return
         role = msg.llm_sender
+        # Some senders (e.g. the Claude Agent SDK coding subagent) report an
+        # exact cost directly — that price correctly accounts for prompt-cache
+        # read/write rates, so prefer it over a flat litellm token estimate.
+        cost_override = getattr(msg, "cost_usd", None)
         with self._lock:
             if role not in self._stats:
                 model_id = _model_id_for_role(role)
@@ -31,18 +35,34 @@ class UsageTracker:
                     "input_tokens": 0,
                     "output_tokens": 0,
                     "calls": 0,
+                    # tokens from messages WITHOUT an exact cost — estimated below
+                    "est_input_tokens": 0,
+                    "est_output_tokens": 0,
+                    "cost_override_sum": 0.0,
+                    "has_override": False,
                 }
             s = self._stats[role]
             s["input_tokens"] += input_t
             s["output_tokens"] += output_t
             s["calls"] += 1
+            if cost_override is not None:
+                s["cost_override_sum"] += cost_override
+                s["has_override"] = True
+            else:
+                s["est_input_tokens"] += input_t
+                s["est_output_tokens"] += output_t
 
     def get_rows(self) -> list[dict]:
         """Return per-role stats sorted by total token usage (descending)."""
         with self._lock:
             rows = []
             for role, s in self._stats.items():
-                cost = _estimate_cost(s["model"], s["input_tokens"], s["output_tokens"])
+                est = _estimate_cost(s["model"], s["est_input_tokens"], s["est_output_tokens"])
+                if s["has_override"]:
+                    # Exact provider cost + estimate for any non-exact messages.
+                    cost = s["cost_override_sum"] + (est or 0.0)
+                else:
+                    cost = est
                 rows.append(
                     {
                         "role": role,

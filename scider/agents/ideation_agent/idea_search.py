@@ -15,11 +15,29 @@ from typing import Optional
 from loguru import logger
 
 from scider.core.llms import ModelRegistry
-from scider.core.types import Message
+from scider.core.types import Message, emit_message
 from scider.core.utils import parse_json_from_llm_response
 
 LLM_NAME = "ideation"
 AGENT_NAME = "ideation"
+# agent_sender for live progress events — gives the search its own UI badge.
+PROGRESS_SENDER = "idea_search"
+
+
+def _emit_progress(content: str, src_msg: Optional[Message] = None) -> None:
+    """Emit a curated progress line to UI message listeners.
+
+    Idea-search LLM calls don't go through a HistoryState, so without this
+    they would neither stream to the UI nor be counted by the usage tracker.
+    When ``src_msg`` is given, its token counts ride along on the emitted
+    message so the usage tracker attributes the cost.
+    """
+    m = Message(role="assistant", content=content, agent_sender=PROGRESS_SENDER)
+    if src_msg is not None:
+        m.llm_sender = src_msg.llm_sender or LLM_NAME
+        m.prompt_tokens = src_msg.prompt_tokens
+        m.completion_tokens = src_msg.completion_tokens
+    emit_message(m)
 
 # Set > 0 when running on a rate-limited API tier (e.g. Gemini free 20 req/min).
 # Adds this many seconds between sequential dimension-scoring calls.
@@ -198,12 +216,22 @@ def _score_dimension(nodes: list[IdeaNode], dimension: str, user_query: str) -> 
             if rank_1based == 1 and rationale:
                 node.top_rationale[dimension] = rationale
 
+        top_title = nodes[ranking[0] - 1].idea.get("title", "")
+        rat = (rationale or "").strip()
+        if len(rat) > 220:
+            rat = rat[:220] + "…"
+        detail = f' — top idea: "{top_title}"' if top_title else ""
+        if rat:
+            detail += f" ({rat})"
+        _emit_progress(f"📊 Ranked {n} ideas by **{dimension}**{detail}", src_msg=msg)
+
     except Exception as e:
         logger.warning("Scoring failed for dimension {}: {}. Assigning neutral 0.5.", dimension, e)
         # Unconditionally overwrite — a stale score from a previous population context
         # is worse than neutral: it mixes scales across different batch sizes.
         for node in nodes:
             setattr(node, f"score_{dimension}", 0.5)
+        _emit_progress(f"⚠️ Scoring failed for **{dimension}** — assigned a neutral 0.5 to all ideas")
 
 
 def _compute_composite(node: IdeaNode) -> None:
@@ -303,7 +331,12 @@ Produce a revised version. Return ONLY a JSON object with these exact keys:
             agent_sender=AGENT_NAME,
             temperature=0.7,
         )
-        return _parse_idea_response(msg.content or "", idea)
+        result = _parse_idea_response(msg.content or "", idea)
+        _emit_progress(
+            f'⬆ Improved "{idea.get("title", "")}" on its weakest dimension (**{weak_dim}**)',
+            src_msg=msg,
+        )
+        return result
     except Exception as e:
         logger.warning("improve_idea failed: {}. Returning original.", e)
         return idea
@@ -350,7 +383,13 @@ Do not describe the synthesis process. Return only the resulting idea."""
             agent_sender=AGENT_NAME,
             temperature=0.8,
         )
-        return _parse_idea_response(msg.content or "", idea_a)
+        result = _parse_idea_response(msg.content or "", idea_a)
+        _emit_progress(
+            f'⚯ Combined "{idea_a.get("title", "")}" + "{idea_b.get("title", "")}" '
+            "into a new idea",
+            src_msg=msg,
+        )
+        return result
     except Exception as e:
         logger.warning("combine_ideas failed: {}. Returning idea_a.", e)
         return idea_a
@@ -408,6 +447,9 @@ def run_idea_search(
     """
     if len(seed_ideas) < MIN_POPULATION_TO_SEARCH:
         logger.info("Too few ideas ({}) for search. Returning as-is.", len(seed_ideas))
+        _emit_progress(
+            f"ℹ️ Only {len(seed_ideas)} seed idea(s) — skipping evolutionary search"
+        )
         return IdeaSearchResult(
             best_ideas=seed_ideas,
             all_nodes=[],
@@ -450,6 +492,11 @@ def run_idea_search(
     # where it competes in the same n=8 context as all evolved ideas.
     pinned_seed = max(population, key=lambda n: n.composite_score or 0.0)
 
+    _emit_progress(
+        f"🧬 Evolutionary search started — {len(population)} ideas in the population, "
+        f"best seed composite **{initial_best_composite:.3f}**"
+    )
+
     any_new_nodes = False  # tracks whether operators ever produced new nodes
 
     # Main loop
@@ -467,6 +514,11 @@ def run_idea_search(
         n_new = POPULATION_SIZE - len(survivors)
         n_improve = round(n_new * improve_fraction)
         n_combine = n_new - n_improve
+
+        _emit_progress(
+            f"🔄 **Iteration {iteration}/{max_iterations}** — kept {len(survivors)} survivors, "
+            f"generating {n_improve} improved + {n_combine} combined idea(s)"
+        )
 
         new_nodes: list[IdeaNode] = []
 
@@ -551,6 +603,11 @@ def run_idea_search(
         iteration,
         llm_calls,
         best[0].composite_score if best else 0.0,
+    )
+
+    _emit_progress(
+        f"✅ Idea search complete — {iteration} iteration(s), {llm_calls} LLM calls, "
+        f"best composite **{(best[0].composite_score or 0.0) if best else 0.0:.3f}**"
     )
 
     return IdeaSearchResult(

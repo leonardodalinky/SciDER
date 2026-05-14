@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import _rm_upload_root, save_and_extract_upload
+from utils import _rm_upload_root, save_and_extract_upload, status_banner
 
 from scider.core import constant
 from scider.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
@@ -43,7 +43,14 @@ def run_full(cfg, workspace_path):
         idea_search_enabled=idea_search_enabled,
     )
     w.run()
-    return w.final_summary or "Workflow finished", []
+    status = getattr(w, "final_status", None)
+    label = {
+        "success": "Full pipeline completed successfully",
+        "failed": "Full pipeline failed",
+    }.get(status, "Full pipeline finished")
+    banner = status_banner(status, label)
+    body = w.final_summary or getattr(w, "error_message", None) or "No summary produced."
+    return f"{banner}\n\n{body}", []
 
 
 def render_form():

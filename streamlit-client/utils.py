@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import time
 import zipfile
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -21,20 +20,21 @@ def stream_markdown(text, delay=0.02):
         time.sleep(delay)
 
 
-def render_intermediate_state(intermediate_state):
-    if not intermediate_state:
-        return
-    by_node = defaultdict(list)
-    for item in intermediate_state:
-        by_node[item.get("node_name", "unknown")].append(item.get("output", ""))
+def status_banner(status: str | None, label: str) -> str:
+    """Return an HTML status banner for a workflow result.
 
-    st.divider()
-    st.subheader("Intermediate States")
-    for node, outputs in by_node.items():
-        with st.expander(node, expanded=False):
-            for i, content in enumerate(outputs, 1):
-                st.markdown(f"**Step {i}**")
-                st.markdown(content)
+    ``status`` is the workflow's ``final_status`` ("success" / "failed" /
+    "max_revisions_reached" / ...). The returned string is a standalone HTML
+    block — prepend it to a markdown report with a blank line in between.
+    """
+    s = (status or "").lower()
+    if s in ("success", "complete", "completed"):
+        cls, icon = "status-success", "✅"
+    elif s in ("failed", "error"):
+        cls, icon = "status-fail", "❌"
+    else:
+        cls, icon = "status-warn", "⚠️"
+    return f"<div class='status-banner {cls}'>{icon} {label}</div>"
 
 
 # --- File upload helpers ---
