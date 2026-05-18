@@ -21,7 +21,7 @@ system_prompt: |
   1. **Extract Keywords**: Identify key terms, concepts, and research threads from the user's query
   2. **Search Literature**: Use paper search subagent to find related papers. Cast a wide net — search multiple keyword variations and related terms.
   3. **Analyze Gaps**: Identify what existing work does NOT address. Look for unexplored combinations, underserved domains, and methodological limitations.
-  4. **Generate Ideas**: Propose 3-5 novel research ideas, each with:
+  4. **Generate Ideas**: Propose 5-8 novel research ideas, each with:
      - Title
      - Description (2-3 sentences)
      - Rationale (why this is novel and important)

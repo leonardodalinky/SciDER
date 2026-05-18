@@ -7,6 +7,7 @@ Streamlit UI thread renders approval buttons and collects the user's response.
 import threading
 
 from scider.core.approval import ApprovalHandler, ApprovalResponse, ApprovalResult
+from workflow.runner import WorkflowCancelled
 
 
 class StreamlitApprovalHandler(ApprovalHandler):
@@ -24,15 +25,20 @@ class StreamlitApprovalHandler(ApprovalHandler):
         self._pending: dict | None = None
         self._lock = threading.Lock()
         self._live_messages: list[dict] = []
+        self._cancelled = False
 
     # -- called from background (workflow) thread --
 
     def request_approval(self, node_name: str, summary: str, title: str = "") -> ApprovalResponse:
         with self._lock:
+            if self._cancelled:
+                raise WorkflowCancelled()
             self._pending = {"node_name": node_name, "summary": summary, "title": title}
             self._event.clear()
             self._response = None
-        self._event.wait()  # blocks until UI calls submit_response
+        self._event.wait()  # blocks until UI calls submit_response or cancel()
+        if self._cancelled:
+            raise WorkflowCancelled()
         return self._response
 
     # -- called from UI (main) thread --
@@ -49,6 +55,8 @@ class StreamlitApprovalHandler(ApprovalHandler):
         self, node_name: str, summary: str, items: list[dict], title: str = ""
     ) -> ApprovalResponse:
         with self._lock:
+            if self._cancelled:
+                raise WorkflowCancelled()
             self._pending = {
                 "node_name": node_name,
                 "summary": summary,
@@ -59,7 +67,16 @@ class StreamlitApprovalHandler(ApprovalHandler):
             self._event.clear()
             self._response = None
         self._event.wait()
+        if self._cancelled:
+            raise WorkflowCancelled()
         return self._response
+
+    def cancel(self) -> None:
+        """Unblock any pending approval wait; subsequent calls raise WorkflowCancelled."""
+        with self._lock:
+            self._cancelled = True
+            self._pending = None
+        self._event.set()
 
     def push_message(
         self,

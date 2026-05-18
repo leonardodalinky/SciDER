@@ -107,6 +107,98 @@ def _select_model(
     )
 
 
+def _ping_provider(provider: str, api_key: str) -> tuple[bool, str]:
+    """Make a 1-token completion call to validate a provider key.
+
+    Returns (ok, message). Costs a fraction of a cent per provider.
+    """
+    import litellm
+
+    # Cheap, widely-available models per provider. If a model goes EOL the
+    # error message still tells the user something useful (key works, model
+    # unavailable) so they can investigate.
+    model = {
+        "gemini": "gemini/gemini-2.5-flash",
+        "openai": "openai/gpt-4o-mini",
+        "anthropic": "anthropic/claude-haiku-4-5",
+    }[provider]
+    try:
+        litellm.completion(
+            model=model,
+            messages=[{"role": "user", "content": "hi"}],
+            max_tokens=1,
+            api_key=api_key,
+            timeout=15,
+        )
+        return True, "Connected"
+    except Exception as e:
+        # Surface the most diagnostic part of the litellm error. Auth errors
+        # tend to come back as AuthenticationError / 401 — short and clear.
+        msg = type(e).__name__ + ": " + str(e)
+        if len(msg) > 160:
+            msg = msg[:160] + "…"
+        return False, msg
+
+
+def _render_connection_tester(current: dict) -> None:
+    """Render the 'Test API Connections' panel (outside the form so it can run on
+    click). Reads typed values from session_state so the user can test keys
+    *before* saving.
+    """
+    init_gemini = current.get("gemini_api_key", "")
+    init_openai = current.get("openai_api_key", "")
+    init_anthropic = current.get("anthropic_api_key", "")
+    # Settings form writes typed values to these session_state keys live.
+    g_key = st.session_state.get("_sk_gemini", init_gemini).strip()
+    o_key = st.session_state.get("_sk_openai", init_openai).strip()
+    a_key = st.session_state.get("_sk_anthropic", init_anthropic).strip()
+
+    any_key = bool(g_key or o_key or a_key)
+
+    with st.container(border=True):
+        col_btn, col_label = st.columns([1, 4])
+        with col_btn:
+            clicked = st.button(
+                "🔌 Test Connections",
+                key="btn_test_connections",
+                disabled=not any_key,
+                use_container_width=True,
+                help=(
+                    "Sends one 1-token request per provider whose key is filled in. "
+                    "Costs a fraction of a cent. Use before saving to catch bad keys early."
+                ),
+            )
+        with col_label:
+            if not any_key:
+                st.caption(
+                    "Fill in at least one API key below, then come back here to verify it works."
+                )
+            else:
+                st.caption(
+                    "Validates that each provided key reaches its provider. "
+                    "Results are cached until you click again."
+                )
+
+        if clicked:
+            results: dict[str, tuple[bool, str]] = {}
+            with st.spinner("Pinging providers…"):
+                if g_key:
+                    results["Gemini"] = _ping_provider("gemini", g_key)
+                if o_key:
+                    results["OpenAI"] = _ping_provider("openai", o_key)
+                if a_key:
+                    results["Anthropic"] = _ping_provider("anthropic", a_key)
+            st.session_state["_conn_test_results"] = results
+
+        results = st.session_state.get("_conn_test_results", {})
+        if results:
+            for provider, (ok, msg) in results.items():
+                if ok:
+                    st.success(f"**{provider}** — ✅ {msg}")
+                else:
+                    st.error(f"**{provider}** — ❌ {msg}")
+
+
 def render_settings_form(current_settings: dict | None = None) -> dict | None:
     """Render settings form. Returns new settings dict on submit, None otherwise."""
     st.markdown("### Configure SciDER")
@@ -147,6 +239,11 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
     }
 
     format_func = _make_format_func(provided_keys)
+
+    # Connection tester sits OUTSIDE the form so its button can run on click
+    # (st.form only allows the submit button inside). It reads typed values
+    # from session_state, so the user can verify keys before pressing Save.
+    _render_connection_tester(current)
 
     with st.form("settings_form"):
         # --- API Keys ---

@@ -166,6 +166,7 @@ def _search_metrics_panel(meta: dict, ideas: list[dict]) -> str:
         ("LLM Calls", f"{calls}{' ⚠' if budget_hit else ''}", "#b45309" if budget_hit else None),
         ("Best Composite", f"{best:.2f}", _score_color(best)),
     ]
+    lift: float | None = None
     if initial is not None and initial > 0:
         lift = best - initial
         items.append(
@@ -183,7 +184,32 @@ def _search_metrics_panel(meta: dict, ideas: list[dict]) -> str:
             f"<div class='sm-item'><div class='sm-val'{style}>{v}</div>"
             f"<div class='sm-lbl'>{lbl}</div></div>"
         )
-    return f"<div class='search-metrics'>{cells}</div>"
+
+    # Caption (only when there's something worth explaining): negative lift can
+    # be real — composites are re-ranked against the evolved competitor set, so
+    # a strong seed can lose a few normalized points when the search produces
+    # ideas that beat it on individual dimensions. Budget cap means the final
+    # population may have been mid-evolution when scoring closed.
+    notes: list[str] = []
+    if lift is not None and lift < 0:
+        notes.append(
+            "Negative lift means the pinned seed lost normalized rank against the evolved "
+            "competitors — not a bug, just a tougher field."
+        )
+    if budget_hit:
+        notes.append(
+            "LLM budget cap was reached — increase <i>Max LLM calls for idea search</i> "
+            "in the form to let the search run more iterations."
+        )
+    caption = ""
+    if notes:
+        caption = (
+            "<div style='font-size:11px;color:#64748b;margin-top:6px;line-height:1.5'>"
+            + " ".join(f"<i>{n}</i>" for n in notes)
+            + "</div>"
+        )
+
+    return f"<div class='search-metrics'>{cells}</div>{caption}"
 
 
 def _build_ideation_output(rs: IdeationAgentState) -> str:

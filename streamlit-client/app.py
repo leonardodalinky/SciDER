@@ -42,7 +42,7 @@ from forms.settings import render_settings_form
 from settings import has_settings, load_settings, save_settings
 from utils import cleanup_uploaded_data, save_chat_history
 from workflow.approval import StreamlitApprovalHandler
-from workflow.runner import WorkflowRunner
+from workflow.runner import WorkflowCancelled, WorkflowRunner
 from workflow.usage_tracker import UsageTracker
 
 from scider.agents import ideation_agent
@@ -617,6 +617,9 @@ def render_chat_messages(messages: list[dict]):
             label = _agent_label(agent) or "Assistant"
             with st.expander(f"{label} ({len(group)} messages)", expanded=True):
                 for m in group:
+                    # Inner messages MUST disable truncation — otherwise a long
+                    # content body would open a nested expander, which Streamlit
+                    # forbids and which would crash the render.
                     render_chat_message(
                         m["role"],
                         m["content"],
@@ -624,6 +627,7 @@ def render_chat_messages(messages: list[dict]):
                         is_tool=m.get("is_tool", False),
                         tool_name=m.get("tool_name"),
                         images=m.get("images"),
+                        truncate=False,
                     )
 
 
@@ -1113,6 +1117,14 @@ if workflow_config and "workflow_runner" not in st.session_state:
 
     # Hook every add_message() call to push to UI
     def _on_msg(msg):
+        # Cooperative cancellation checkpoint: the user clicked Cancel and the
+        # background thread is still doing work. Raising here propagates up
+        # through add_message() and out of whatever LangGraph node is running,
+        # where WorkflowRunner._run catches it.
+        runner_ref = st.session_state.get("workflow_runner")
+        if runner_ref is not None and runner_ref.is_cancel_requested():
+            raise WorkflowCancelled()
+
         images = getattr(msg, "tool_result_images", None)
         agent = getattr(msg, "agent_sender", None)
         content = msg.content or ""
@@ -1154,6 +1166,55 @@ if workflow_config and "workflow_runner" not in st.session_state:
     runner.start(_run_workflow_func, workflow_config, _graph, _wspath)
     st.rerun()
 
+def _render_live_status_and_cancel(runner) -> None:
+    """Live status banner (current agent · elapsed · tokens · cost) + Cancel button.
+
+    Shared between the running and approval-pending poll-loop branches so the
+    user can see cost accumulate and bail out while a workflow is paused for
+    review.
+    """
+    elapsed = int(runner.elapsed)
+    mins, secs = divmod(elapsed, 60)
+    elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+    last_agent = next(
+        (m.get("agent") for m in reversed(st.session_state.messages) if m.get("agent")),
+        None,
+    )
+    agent_str = _agent_label(last_agent) if last_agent else "starting up…"
+    if runner.is_cancel_requested():
+        agent_str = "Cancelling…"
+    parts = [f"⚙️ <b>{agent_str}</b>", f"⏱ {elapsed_str}"]
+    tracker = st.session_state.get("usage_tracker")
+    if tracker is not None:
+        toks = tracker.total_tokens
+        if toks:
+            cost = tracker.total_cost
+            cost_str = f" · ~${cost:.4f}" if cost else ""
+            parts.append(f"{toks:,} tokens{cost_str}")
+
+    col_status, col_cancel = st.columns([5, 1])
+    with col_status:
+        st.markdown(
+            "<div class='running-indicator'>" + " &nbsp;·&nbsp; ".join(parts) + "</div>",
+            unsafe_allow_html=True,
+        )
+    with col_cancel:
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        if st.button(
+            "🛑 Cancel",
+            key=f"btn_cancel_workflow_{int(runner.elapsed)}",
+            disabled=runner.is_cancel_requested(),
+            use_container_width=True,
+            help="Stop the running workflow. Best-effort: takes effect at the next message.",
+        ):
+            runner.cancel()
+            # Also unblock any pending approval — its handler will raise.
+            handler = st.session_state.get("approval_handler")
+            if handler is not None:
+                handler.cancel()
+            st.rerun()
+
+
 # --- Poll running workflow ---
 if "workflow_runner" in st.session_state:
     runner = st.session_state.workflow_runner
@@ -1166,11 +1227,11 @@ if "workflow_runner" in st.session_state:
     # Re-render all messages (including newly drained ones)
     render_chat_messages(st.session_state.messages)
 
-    if handler.has_pending():
-        render_approval_ui(handler)
-    elif runner.is_done:
+    if runner.is_done:
         tb_msg = None
-        if runner.error:
+        if runner.cancelled:
+            resp = "🛑 Workflow cancelled by user."
+        elif runner.error:
             resp = f"❌ Workflow failed: {runner.error}"
             if runner.traceback:
                 # Persist the full traceback as its own message — it lands in
@@ -1224,28 +1285,11 @@ if "workflow_runner" in st.session_state:
         del st.session_state.workflow_config_active
         del st.session_state.approval_handler
         st.rerun()
+    elif handler.has_pending():
+        render_approval_ui(handler)
+        _render_live_status_and_cancel(runner)
+        # No sleep — approval-UI buttons rerun on click.
     else:
-        # Live status: current agent, elapsed time, running token/cost total.
-        elapsed = int(runner.elapsed)
-        mins, secs = divmod(elapsed, 60)
-        elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
-        last_agent = next(
-            (m.get("agent") for m in reversed(st.session_state.messages) if m.get("agent")),
-            None,
-        )
-        agent_str = _agent_label(last_agent) if last_agent else "starting up…"
-        parts = [f"⚙️ <b>{agent_str}</b>", f"⏱ {elapsed_str}"]
-        tracker = st.session_state.get("usage_tracker")
-        if tracker is not None:
-            toks = tracker.total_tokens
-            if toks:
-                cost = tracker.total_cost
-                cost_str = f" · ~${cost:.4f}" if cost else ""
-                parts.append(f"{toks:,} tokens{cost_str}")
-        render_chat_message(
-            "assistant",
-            "<div class='running-indicator'>" + " &nbsp;·&nbsp; ".join(parts) + "</div>",
-            None,
-        )
+        _render_live_status_and_cancel(runner)
         time.sleep(2)
         st.rerun()
