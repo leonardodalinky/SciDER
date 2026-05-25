@@ -108,9 +108,11 @@ the LaTeX code and save to `workspace/drafts/paper.tex`.
 ### 4. Run the deterministic gates
 
 ```bash
-# Orphan citation gate: every \cite{KEY} must exist in refs.bib
+# Orphan + fabrication gate: every \cite{KEY} must exist in refs.bib, AND every
+# refs.bib entry must come from the verified citation_pool.json (no hand-written
+# / fabricated references). Pass the pool as the 3rd arg whenever it exists.
 python skills/section-writing-agent/scripts/orphan_cite_gate.py \
-    workspace/drafts/paper.tex workspace/refs.bib
+    workspace/drafts/paper.tex workspace/refs.bib workspace/citation_pool.json
 
 # Latex sanity: matched braces, matched begin/end, no unescaped specials
 python skills/section-writing-agent/scripts/latex_sanity.py \

@@ -14,6 +14,13 @@ from ..tools import ToolRegistry
 from .constant import __AGENT_STATE_NAME__
 from .types import Message
 
+# Anthropic rejects a completion that carries tool-use history but passes no
+# ``tools=`` on the current call (raises UnsupportedParamsError). This happens
+# for tool-less summary/critic calls once any Claude model is used for the
+# experiment/critic roles. Letting litellm inject a dummy tool keeps those
+# roles working across providers. Safe no-op for Gemini/OpenAI.
+litellm.modify_params = True
+
 
 class ZeroChoiceError(Exception):
     """Raised when LLM completion returns zero choices."""

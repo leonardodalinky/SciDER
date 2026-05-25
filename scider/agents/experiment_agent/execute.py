@@ -125,6 +125,30 @@ def agent_loop_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     return agent_state
 
 
+def _is_degenerate_summary(text: str) -> bool:
+    """True if a summary call returned a deferral/preamble instead of a report.
+
+    A real report is long and carries markdown section headers. A deferral like
+    "Let me first collect the results before writing the report." is short and
+    has no headers — catching it lets us retry before it poisons the paper.
+    """
+    s = (text or "").strip()
+    if len(s) < 400:
+        return True
+    if "#" not in s:  # no markdown headers at all → not the structured report
+        return True
+    deferral_markers = (
+        "let me first",
+        "let me collect",
+        "i will first",
+        "i'll first",
+        "before writing the report",
+        "before i write",
+    )
+    head = s[:200].lower()
+    return any(m in head for m in deferral_markers)
+
+
 def generate_summary_node(agent_state: ExperimentAgentState) -> ExperimentAgentState:
     logger.debug("generate_summary_node of ExperimentAgent")
     agent_state.add_node_history("generate_summary")
@@ -144,9 +168,43 @@ def generate_summary_node(agent_state: ExperimentAgentState) -> ExperimentAgentS
         system_prompt=PROMPTS.experiment_agent.summary_system_prompt.render(),
         agent_sender=AGENT_NAME,
     ).with_log()
-
     agent_state.add_message(msg)
-    agent_state.output_summary = msg.content or ""
+
+    # The summary call is tool-less and single-shot. Agentic models sometimes
+    # reply with a deferral preamble ("Let me first collect the results...")
+    # instead of the report itself; that empty summary then propagates into the
+    # paper's experimental_log as "(none recorded)". Detect that and retry once
+    # with a forceful, no-tools instruction before giving up.
+    summary = msg.content or ""
+    if _is_degenerate_summary(summary):
+        logger.warning(
+            "Experiment summary looks degenerate (len={}); retrying once.", len(summary.strip())
+        )
+        agent_state.add_message(
+            Message(
+                role="user",
+                content=(
+                    "That was not a report. Write the COMPLETE experiment report NOW, "
+                    "in THIS single message. You have NO tools and cannot run code or "
+                    "read files — every result you need is already in the conversation "
+                    "above. Do NOT defer, do NOT say you will collect data, do NOT use "
+                    "placeholders. Output the full markdown report with all required "
+                    "sections and every concrete number from the conversation."
+                ),
+                agent_sender=AGENT_NAME,
+                is_meta=True,
+            )
+        )
+        msg = ModelRegistry.completion(
+            LLM_NAME,
+            agent_state.messages,
+            system_prompt=PROMPTS.experiment_agent.summary_system_prompt.render(),
+            agent_sender=AGENT_NAME,
+        ).with_log()
+        agent_state.add_message(msg)
+        summary = msg.content or ""
+
+    agent_state.output_summary = summary
     agent_state.final_summary = agent_state.output_summary
     agent_state.final_status = "success"
 

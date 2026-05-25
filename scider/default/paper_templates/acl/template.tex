@@ -7,8 +7,12 @@
 % Without the style file this compiles as a plain article for drafting.
 \documentclass{article}
 
-% Uncomment after placing acl.sty in the inputs/ directory:
-% \usepackage[review]{acl}
+% Uncomment after placing acl.sty in the inputs/ directory.
+% 'preprint' = ACL layout + page numbers, NO line-number ruler — compiles on
+% minimal TeX installs (the [review] ruler needs Helvetica 'phvb', which basic
+% TeX trees lack, and otherwise overlaps the text). Switch to [review] for an
+% anonymized ACL submission with line numbers.
+% \usepackage[preprint]{acl}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -16,11 +20,13 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+% Times: the ACL body font. Load it explicitly — acl.sty does NOT, and without a
+% scalable font 'microtype' font-expansion aborts fatally on minimal TeX trees.
+\usepackage{times}
 \usepackage{microtype}
 \usepackage{cleveref}
-% natbib and times are loaded by acl.sty; only include them in plain-article mode
+% natbib is loaded by acl.sty; only uncomment in plain-article (no-acl) mode.
 % \usepackage[round]{natbib}
-% \usepackage{times}
 
 \title{TODO: Paper Title}
 
@@ -32,7 +38,7 @@
 \maketitle
 
 \begin{abstract}
-TODO: fill with Abstract content (≤ 200 words). State the task, approach, and key results.
+TODO: fill with Abstract content (at most 200 words). State the task, approach, and key results.
 \end{abstract}
 
 \section{Introduction}
@@ -66,7 +72,12 @@ TODO: fill with Abstract content (≤ 200 words). State the task, approach, and 
 
 \section*{Ethics Statement}
 
-\bibliographystyle{acl_natbib}
+% acl.sty already sets \bibliographystyle{acl_natbib}; setting it again triggers
+% BibTeX's fatal "Illegal, another \bibstyle command". Only set it ourselves in
+% the plain-article fallback (when acl.sty is not loaded).
+\makeatletter
+\@ifpackageloaded{acl}{}{\bibliographystyle{acl_natbib}}
+\makeatother
 \bibliography{refs}
 
 \end{document}

@@ -54,6 +54,15 @@ Critical Instructions
      subsections.
    - You MUST use the exact keys found in citation_map.json (e.g.,
      \cite{Hu2021LoraLowrank}).
+   - NEVER invent, guess, or hand-write citation keys, and NEVER create or
+     overwrite refs.bib / citation_map.json. They are PROVIDED and FINAL.
+     Inventing a reference (e.g. `\cite{dkt_cold_start}` with a made-up
+     "Smith et al." entry) is a CRITICAL FAILURE — every key you cite MUST
+     already exist verbatim in citation_map.json. If citation_map.json is
+     missing or empty, STOP and report it; do NOT fabricate references.
+   - Cite broadly: the bibliography is verified and substantial — integrate at
+     least `min_cite_paper_count` of the available papers across the
+     Introduction and Related Work, not just a handful.
    - Content Enrichment: Read the abstract provided in citation_map.json
      for the papers you are citing. Use this context to write accurate,
      specific sentences about those works.

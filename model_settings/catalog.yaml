@@ -67,6 +67,15 @@ models:
     default_params:
       reasoning_effort: low
 
+  gemini-3.5-flash:
+    provider: gemini
+    litellm_id: gemini/gemini-3.5-flash
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
   # ---- OpenAI (completion) ----
   gpt-5-nano:
     provider: openai
@@ -114,6 +123,36 @@ models:
     capabilities: [completion]
     supports_vision: true
     requires_env: [OPENAI_API_KEY]
+
+  gpt-5.4-mini:
+    provider: openai
+    litellm_id: gpt-5.4-mini
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
+
+  gpt-5.4:
+    provider: openai
+    litellm_id: gpt-5.4
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
+
+  gpt-5.5:
+    provider: openai
+    litellm_id: gpt-5.5
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [OPENAI_API_KEY]
+    default_params:
+      reasoning:
+        effort: low
 
   o1-mini:
     provider: openai
