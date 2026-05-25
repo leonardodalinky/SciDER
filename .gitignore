@@ -216,6 +216,13 @@ env
 .DS_Store
 docs/
 
+# Local pipeline run outputs (datasets, checkpoints, logs, generated papers)
+runs/
+# User-supplied datasets (large, not redistributable)
+datset.zip
+streamlit-client/datset.zip
+# Local setup scratch notes
+exa_setup_prompt.md
 
 streamlit-client/case-study-memory/
 saved_chats/
@@ -243,3 +250,7 @@ scider/default/paper_templates/**/*.bst
 scider/default/paper_templates/**/*.cls
 scider/default/paper_templates/**/*.clo
 scider/default/paper_templates/**/*.cfg
+_test_app_session.py
+_test_live_ideation.py
+_test_changes.py
+SYSTEM_OVERVIEW.md

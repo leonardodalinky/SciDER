@@ -8,11 +8,18 @@ citation_map.json". This script enforces it deterministically.
 
 Exit codes:
     0  every cite key resolves
-    1  one or more orphan cite keys
+    1  one or more orphan cite keys, or refs.bib contains fabricated entries
+       (keys absent from the verified citation_pool.json)
 
 Usage:
-    python orphan_cite_gate.py paper.tex refs.bib
+    python orphan_cite_gate.py paper.tex refs.bib [citation_pool.json]
+
+If the optional citation_pool.json is given, the gate ALSO fails when refs.bib
+contains any key that is not present in the verified pool — this catches the
+agent hand-writing/fabricating bibliography entries instead of using the
+pre-built, verified pool.
 """
+import json
 import re
 import sys
 
@@ -25,11 +32,12 @@ BIB_KEY_RE = re.compile(r"^@\w+\{\s*([^,\s]+)", re.M)
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(__doc__, file=sys.stderr)
         return 2
 
     tex_path, bib_path = sys.argv[1], sys.argv[2]
+    pool_path = sys.argv[3] if len(sys.argv) == 4 else None
     tex = open(tex_path).read()
     bib = open(bib_path).read()
 
@@ -37,6 +45,26 @@ def main() -> int:
     if not bib_keys:
         print(f"ERROR: no @entry keys found in {bib_path}", file=sys.stderr)
         return 1
+
+    # Anti-fabrication check: every refs.bib key must come from the verified pool.
+    if pool_path:
+        pool = json.load(open(pool_path))
+        pool_keys = {
+            p.get("bibtex_key")
+            for p in pool.get("papers", [])
+            if p.get("bibtex_key")
+        }
+        fabricated = sorted(bib_keys - pool_keys) if pool_keys else []
+        if fabricated:
+            print(
+                f"\nFAIL: {len(fabricated)} refs.bib entr(y/ies) NOT in the verified "
+                f"citation pool — looks fabricated. Rebuild refs.bib from the pool "
+                f"with bibtex_format.py; never hand-write entries:",
+                file=sys.stderr,
+            )
+            for k in fabricated:
+                print(f"  - {k}", file=sys.stderr)
+            return 1
 
     cite_keys: set[str] = set()
     for m in CITE_RE.finditer(tex):
