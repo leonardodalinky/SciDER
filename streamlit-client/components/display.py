@@ -4,23 +4,9 @@ Display Components for Streamlit Interface
 Reusable components for displaying workflow outputs.
 """
 
-import time
-
 import streamlit as st
 
 from scider.core.approval import ApprovalResponse, ApprovalResult
-
-
-def render_live_intermediate(items: list[dict]) -> None:
-    """Render intermediate state items as they arrive (real-time)."""
-    if not items:
-        return
-    for item in items:
-        node = item.get("node_name", "unknown")
-        output = item.get("output", "")
-        with st.status(f"Node: {node}", state="complete"):
-            st.markdown(output[:800] if output else "(no output)")
-
 
 _APPROVAL_CONTENT_TRUNCATE = 800
 
@@ -35,16 +21,15 @@ def render_approval_ui(handler) -> None:
     node_name = pending["node_name"]
     title = pending.get("title", "")
 
-    # Highlighted header with title
+    # Approval card header
     title_html = (
-        f"<br><span style='font-size: 16px; font-weight: 600; color: #856404;'>{title}</span>"
+        f"<p class='approval-card-subtitle'>{title}</p>"
         if title
         else ""
     )
     st.markdown(
-        f"""<div style="background: #fff3cd; border-left: 4px solid #ffc107;
-        padding: 12px 16px; border-radius: 6px; margin-bottom: 8px;">
-        <span style="font-size: 18px; font-weight: 700;">⚠️ Approval required: {node_name}</span>
+        f"""<div class='approval-card'>
+        <p class='approval-card-title'>Review required: {node_name}</p>
         {title_html}
         </div>""",
         unsafe_allow_html=True,
@@ -52,9 +37,9 @@ def render_approval_ui(handler) -> None:
 
     # Approval content in a bordered container, collapsible if long
     if len(summary) > _APPROVAL_CONTENT_TRUNCATE:
-        preview_lines = summary[:200].split("\n")
-        label = " | ".join(line.strip() for line in preview_lines if line.strip())[:200]
-        with st.expander(f"{label}...", expanded=True):
+        first_line = next((ln.strip() for ln in summary.splitlines() if ln.strip()), "")
+        label = (first_line[:117] + "…") if len(first_line) > 117 else (first_line or "Details")
+        with st.expander(label, expanded=True):
             st.markdown(summary)
     else:
         with st.container(border=True):

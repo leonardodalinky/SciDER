@@ -85,6 +85,8 @@ def run_claude_agent_sdk(
             )
 
             final_result = None
+            final_usage = None
+            final_cost = None
 
             async for message in query(prompt=prompt, options=options):
                 # message is a pydantic-ish object; try best-effort serialization
@@ -98,8 +100,16 @@ def run_claude_agent_sdk(
                 msgs.append(data)
                 from claude_agent_sdk import ResultMessage
 
-                if isinstance(message, ResultMessage) and message.result is not None:
-                    final_result = message.result
+                if isinstance(message, ResultMessage):
+                    if message.result is not None:
+                        final_result = message.result
+                    # Capture token usage + exact cost so the caller can
+                    # attribute this work in the API usage report. Without
+                    # this, all SDK coding-subagent tokens go uncounted.
+                    if getattr(message, "usage", None) is not None:
+                        final_usage = message.usage
+                    if getattr(message, "total_cost_usd", None) is not None:
+                        final_cost = message.total_cost_usd
 
             return {
                 "cwd": str(working_dir),
@@ -108,6 +118,8 @@ def run_claude_agent_sdk(
                 "messages": msgs[-3:],  # keep tail only
                 "message_count": len(msgs),
                 "final_result": final_result,
+                "usage": final_usage,
+                "total_cost_usd": final_cost,
             }
         finally:
             os.chdir(old)

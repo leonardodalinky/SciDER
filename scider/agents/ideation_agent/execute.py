@@ -210,6 +210,9 @@ def idea_search_node(agent_state: IdeationAgentState) -> IdeationAgentState:
         "iterations_completed": result.iterations_completed,
         "search_budget_hit": result.search_budget_hit,
         "n_ideas": len(result.best_ideas),
+        # Best composite among the seed population before any operators ran —
+        # lets the UI show the score lift from evolutionary search.
+        "initial_best_composite": result.initial_best_composite,
     }
 
     best_score = max(agent_state.composite_scores, default=0.0)

@@ -1,0 +1,68 @@
+% --- SciDER AAAI template ---
+%
+% The bootstrap step will attempt to auto-download the official AAAI 2026
+% style file from https://aaai.org/authorkit26-1/
+% If the download fails, download manually and place aaai2026.sty here.
+%
+% Without the style file this compiles as a plain article for drafting.
+\documentclass[letterpaper]{article}
+
+% \usepackage{aaai2026}  % AAAI 2026 — auto-activated
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{cleveref}
+\usepackage{times}
+
+% AAAI uses its own bibliography style; fall back to plain without the style file
+\usepackage{natbib}
+
+\title{TODO: Paper Title}
+
+% AAAI uses double-blind review — no author names
+\author{Anonymous Author(s)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO: fill with Abstract content (≤ 250 words). State the problem, method, results, and significance clearly.
+\end{abstract}
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Method}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\subsection{Problem Formulation}
+
+\subsection{Proposed Approach}
+
+\section{Experiments}
+% TODO: filled by Step 4 using experimental_log.md and figures/.
+
+\subsection{Experimental Setup}
+
+\subsection{Results}
+
+\subsection{Analysis}
+
+\section{Conclusion}
+% TODO: filled by Step 4. Summarize contributions and future work.
+
+\bibliographystyle{aaai2026}
+\bibliography{refs}
+
+\end{document}

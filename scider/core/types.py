@@ -26,6 +26,21 @@ def remove_message_listener(listener: Callable[["Message"], None]) -> None:
         pass
 
 
+def emit_message(message: "Message") -> None:
+    """Fire all registered message listeners for a standalone message.
+
+    Unlike ``HistoryState.add_message``, this does not append to any history —
+    it is for progress events from subsystems that run LLM calls outside the
+    normal agent loop (e.g. the evolutionary idea search), so they can still
+    surface in the UI stream and the usage tracker. Exceptions are swallowed.
+    """
+    for listener in list(_message_listeners):
+        try:
+            listener(message)
+        except Exception:
+            pass
+
+
 @contextlib.contextmanager
 def message_listener(
     listener: Callable[["Message"], None],
@@ -102,6 +117,7 @@ class Message(LLMessage):
         "tool_name",
         "completion_tokens",
         "prompt_tokens",
+        "cost_usd",
         "_n_tokens",
         "is_meta",
         "is_compact_boundary",
@@ -122,6 +138,11 @@ class Message(LLMessage):
     tool_name: str | None = None
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
+    # Exact USD cost for this message, when the provider reports it directly
+    # (e.g. the Claude Agent SDK's ResultMessage.total_cost_usd). When set,
+    # cost trackers should use this instead of estimating from token counts —
+    # it correctly accounts for prompt-cache read/write pricing.
+    cost_usd: float | None = None
     _n_tokens: int | None = None
     # True for programmatically injected messages (recovery nudges, system context, etc.)
     # that are not real user/LLM interactions. Excluded when serializing to litellm.

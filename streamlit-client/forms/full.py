@@ -4,10 +4,11 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import _rm_upload_root, save_and_extract_upload
+from utils import _rm_upload_root, save_and_extract_upload, status_banner
 
 from scider.core import constant
 from scider.workflows.full_workflow_with_ideation import FullWorkflowWithIdeation
+from scider.workflows.paper_bootstrap import BUNDLED_TEMPLATES, BUNDLED_TEMPLATE_LABELS
 
 
 def run_full(cfg, workspace_path):
@@ -24,6 +25,9 @@ def run_full(cfg, workspace_path):
     run_paper_writing = cfg.get("run_paper_writing", False)
     idea_search_enabled = cfg.get("idea_search_enabled", True)
 
+    template_name = cfg.get("paper_template", "simple")
+    paper_template_dir = BUNDLED_TEMPLATES.get(template_name, BUNDLED_TEMPLATES["simple"])
+
     w = FullWorkflowWithIdeation(
         user_query=cfg["query"],
         workspace_path=workspace_path,
@@ -35,10 +39,18 @@ def run_full(cfg, workspace_path):
         max_revisions=5,
         skip_ideation=not run_ideation,
         run_paper_writing=run_paper_writing,
+        paper_template_dir_path=paper_template_dir if run_paper_writing else None,
         idea_search_enabled=idea_search_enabled,
     )
     w.run()
-    return w.final_summary or "Workflow finished", []
+    status = getattr(w, "final_status", None)
+    label = {
+        "success": "Full pipeline completed successfully",
+        "failed": "Full pipeline failed",
+    }.get(status, "Full pipeline finished")
+    banner = status_banner(status, label)
+    body = w.final_summary or getattr(w, "error_message", None) or "No summary produced."
+    return f"{banner}\n\n{body}", []
 
 
 def render_form():
@@ -58,8 +70,15 @@ def render_form():
     )
 
     with st.form("full_form", clear_on_submit=True):
-        st.markdown("### Full Workflow")
-        topic = st.text_input("Research Topic", placeholder="Enter your research topic...")
+        st.markdown("### End-to-End Research Pipeline")
+        st.caption(
+            "Chain all SciDER phases: Ideation → Data Analysis → Experiment → (optional) Paper Writing. "
+            "Each phase pauses for your review before proceeding."
+        )
+        topic = st.text_input(
+            "Research Topic",
+            placeholder="e.g. Using graph neural networks for molecular property prediction",
+        )
 
         if data_source == "Generate hypothetical data":
             hf_repo = None
@@ -128,8 +147,18 @@ def render_form():
                 "`latexmk` on the host."
             ),
         )
+        paper_template = st.selectbox(
+            "↳ Paper Template",
+            options=list(BUNDLED_TEMPLATE_LABELS.keys()),
+            format_func=lambda k: BUNDLED_TEMPLATE_LABELS[k],
+            help=(
+                "Venue-specific LaTeX template used when 'Run Paper Writing' is enabled. "
+                "Style files are auto-downloaded on first use and cached locally."
+            ),
+            key="full_paper_template",
+        )
         submitted = st.form_submit_button(
-            "Run Full Workflow",
+            "Launch Pipeline",
         )
 
         if submitted and topic:
@@ -197,5 +226,6 @@ def render_form():
                     "run_data": run_data,
                     "run_exp": run_exp,
                     "run_paper_writing": run_paper_writing,
+                    "paper_template": paper_template,
                 }
     return None

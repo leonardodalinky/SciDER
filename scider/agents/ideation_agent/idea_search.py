@@ -15,11 +15,29 @@ from typing import Optional
 from loguru import logger
 
 from scider.core.llms import ModelRegistry
-from scider.core.types import Message
+from scider.core.types import Message, emit_message
 from scider.core.utils import parse_json_from_llm_response
 
 LLM_NAME = "ideation"
 AGENT_NAME = "ideation"
+# agent_sender for live progress events — gives the search its own UI badge.
+PROGRESS_SENDER = "idea_search"
+
+
+def _emit_progress(content: str, src_msg: Optional[Message] = None) -> None:
+    """Emit a curated progress line to UI message listeners.
+
+    Idea-search LLM calls don't go through a HistoryState, so without this
+    they would neither stream to the UI nor be counted by the usage tracker.
+    When ``src_msg`` is given, its token counts ride along on the emitted
+    message so the usage tracker attributes the cost.
+    """
+    m = Message(role="assistant", content=content, agent_sender=PROGRESS_SENDER)
+    if src_msg is not None:
+        m.llm_sender = src_msg.llm_sender or LLM_NAME
+        m.prompt_tokens = src_msg.prompt_tokens
+        m.completion_tokens = src_msg.completion_tokens
+    emit_message(m)
 
 # Set > 0 when running on a rate-limited API tier (e.g. Gemini free 20 req/min).
 # Adds this many seconds between sequential dimension-scoring calls.
@@ -172,8 +190,15 @@ def _ranking_prompt(nodes: list[IdeaNode], dimension: str, user_query: str) -> s
     return "\n".join(lines)
 
 
-def _score_dimension(nodes: list[IdeaNode], dimension: str, user_query: str) -> None:
-    """Score all nodes on one dimension via K-way batch ranking. Mutates nodes in-place."""
+def _score_dimension(
+    nodes: list[IdeaNode], dimension: str, user_query: str, pass_label: str = ""
+) -> None:
+    """Score all nodes on one dimension via K-way batch ranking. Mutates nodes in-place.
+
+    ``pass_label`` (e.g. "seed scoring", "iteration 2", "final scoring") is
+    included in the streamed progress line so the UI can tell repeated
+    "Ranked N ideas by X" messages apart.
+    """
     n = len(nodes)
     prompt = _ranking_prompt(nodes, dimension, user_query)
     try:
@@ -198,12 +223,26 @@ def _score_dimension(nodes: list[IdeaNode], dimension: str, user_query: str) -> 
             if rank_1based == 1 and rationale:
                 node.top_rationale[dimension] = rationale
 
+        top_title = nodes[ranking[0] - 1].idea.get("title", "")
+        rat = (rationale or "").strip()
+        if len(rat) > 220:
+            rat = rat[:220] + "…"
+        detail = f' — top idea: "{top_title}"' if top_title else ""
+        if rat:
+            detail += f" ({rat})"
+        prefix = f"[{pass_label}] " if pass_label else ""
+        _emit_progress(f"📊 {prefix}Ranked {n} ideas by **{dimension}**{detail}", src_msg=msg)
+
     except Exception as e:
         logger.warning("Scoring failed for dimension {}: {}. Assigning neutral 0.5.", dimension, e)
         # Unconditionally overwrite — a stale score from a previous population context
         # is worse than neutral: it mixes scales across different batch sizes.
         for node in nodes:
             setattr(node, f"score_{dimension}", 0.5)
+        prefix = f"[{pass_label}] " if pass_label else ""
+        _emit_progress(
+            f"⚠️ {prefix}Scoring failed for **{dimension}** — assigned a neutral 0.5 to all ideas"
+        )
 
 
 def _compute_composite(node: IdeaNode) -> None:
@@ -218,12 +257,17 @@ def _compute_composite(node: IdeaNode) -> None:
     node.composite_score = sum(SCORE_WEIGHTS[k] * scores[k] for k in SCORE_WEIGHTS)  # type: ignore[operator]
 
 
-def score_population(nodes: list[IdeaNode], user_query: str, max_workers: int = 4) -> None:
+def score_population(
+    nodes: list[IdeaNode], user_query: str, max_workers: int = 4, pass_label: str = ""
+) -> None:
     """Score all nodes across all 4 dimensions, then compute composite.
 
     Args:
         max_workers: Parallel scoring threads. Set to 1 on rate-limited API tiers
             (e.g. Gemini free tier with 20 req/min) to avoid quota errors.
+        pass_label: Optional label (e.g. "seed scoring", "iteration 1") forwarded
+            to each per-dimension call's progress event so duplicate ranking
+            lines are distinguishable in the UI.
 
     Note: when nodes include both survivors and new nodes, a survivor's composite_score
     may change as the ranking batch changes — this is correct behavior (calibration),
@@ -232,7 +276,7 @@ def score_population(nodes: list[IdeaNode], user_query: str, max_workers: int = 
     if max_workers > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {
-                pool.submit(_score_dimension, nodes, dim, user_query): dim
+                pool.submit(_score_dimension, nodes, dim, user_query, pass_label): dim
                 for dim in DIMENSIONS
             }
             for future in as_completed(futures):
@@ -243,7 +287,7 @@ def score_population(nodes: list[IdeaNode], user_query: str, max_workers: int = 
                     logger.warning("Dimension {} scoring thread raised: {}", dim, e)
     else:
         for dim in DIMENSIONS:
-            _score_dimension(nodes, dim, user_query)
+            _score_dimension(nodes, dim, user_query, pass_label)
             if _SEQUENTIAL_CALL_DELAY_S > 0:
                 import time
                 time.sleep(_SEQUENTIAL_CALL_DELAY_S)
@@ -303,7 +347,12 @@ Produce a revised version. Return ONLY a JSON object with these exact keys:
             agent_sender=AGENT_NAME,
             temperature=0.7,
         )
-        return _parse_idea_response(msg.content or "", idea)
+        result = _parse_idea_response(msg.content or "", idea)
+        _emit_progress(
+            f'⬆ Improved "{idea.get("title", "")}" on its weakest dimension (**{weak_dim}**)',
+            src_msg=msg,
+        )
+        return result
     except Exception as e:
         logger.warning("improve_idea failed: {}. Returning original.", e)
         return idea
@@ -350,7 +399,13 @@ Do not describe the synthesis process. Return only the resulting idea."""
             agent_sender=AGENT_NAME,
             temperature=0.8,
         )
-        return _parse_idea_response(msg.content or "", idea_a)
+        result = _parse_idea_response(msg.content or "", idea_a)
+        _emit_progress(
+            f'⚯ Combined "{idea_a.get("title", "")}" + "{idea_b.get("title", "")}" '
+            "into a new idea",
+            src_msg=msg,
+        )
+        return result
     except Exception as e:
         logger.warning("combine_ideas failed: {}. Returning idea_a.", e)
         return idea_a
@@ -408,6 +463,9 @@ def run_idea_search(
     """
     if len(seed_ideas) < MIN_POPULATION_TO_SEARCH:
         logger.info("Too few ideas ({}) for search. Returning as-is.", len(seed_ideas))
+        _emit_progress(
+            f"ℹ️ Only {len(seed_ideas)} seed idea(s) — skipping evolutionary search"
+        )
         return IdeaSearchResult(
             best_ideas=seed_ideas,
             all_nodes=[],
@@ -434,7 +492,9 @@ def run_idea_search(
             for idea in seed_ideas[:POPULATION_SIZE]
         ]
         logger.info("Idea search: scoring {} seed ideas across 4 dimensions.", len(population))
-        score_population(population, user_query, max_workers=score_workers)
+        score_population(
+            population, user_query, max_workers=score_workers, pass_label="seed scoring"
+        )
         llm_calls += 4
         all_nodes.extend(population)
 
@@ -450,10 +510,22 @@ def run_idea_search(
     # where it competes in the same n=8 context as all evolved ideas.
     pinned_seed = max(population, key=lambda n: n.composite_score or 0.0)
 
+    _emit_progress(
+        f"🧬 Evolutionary search started — {len(population)} ideas in the population, "
+        f"best seed composite **{initial_best_composite:.3f}**"
+    )
+
     any_new_nodes = False  # tracks whether operators ever produced new nodes
 
+    # Reserve 4 calls for the final authoritative scoring pass so the lift
+    # metric stays meaningful (without the reserve, very tight budgets would
+    # push the final pass over the cap or skip it). Only reserve when there's
+    # also room for at least one full iteration; otherwise behave as before so
+    # users with small budgets still get at least one round of evolution.
+    in_loop_budget = max_llm_calls - 4 if max_llm_calls >= 16 else max_llm_calls
+
     # Main loop
-    while iteration < max_iterations and llm_calls < max_llm_calls:
+    while iteration < max_iterations and llm_calls < in_loop_budget:
         iteration += 1
         logger.info("Idea search iteration {}/{}", iteration, max_iterations)
 
@@ -468,11 +540,16 @@ def run_idea_search(
         n_improve = round(n_new * improve_fraction)
         n_combine = n_new - n_improve
 
+        _emit_progress(
+            f"🔄 **Iteration {iteration}/{max_iterations}** — kept {len(survivors)} survivors, "
+            f"generating {n_improve} improved + {n_combine} combined idea(s)"
+        )
+
         new_nodes: list[IdeaNode] = []
 
         # Improve operator
         for i in range(n_improve):
-            if llm_calls >= max_llm_calls:
+            if llm_calls >= in_loop_budget:
                 break
             parent = survivors[i % len(survivors)]
             weak_dim = parent.weak_dimension() or "specificity"
@@ -490,7 +567,7 @@ def run_idea_search(
 
         # Combine operator
         for _ in range(n_combine):
-            if llm_calls >= max_llm_calls:
+            if llm_calls >= in_loop_budget:
                 break
             if len(survivors) < 2:
                 break
@@ -515,7 +592,12 @@ def run_idea_search(
             any_new_nodes = True
             # Score against the full merged batch so ranks are calibrated.
             # A survivor's composite_score may shift — this is correct, not a bug.
-            score_population(survivors + new_nodes, user_query, max_workers=score_workers)
+            score_population(
+                survivors + new_nodes,
+                user_query,
+                max_workers=score_workers,
+                pass_label=f"iteration {iteration}",
+            )
             llm_calls += 4
             all_nodes.extend(new_nodes)
 
@@ -523,12 +605,18 @@ def run_idea_search(
 
     # Final authoritative scoring pass — only when the population changed.
     # Skipping when no operators ran keeps baseline_composite.lift = 0 by construction
-    # and avoids paying 4 calls to re-score an unchanged population.
+    # and avoids paying 4 calls to re-score an unchanged population. The
+    # in_loop_budget reserve above guarantees we still have ~4 calls of headroom
+    # so the lift metric stays meaningful even when max_llm_calls is tight.
     if any_new_nodes:
         logger.info("Idea search: final scoring pass on {} ideas.", len(population))
-        score_population(population, user_query, max_workers=score_workers)
+        score_population(
+            population, user_query, max_workers=score_workers, pass_label="final scoring"
+        )
         llm_calls += 4
 
+    # We "hit budget" if in-loop work consumed the reserve as well — i.e. the
+    # final scoring pass had to push us past the user-set cap.
     budget_hit = llm_calls >= max_llm_calls
     if budget_hit:
         logger.warning("Idea search hit LLM budget cap ({} calls).", llm_calls)
@@ -551,6 +639,11 @@ def run_idea_search(
         iteration,
         llm_calls,
         best[0].composite_score if best else 0.0,
+    )
+
+    _emit_progress(
+        f"✅ Idea search complete — {iteration} iteration(s), {llm_calls} LLM calls, "
+        f"best composite **{(best[0].composite_score or 0.0) if best else 0.0:.3f}**"
     )
 
     return IdeaSearchResult(

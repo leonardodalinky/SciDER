@@ -4,7 +4,12 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import _rm_upload_root, find_data_analysis_file, save_and_extract_upload
+from utils import (
+    _rm_upload_root,
+    find_data_analysis_file,
+    save_and_extract_upload,
+    status_banner,
+)
 
 from scider.workflows.experiment_workflow import ExperimentWorkflow
 
@@ -26,14 +31,26 @@ def run_experiment(q, path, workspace_path):
     else:
         return "No data analysis file", []
     w.run()
-    return w.final_summary or "Experiment finished", w.experiment_agent_intermediate_state
+    status = getattr(w, "final_status", None)
+    label = {
+        "success": "Experiment completed successfully",
+        "max_revisions_reached": "Experiment finished — max revision cycles reached",
+        "failed": "Experiment failed",
+    }.get(status, "Experiment finished")
+    banner = status_banner(status, label)
+    body = w.final_summary or getattr(w, "error_message", None) or "No summary produced."
+    return f"{banner}\n\n{body}", w.experiment_agent_intermediate_state
 
 
 def render_form():
     """Render the experiment form. Returns workflow_config dict or None."""
     with st.form("experiment_form", clear_on_submit=True):
-        st.markdown("### Experiment Workflow")
-        st.caption("Upload a zip containing data_analysis.md or enter path manually")
+        st.markdown("### Run an Experiment")
+        st.caption(
+            "Upload a ZIP containing a data_analysis.md file produced by the Data Analysis workflow. "
+            "SciDER's coding agent will implement, execute, and iteratively refine an ML experiment "
+            "based on your query, going through up to 5 revision cycles."
+        )
         uploaded_exp_zip = st.file_uploader(
             "Upload ZIP with data analysis (optional)",
             type=["zip"],
@@ -42,7 +59,10 @@ def render_form():
         )
         if st.session_state.get("uploaded_experiment_path"):
             st.info(f"Using: `{st.session_state.uploaded_experiment_path}`")
-        query = st.text_input("Experiment Query", placeholder="Describe your experiment...")
+        query = st.text_input(
+            "Experiment Query",
+            placeholder="e.g. Train a classifier to predict the target variable and report accuracy, F1, and confusion matrix",
+        )
         submitted = st.form_submit_button(
             "Run Experiment",
         )

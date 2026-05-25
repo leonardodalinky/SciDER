@@ -1,0 +1,7 @@
+{
+  "files": [
+    "https://www.tug.org/texlive/Contents/live/texmf-dist/tex/latex/ieeetran/IEEEtran.cls",
+    "https://www.tug.org/texlive/Contents/live/texmf-dist/bibtex/bst/ieeetran/IEEEtran.bst"
+  ],
+  "note": "IEEEtran document class and bibliography style from the TeX Live mirror. Cached here; delete to force re-download."
+}

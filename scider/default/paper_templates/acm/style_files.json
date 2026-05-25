@@ -1,0 +1,7 @@
+{
+  "files": [
+    "https://www.tug.org/texlive/Contents/live/texmf-dist/tex/latex/acmart/acmart.cls",
+    "https://www.tug.org/texlive/Contents/live/texmf-dist/bibtex/bst/acmart/ACM-Reference-Format.bst"
+  ],
+  "note": "acmart document class and bibliography style from the TeX Live mirror. Cached here; delete to force re-download."
+}

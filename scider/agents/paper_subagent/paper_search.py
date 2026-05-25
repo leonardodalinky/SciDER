@@ -29,7 +29,7 @@ class PaperRepository:
 class ArXivRepository(PaperRepository):
     def search(self, query: str, max_results: int = 10) -> List[Paper]:
         try:
-            base_url = "http://export.arxiv.org/api/query?"
+            base_url = "https://export.arxiv.org/api/query?"
 
             # Fix: Build query string correctly for arXiv API
             # arXiv API expects: all:"query terms" or all:term1+term2

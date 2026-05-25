@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 from loguru import logger
-from utils import cleanup_uploaded_data, save_and_extract_upload
+from utils import cleanup_uploaded_data, save_and_extract_upload, status_banner
 
 from scider.core import constant
 from scider.workflows.data_workflow import DataWorkflow
@@ -13,11 +13,11 @@ from scider.workflows.hypo_data_workflow import HypoDataWorkflow
 
 def run_data(path, q, workspace_path):
     """Run data workflow. Called from background thread."""
-    data_path = Path(path) if Path(path).exists() else path  # may be HF repo name
+    data_path = Path(path) if Path(path).exists() else Path(str(path))
     logger.info(f"Running data analysis on path: {data_path}")
 
     w = DataWorkflow(
-        data_path=Path(path) if Path(path).exists() else Path(str(path)),
+        data_path=data_path,
         workspace_path=workspace_path,
         recursion_limit=100,
     )
@@ -25,11 +25,11 @@ def run_data(path, q, workspace_path):
     intermediate_state = getattr(w, "data_agent_intermediate_state", [])
     if w.final_status != "success":
         error_msg = w.error_message or "Data workflow failed"
-        return f"Data workflow failed: {error_msg}", intermediate_state
-    out = ["## Data Analysis Complete"]
-    if w.data_summary:
-        out.append(w.data_summary)
-    return "\n\n".join(out), intermediate_state
+        banner = status_banner("failed", "Data workflow failed")
+        return f"{banner}\n\n{error_msg}", intermediate_state
+    banner = status_banner("success", "Data analysis complete")
+    body = w.data_summary or "The data agent finished but produced no summary."
+    return f"{banner}\n\n{body}", intermediate_state
 
 
 def run_hypo_data(feature_desc, num_rows, query, workspace_path):
@@ -47,11 +47,11 @@ def run_hypo_data(feature_desc, num_rows, query, workspace_path):
 
     if w.final_status != "success":
         error_msg = w.error_message or "Hypothetical data workflow failed"
-        return f"Workflow failed: {error_msg}", []
-    out = ["## Hypothetical Data Analysis Complete"]
-    if w.data_summary:
-        out.append(w.data_summary)
-    return "\n\n".join(out), []
+        banner = status_banner("failed", "Hypothetical data workflow failed")
+        return f"{banner}\n\n{error_msg}", []
+    banner = status_banner("success", "Hypothetical data analysis complete")
+    body = w.data_summary or "The data agent finished but produced no summary."
+    return f"{banner}\n\n{body}", []
 
 
 def render_form():
@@ -71,7 +71,11 @@ def render_form():
     )
 
     with st.form("data_form", clear_on_submit=True):
-        st.markdown("### Data Analysis Workflow")
+        st.markdown("### Analyze Your Data")
+        st.caption(
+            "Upload a dataset, enter a HuggingFace repo name, or let SciDER generate synthetic data. "
+            "The AI agent explores structure, runs statistical analysis, and searches for related metrics in the literature."
+        )
 
         if data_source == "Generate hypothetical data":
             feature_desc = st.text_area(
@@ -114,8 +118,11 @@ def render_form():
                 placeholder="e.g. scikit-learn/iris",
                 help="Enter a HuggingFace dataset repository name. It will be downloaded automatically.",
             )
-            query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis")
+            query = st.text_input(
+                "Query",
+                placeholder="e.g. What features most strongly predict the target variable?",
+            )
+            submitted = st.form_submit_button("Analyze Dataset")
             if submitted:
                 if not hf_repo or not hf_repo.strip():
                     st.error("Please enter a HuggingFace dataset repository name.")
@@ -125,7 +132,7 @@ def render_form():
                 return {"type": "data", "path": hf_repo.strip(), "query": query}
 
         else:
-            st.caption("Upload a zip dataset or enter a path to existing data")
+            st.caption("Upload a zip file containing your dataset")
             uploaded_zip = st.file_uploader(
                 "Upload ZIP dataset (optional)",
                 type=["zip"],
@@ -133,8 +140,11 @@ def render_form():
             )
             if st.session_state.get("uploaded_data_path"):
                 st.info(f"Using uploaded data: `{st.session_state.uploaded_data_path}`")
-            query = st.text_input("Query", placeholder="What would you like to analyze?")
-            submitted = st.form_submit_button("Run Data Analysis")
+            query = st.text_input(
+                "Query",
+                placeholder="e.g. What features most strongly predict the target variable?",
+            )
+            submitted = st.form_submit_button("Analyze Dataset")
             if submitted:
                 if not query or not query.strip():
                     query = "Analyze this dataset — explore its structure, key patterns, and notable findings."

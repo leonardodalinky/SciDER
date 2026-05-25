@@ -15,7 +15,12 @@ the paper-orchestra skill.
 
 from __future__ import annotations
 
+import io
+import json
+import re
 import shutil
+import urllib.request
+import zipfile
 from pathlib import Path
 
 from loguru import logger
@@ -49,6 +54,35 @@ _GUIDELINES_NAME = "guidelines.md"
 
 # Copy these image extensions from figures_src into inputs/figures/
 _FIGURE_EXTS = {".png", ".jpg", ".jpeg", ".pdf", ".webp"}
+
+# Registry of bundled venue templates shipped with SciDER.
+# Keys are internal identifiers; values are absolute paths to template directories.
+# Each directory must contain template.tex and guidelines.md.
+BUNDLED_TEMPLATES: dict[str, Path] = {
+    "simple": _DEFAULTS_DIR / "simple",
+    "neurips": _DEFAULTS_DIR / "neurips",
+    "acl": _DEFAULTS_DIR / "acl",
+    "ieee": _DEFAULTS_DIR / "ieee",
+    "acm": _DEFAULTS_DIR / "acm",
+    "icml": _DEFAULTS_DIR / "icml",
+    "iclr": _DEFAULTS_DIR / "iclr",
+    "aaai": _DEFAULTS_DIR / "aaai",
+}
+
+BUNDLED_TEMPLATE_LABELS: dict[str, str] = {
+    "simple": "Simple (generic article)",
+    "neurips": "NeurIPS 2026",
+    "acl": "ACL / EMNLP / NAACL",
+    "ieee": "IEEE Conference",
+    "acm": "ACM SIGCONF",
+    "icml": "ICML 2026",
+    "iclr": "ICLR 2026",
+    "aaai": "AAAI 2026",
+}
+
+
+# Extensions considered "LaTeX support files" for auto-extraction from zips.
+_STYLE_FILE_EXTS = {".sty", ".bst", ".cls", ".clo", ".cfg"}
 
 
 # --------------------------------------------------------------------------- #
@@ -101,9 +135,17 @@ def bootstrap_paper_workspace(
     if not resolved_template_dir.is_dir():
         raise FileNotFoundError(f"Template directory not found: {resolved_template_dir}")
 
+    # Download and cache venue style files if style_files.json is present.
+    # Runs before the copy so freshly downloaded files are included.
+    _fetch_and_cache_style_files(resolved_template_dir)
+
     # Copy template.tex, guidelines.md, and any auxiliary files sitting at
     # the top level of the template directory.
     _copy_template_dir_into_inputs(resolved_template_dir, inputs_dir)
+
+    # Activate any downloaded style files by uncommenting the matching
+    # \usepackage line in inputs/template.tex.
+    _activate_style_files(inputs_dir)
 
     # Explicit string overrides win over whatever was copied from disk.
     if template_tex is not None:
@@ -128,6 +170,172 @@ def bootstrap_paper_workspace(
 
     logger.info("Paper workspace bootstrapped at {}", paper_workspace)
     return paper_workspace
+
+
+def _fetch_and_cache_style_files(template_dir: Path) -> None:
+    """Download and cache venue style files declared in ``style_files.json``.
+
+    Reads ``<template_dir>/style_files.json`` (if present), fetches the zip at
+    ``url``, and extracts every entry whose extension is in
+    ``extract_extensions`` (defaulting to ``.sty .bst .cls .clo .cfg``) into
+    ``template_dir``.  Directory nesting inside the zip is stripped — only the
+    basename is used — so GitHub archive layouts (e.g.
+    ``acl-style-files-master/acl.sty``) work without path configuration.
+
+    Files are cached: if a downloaded file already exists in ``template_dir``
+    it is skipped, so repeated bootstrap calls do not re-download.  On any
+    network or I/O error a warning is logged and the function returns without
+    raising so the rest of the bootstrap can continue with whatever files are
+    already present.
+    """
+    config_path = template_dir / "style_files.json"
+    if not config_path.exists():
+        return
+
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Could not read style_files.json in {}: {}", template_dir, exc)
+        return
+
+    url = config.get("url", "").strip()
+    files: list[str] = config.get("files", [])
+    if not url and not files:
+        return
+
+    want_exts = set(config.get("extract_extensions", list(_STYLE_FILE_EXTS)))
+
+    _headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
+
+    def _fetch(fetch_url: str) -> bytes | None:
+        try:
+            req = urllib.request.Request(fetch_url, headers=_headers)  # noqa: S310
+            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+                return resp.read()
+        except Exception as exc:
+            logger.warning(
+                "Could not download '{}' for template '{}': {}.",
+                fetch_url, template_dir.name, exc,
+            )
+            return None
+
+    # --- zip mode ---
+    if url:
+        logger.info("Fetching style files for template '{}' from {}", template_dir.name, url)
+        raw = _fetch(url)
+        if raw is None:
+            logger.warning(
+                "Proceeding without style files for template '{}' — venue-specific formatting may be absent.",
+                template_dir.name,
+            )
+        else:
+            try:
+                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                    extracted = 0
+                    for info in zf.infolist():
+                        if info.is_dir():
+                            continue
+                        suffix = Path(info.filename).suffix.lower()
+                        if suffix not in want_exts:
+                            continue
+                        basename = Path(info.filename).name
+                        dest = template_dir / basename
+                        if dest.exists():
+                            logger.debug("Style file {} already cached — skipping", basename)
+                            continue
+                        dest.write_bytes(zf.read(info.filename))
+                        logger.info("Cached style file {} in {}", basename, template_dir)
+                        extracted += 1
+                    if extracted == 0:
+                        logger.debug(
+                            "No new style files extracted from zip for template '{}'",
+                            template_dir.name,
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to extract style files for template '{}': {}. "
+                    "Proceeding without them.",
+                    template_dir.name,
+                    exc,
+                )
+
+    # --- individual files mode ---
+    for file_url in files:
+        basename = Path(file_url).name
+        dest = template_dir / basename
+        if dest.exists():
+            logger.debug("Style file {} already cached — skipping", basename)
+            continue
+        suffix = Path(basename).suffix.lower()
+        if suffix not in want_exts:
+            logger.debug("Skipping {} — extension not in want_exts", basename)
+            continue
+        logger.info("Fetching style file {} for template '{}'", basename, template_dir.name)
+        raw = _fetch(file_url)
+        if raw is not None:
+            dest.write_bytes(raw)
+            logger.info("Cached style file {} in {}", basename, template_dir)
+
+
+def _activate_style_files(inputs_dir: Path) -> None:
+    """Uncomment ``\\usepackage`` lines in ``inputs/template.tex`` for any
+    ``.sty`` files that were successfully downloaded into ``inputs/``.
+
+    The bundled venue templates ship with the relevant ``\\usepackage`` call
+    commented out (so they compile as plain ``article`` without the style
+    file).  Once ``_fetch_and_cache_style_files`` has placed a ``.sty`` file
+    alongside ``template.tex``, this function patches ``inputs/template.tex``
+    in-place to activate the first matching commented ``\\usepackage`` line.
+
+    Rules:
+    - Only the **first** matching line per package stem is uncommented (avoids
+      activating both the accepted and submission variants for ICML).
+    - Lines already uncommented are left untouched.
+    - A line is considered a match when the package name inside ``{…}``
+      equals the ``.sty`` file's stem (e.g. ``acl.sty`` → ``acl``).
+    """
+    template_tex = inputs_dir / "template.tex"
+    if not template_tex.exists():
+        return
+
+    sty_stems = {f.stem for f in inputs_dir.glob("*.sty")}
+    if not sty_stems:
+        return
+
+    # Matches a \usepackage call that is the first non-whitespace token on the
+    # uncommented line — this excludes prose comments like "% see \usepackage{foo}".
+    _pkg_re = re.compile(r'^\s*\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}')
+    activated: set[str] = set()
+
+    lines = template_tex.read_text(encoding="utf-8").splitlines(keepends=True)
+    new_lines = []
+    changed = False
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("%"):
+            # Strip the leading comment marker to get the "uncommented" content.
+            uncommented = re.sub(r'^%\s*', '', stripped)
+            m = _pkg_re.match(uncommented)
+            if m:
+                pkg = m.group(1)
+                if pkg in sty_stems and pkg not in activated:
+                    # Remove the leading comment marker (handles "% " and "%\s*")
+                    new_line = re.sub(r'^(\s*)%\s*', r'\1', line, count=1)
+                    new_lines.append(new_line)
+                    activated.add(pkg)
+                    changed = True
+                    logger.info(
+                        "Activated \\usepackage{{{}}} in inputs/template.tex", pkg
+                    )
+                    continue
+        new_lines.append(line)
+
+    if changed:
+        template_tex.write_text("".join(new_lines), encoding="utf-8")
 
 
 def _copy_template_dir_into_inputs(template_dir: Path, inputs_dir: Path) -> None:

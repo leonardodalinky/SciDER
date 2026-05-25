@@ -1,0 +1,78 @@
+% --- SciDER ACM SIGCONF template ---
+%
+% The bootstrap step will auto-download acmart.cls and ACM-Reference-Format.bst
+% from the TeX Live mirror into inputs/. LaTeX finds them in the local directory.
+%
+% Options: sigconf (two-column proceedings), review (adds line numbers),
+%          anonymous (removes author info for blind review).
+\documentclass[sigconf,review,anonymous]{acmart}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{cleveref}
+
+% ACM copyright block — leave as-is for review submissions
+\setcopyright{none}
+
+\title{TODO: Paper Title}
+
+% Author info is hidden by the anonymous option above
+\author{Anonymous Author(s)}
+\affiliation{\institution{Anonymous Institution}}
+\email{email@example.com}
+
+\begin{document}
+
+\begin{abstract}
+TODO: fill with Abstract content. Describe the problem, approach, evaluation, and main findings.
+\end{abstract}
+
+% ACM CCS concepts (fill in appropriate terms)
+\begin{CCSXML}
+<ccs2012>
+  <concept>
+    <concept_id>10010147.10010257</concept_id>
+    <concept_desc>Computing methodologies~Machine learning</concept_desc>
+    <concept_significance>500</concept_significance>
+  </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{keyword1, keyword2, keyword3}
+
+\maketitle
+
+\section{Introduction}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Related Work}
+% TODO: filled by Step 3 (literature-review-agent) into drafts/intro_relwork.tex.
+
+\section{Method}
+% TODO: filled by Step 4 (section-writing-agent) using idea.md and outline.json.
+
+\subsection{Problem Statement}
+
+\subsection{Approach}
+
+\section{Evaluation}
+% TODO: filled by Step 4 using experimental_log.md and figures/.
+
+\subsection{Experimental Setup}
+
+\subsection{Results}
+
+\subsection{Discussion}
+
+\section{Conclusion}
+% TODO: filled by Step 4. Summarize contributions, limitations, and future work.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\end{document}

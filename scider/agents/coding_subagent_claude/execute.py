@@ -23,6 +23,35 @@ from .state import ClaudeCodingAgentState
 LLM_NAME = "experiment_coding"
 AGENT_NAME = "experiment_coding"
 
+
+def _sdk_usage_fields(raw_sdk_result: dict | None) -> dict:
+    """Extract token-usage + cost fields from a Claude Agent SDK result.
+
+    The SDK does its own multi-turn tool-calling internally, so its token use
+    never flows through ModelRegistry.completion(). Without lifting the usage
+    onto the Message, the coding subagent — typically the most expensive part
+    of an Experiment/Full pipeline — is entirely absent from the cost report.
+    """
+    if not isinstance(raw_sdk_result, dict):
+        return {}
+    usage = raw_sdk_result.get("usage") or {}
+    if not isinstance(usage, dict):
+        usage = {}
+    input_t = usage.get("input_tokens") or 0
+    output_t = usage.get("output_tokens") or 0
+    cache_read = usage.get("cache_read_input_tokens") or 0
+    cache_creation = usage.get("cache_creation_input_tokens") or 0
+    total_in = input_t + cache_read + cache_creation
+    fields: dict = {}
+    if total_in or output_t:
+        fields["prompt_tokens"] = total_in
+        fields["completion_tokens"] = output_t
+        fields["llm_sender"] = LLM_NAME
+    cost = raw_sdk_result.get("total_cost_usd")
+    if cost is not None:
+        fields["cost_usd"] = cost
+    return fields
+
 CLAUDE_PROMPT: Template = Template(
     """\
 # Requirements:
@@ -123,6 +152,7 @@ def claude_node(agent_state: ClaudeCodingAgentState) -> ClaudeCodingAgentState:
                         f"{sdk_text}"
                     ),
                     agent_sender="claude_agent_sdk",
+                    **_sdk_usage_fields(raw_sdk_result),
                 ).with_log()
             )
         else:
