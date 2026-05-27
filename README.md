@@ -30,6 +30,7 @@ pinned: false
 
 - [Installation](#installation)
 - [Workflows](#workflows)
+- [Paper Writing & Templates](#paper-writing--templates)
 - [Configuration](#configuration)
 - [Web UI](#web-ui)
 - [Coding Backend](#coding-backend)
@@ -70,7 +71,7 @@ print(wf.final_summary)
 
 ## Workflows
 
-SciDER provides six workflows in `scider.workflows`:
+SciDER provides seven workflows in `scider.workflows`:
 
 | Workflow | Description |
 |---|---|
@@ -78,20 +79,62 @@ SciDER provides six workflows in `scider.workflows`:
 | `DataWorkflow` | Analyze a dataset and produce a structured summary. |
 | `HypoDataWorkflow` | Generate synthetic data from a feature description, then analyze it. |
 | `ExperimentWorkflow` | Implement and run an experiment given a data summary. |
-| `FullWorkflow` | Data analysis -> experiment execution. |
-| `FullWorkflowWithIdeation` | Ideation -> (optional) data analysis -> (optional) experiment. Each phase can be skipped via flags. |
+| `WritingWorkflow` | Turn SciDER outputs (data summary, experiment log, ideas) into a venue-formatted LaTeX/PDF paper. |
+| `FullWorkflow` | Data analysis -> experiment execution -> (optional) paper writing. |
+| `FullWorkflowWithIdeation` | Ideation -> (optional) data analysis -> (optional) experiment -> (optional) paper writing. Each phase can be skipped via flags. |
 
 Each workflow has a class form (`FooWorkflow`) and a convenience function (`run_foo_workflow`).
 
+## Paper Writing & Templates
+
+The `WritingWorkflow` (and the optional paper-writing phase of the full workflows) generates a publication-ready LaTeX paper. SciDER ships **7 venue templates** — NeurIPS, ACL, ICML, ICLR, AAAI, IEEE, and ACM. The official style files (`.sty`/`.bst`/`.cls`) are auto-downloaded and cached on first use, and matching `\usepackage` lines are activated automatically. Select a template in the Web UI or pass `paper_template_dir_path` to the workflow.
+
 ## Configuration
 
-The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference.
+The project is configured using environment variables. You can set these variables in a `.env` file at the root of the project. A template `.env.template` is provided for reference. You can also set them directly in your shell or terminal session.
 
-Also, you can set environment variables directly in your shell or terminal session.
+### Model catalog
+
+SciDER uses a **unified model catalog** so you can mix providers per agent role. `model_settings/catalog.yaml` is the single source of truth for every model SciDER knows about (provider, LiteLLM id, capabilities, required env vars). `model_settings/role_defaults.yaml` then assigns a model to each role — e.g. Claude for `experiment`, Gemini for `data` — with inline param overrides:
+
+```yaml
+defaults:
+  experiment: claude-opus-4-6[reasoning_effort=medium]
+  data: gemini-2.5-pro[reasoning_effort=medium]
+```
+
+Provide any combination of provider keys (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, ...) in `.env`. Frontend selections on the Settings page override these defaults.
 
 ## Web UI
 
-The web UI is a Streamlit application. Deploy it using the `Dockerfile` at the project root.
+The web UI is a Streamlit application. It supports:
+
+- Live token/cost usage tracking (updated during runs and pauses)
+- Cancel and pause controls for in-progress workflows
+- Test-API-connection buttons on the Settings page
+- Evolutionary idea search toggle
+- Venue paper-template picker for the full workflow
+
+### Run locally
+
+From the project root:
+
+```shell
+bash streamlit-client/run.sh
+```
+
+Or manually:
+
+```shell
+uv sync --extra streamlit
+uv run python -m streamlit run streamlit-client/app.py --server.port 7860
+```
+
+Then open `http://localhost:7860`. On first launch a Settings page appears for configuring providers, API keys, and per-role model assignments.
+
+### Run with Docker
+
+Deploy it using the `Dockerfile` at the project root.
 
 1. Create a `.env` file at the project root (copy from `.env.template`) and fill in your API keys.
 
@@ -188,7 +231,7 @@ SkillRegistry.instance().register_skill_dirs(
 )
 ```
 
-`allow` restricts which agents see the skill; `preload_for` controls which agents get the full content in their system prompt. Both accept a `Literal` of the valid agent names (`ideation`, `data`, `experiment`, `experiment_coding`, `native_coding`, `critic`, `paper_search`) for static type checking. Passing `None` for either keeps the value from the SKILL.md frontmatter.
+`allow` restricts which agents see the skill; `preload_for` controls which agents get the full content in their system prompt. Both accept a `Literal` of the valid agent names (`ideation`, `data`, `experiment`, `experiment_coding`, `native_coding`, `critic`, `paper_search`, `writing`, `approval`) for static type checking. Passing `None` for either keeps the value from the SKILL.md frontmatter.
 
 ## Development Guide
 
@@ -241,7 +284,7 @@ If you find SciDER useful in your research, please consider citing our paper:
 ```bibtex
 @article{lin2026scider,
   title={SciDER: Scientific Data-centric End-to-end Researcher},
-  author={Lin, Ke and Lu, Yilin and Bhat, Shreyas and Guo, Xuehang and Oliva, Junier and Wang, Qingyun},
+  author={Lin, Ke and Aijaz, Owais and Lu, Yilin and Bhat, Shreyas and Guo, Xuehang and Oliva, Junier},
   journal={arXiv preprint arXiv:2603.01421},
   year={2026},
   doi={10.48550/arXiv.2603.01421}

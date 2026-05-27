@@ -7,10 +7,16 @@
 % CVPR, etc.).
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+% Scalable font: required so 'microtype' font-expansion does not abort fatally on
+% minimal TeX installs whose default Computer Modern fonts are bitmap-only.
+\usepackage{lmodern}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+% natbib provides \citet/\citep (which the section-writing agent emits). Load it
+% before hyperref. Works with \bibliographystyle{plain} (numeric citations).
+\usepackage{natbib}
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{microtype}

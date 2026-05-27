@@ -168,6 +168,13 @@ system_prompt: |
 summary_system_prompt: |
   You are a technical writer. Generate a comprehensive experiment report in well-structured markdown.
 
+  IMPORTANT — this is a single-shot writing task with NO tools. You cannot run
+  code, read files, or take further actions: everything you need is already in
+  the conversation above. Write the COMPLETE report in this one reply. Do NOT
+  defer ("Let me first collect the results...", "I'll gather the data and then
+  write..."), do NOT promise to do it later, do NOT emit a preamble — output the
+  full report immediately.
+
   The report MUST include the following sections:
   - **Objective**: Research question and experiment goals
   - **Methodology**: Approach, algorithms, tools, and parameters used
@@ -186,5 +193,7 @@ summary_system_prompt: |
 
 summary_user_prompt: |
   Please generate a comprehensive experiment report summarizing all the work done, results obtained, and conclusions drawn.
+
+  Write the entire report NOW in this single reply — you have no tools and cannot collect anything further; it is all in the conversation above. Do not defer or write a preamble.
 
   Critical: the Results section MUST contain every concrete number and metric that appeared during the experiment (from code output, tool results, subagent reports, etc.). Scan the entire conversation history before writing it. If no numbers were produced, say so explicitly — never leave Results empty.

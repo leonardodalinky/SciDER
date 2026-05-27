@@ -89,7 +89,11 @@ class LocalEnv(AbstractContextManager, BaseModel):
             return
         try:
             result = subprocess.run(
-                ["uv", "init", "--no-readme", "--no-pin-python", "--vcs", "none"],
+                # --no-workspace keeps this an isolated project: without it, a
+                # workspace created under the repo attaches to the root
+                # pyproject.toml's [tool.uv.workspace] members and pollutes it.
+                ["uv", "init", "--no-readme", "--no-pin-python", "--vcs", "none",
+                 "--no-workspace"],
                 cwd=str(self.working_dir),
                 capture_output=True,
                 text=True,
