@@ -14,7 +14,7 @@ pinned: false
 </div>
 
 <div align="center">
-    <a href="https://harryluumn.github.io/scider-proj-page/"><img src="https://img.shields.io/badge/Project Page-blue?style=for-the-badge&color=1a1a2e&logo=homepage&logoColor=orange" alt="Project Page"></a>
+    <a href="https://leonardodalinky.github.io/scider-proj-page/"><img src="https://img.shields.io/badge/Project Page-blue?style=for-the-badge&color=1a1a2e&logo=homepage&logoColor=orange" alt="Project Page"></a>
     <a href="https://huggingface.co/collections/leonardklin/scider"><img src="https://img.shields.io/badge/HuggingFace-1a1a2e?logo=huggingface&style=for-the-badge" alt="Huggingface Collection"></a>
     <a href="https://huggingface.co/spaces/leonardklin/SciDER"><img src="https://img.shields.io/badge/Live DEMO-1a1a2e?logo=huggingface&style=for-the-badge" alt="Live Demo"></a>
     <br/>

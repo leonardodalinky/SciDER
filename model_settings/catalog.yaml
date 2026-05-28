@@ -13,6 +13,24 @@
 
 models:
   # ---- Gemini (completion) ----
+  gemini-flash-latest:
+    provider: gemini
+    litellm_id: gemini/gemini-flash-latest
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
+  gemini-flash-lite-latest:
+    provider: gemini
+    litellm_id: gemini/gemini-flash-lite-latest
+    capabilities: [completion]
+    supports_vision: true
+    requires_env: [GEMINI_API_KEY]
+    default_params:
+      reasoning_effort: low
+
   gemini-2.5-flash-lite:
     provider: gemini
     litellm_id: gemini/gemini-2.5-flash-lite

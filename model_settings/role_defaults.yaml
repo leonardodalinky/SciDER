@@ -9,12 +9,12 @@
 
 defaults:
   ideation: gemini-3.1-pro-preview[reasoning_effort=medium]
-  paper_search: gemini-3.5-flash[reasoning_effort=low]
-  metric_search: gemini-3.5-flash[reasoning_effort=low]
+  paper_search: gemini-flash-latest[reasoning_effort=low]
+  metric_search: gemini-flash-latest[reasoning_effort=low]
   data: gemini-3.1-pro-preview[reasoning_effort=medium]
   #critic: gemini-3.1-pro-preview[reasoning_effort=medium,temperature=0.3]
   critic: claude-opus-4-6
-  history: gemini-3.5-flash[reasoning_effort=low]
+  history: gemini-flash-latest[reasoning_effort=low]
   experiment: claude-opus-4-6[reasoning_effort=medium]
   experiment_coding: claude-opus-4-6[reasoning_effort=medium]
   # Paper writing agent — requires a vision model to read generated figures
@@ -23,5 +23,5 @@ defaults:
   # Approval subagent — binary shipping-gate judge for critic's user_review
   # (only active when USER_APPROVAL_ENABLED=false + APPROVAL_SUBAGENT_ENABLED=true).
   # Cheap + fast is fine; falls back to 'critic' if not registered.
-  approval: gemini-3.5-flash[reasoning_effort=low]
+  approval: gemini-flash-latest[reasoning_effort=low]
   embedding: text-embedding-3-small

@@ -118,8 +118,8 @@ def _ping_provider(provider: str, api_key: str) -> tuple[bool, str]:
     # error message still tells the user something useful (key works, model
     # unavailable) so they can investigate.
     model = {
-        "gemini": "gemini/gemini-2.5-flash",
-        "openai": "openai/gpt-4o-mini",
+        "gemini": "gemini/gemini-flash-latest",
+        "openai": "openai/gpt-5-mini",
         "anthropic": "anthropic/claude-haiku-4-5",
     }[provider]
     try:
@@ -346,7 +346,7 @@ def render_settings_form(current_settings: dict | None = None) -> dict | None:
             coding_fallback = "claude-haiku-4-5"
         else:
             coding_options = completion_ids
-            coding_fallback = "gemini-2.5-pro"
+            coding_fallback = "gemini-flash-latest"
 
         coding_model = _select_model(
             "Code generation model",
