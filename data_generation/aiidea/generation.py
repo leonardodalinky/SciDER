@@ -2,7 +2,7 @@
 
 Source: https://huggingface.co/datasets/yanshengqiu/AI_Idea_Bench_2025
 
-For each row in the benchmark we hand the paper's research seed (topic +
+For each training paper we hand the paper's research seed (topic +
 motivation) to SciDER's IdeationAgent and persist the full message history
 at ``<workspace>/ideation_agent_history.json``. The trajectories become SFT
 data for OpenSciDER (consumed later by ``train/prepare_data.py``).
@@ -42,9 +42,10 @@ from ._common import (
 HF_DATASET_ID = "yanshengqiu/AI_Idea_Bench_2025"
 ROLES_YAML_PATH = Path(__file__).parent / "roles.yaml"
 
-# AI-Idea-Bench ships a single split called "test". It is the source of
-# research seeds for our IdeationAgent — we don't evaluate against it, so
-# there is no train/test contamination concern.
+# AI-Idea-Bench ships a single split called "test". We split its papers into
+# disjoint training and evaluation sets: only training papers are used as
+# research seeds for SFT data, and the remaining papers are held out for
+# evaluation.
 DEFAULT_SPLIT = "test"
 
 
