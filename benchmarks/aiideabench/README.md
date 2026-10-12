@@ -1,8 +1,8 @@
 # Benchmark for AI Idea Bench
 
 > [!NOTE]
-> This benchmark has a terrible coding quality, and most of the code seems to be written in a hurry. If you do need to run this benchmark, you may encounter endless bugs and issues. Please be mentally prepared for that. Though I have tried my best to fix the bugs, some metrics like MCQ still cannot work.
-> If you encounter similar issues, please feel free to contact the me or the authors of the benchmark.
+> The upstream benchmark code required several fixes to run in our setup, which are included in the submodule. The MCQ metric still does not run; our evaluation uses the idea-to-idea and idea-to-topic metrics below.
+> If you run into issues, please open an issue here or contact the benchmark authors.
 
 We assume all commands are run from the same dir as this README file.
 

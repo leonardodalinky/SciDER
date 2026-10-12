@@ -1,21 +1,21 @@
 [submodule "benchmarks/mlebench/mle-bench"]
 	path = benchmarks/mlebench/mle-bench
-	url = git@github.com:leonardodalinky/mle-bench.git
+	url = https://github.com/leonardodalinky/mle-bench.git
 [submodule "benchmarks/scicodebench/SciCode"]
 	path = benchmarks/scicodebench/SciCode
-	url = git@github.com:leonardodalinky/SciCode.git
+	url = https://github.com/leonardodalinky/SciCode.git
 [submodule "benchmarks/aiideabench/AI_Idea_Bench"]
 	path = benchmarks/aiideabench/AI_Idea_Bench
-	url = git@github.com:leonardodalinky/AI_Idea_Bench_2025.git
+	url = https://github.com/leonardodalinky/AI_Idea_Bench_2025.git
 [submodule "benchmarks/astrovisbench/AstroVisBench"]
 	path = benchmarks/astrovisbench/AstroVisBench
-	url = git@github.com:leonardodalinky/AstroVisBench.git
+	url = https://github.com/leonardodalinky/AstroVisBench.git
 [submodule "benchmarks/airsbench/airs-bench"]
 	path = benchmarks/airsbench/airs-bench
-	url = git@github.com:leonardodalinky/airs-bench.git
+	url = https://github.com/leonardodalinky/airs-bench.git
 [submodule "benchmarks/discoverybench/discoverybench"]
 	path = benchmarks/discoverybench/discoverybench
-	url = git@github.com:leonardodalinky/discoverybench.git
+	url = https://github.com/leonardodalinky/discoverybench.git
 [submodule "train/LlamaFactory"]
 	path = train/LlamaFactory
-	url = git@github.com:leonardodalinky/LlamaFactory.git
+	url = https://github.com/leonardodalinky/LlamaFactory.git
