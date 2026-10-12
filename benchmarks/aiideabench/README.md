@@ -1,7 +1,7 @@
 # Benchmark for AI Idea Bench
 
 > [!NOTE]
-> The upstream benchmark code required several fixes to run in our setup, which are included in the submodule. The MCQ metric still does not run; our evaluation uses the idea-to-idea and idea-to-topic metrics below.
+> The upstream benchmark code required several fixes to run in our setup, which are included in the submodule. The MCQ metric still does not run.
 > If you run into issues, please open an issue here or contact the benchmark authors.
 
 We assume all commands are run from the same dir as this README file.
